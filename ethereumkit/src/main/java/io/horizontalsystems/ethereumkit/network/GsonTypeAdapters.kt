@@ -156,9 +156,9 @@ class OptionalTypeAdapter<T>(
     override fun read(reader: JsonReader): Optional<T> {
         if (reader.peek() == JsonToken.NULL) {
             reader.nextNull()
-            return Optional.empty()
+            return Optional.empty<T>() as Optional<T>
         }
-        return Optional.of(gson.fromJson(reader, type))
+        return Optional.of<T>(gson.fromJson(reader, type)) as Optional<T>
     }
 
 }
