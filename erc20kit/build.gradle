@@ -1,7 +1,7 @@
 plugins {
     id 'com.android.library'
     id 'kotlin-android'
-    id 'kotlin-kapt'
+    id 'com.google.devtools.ksp'
     id 'maven-publish'
 }
 
@@ -16,17 +16,15 @@ afterEvaluate {
 }
 
 android {
-    compileSdkVersion 32
+    namespace 'io.horizontalsystems.erc20kit'
+    compileSdkVersion 34
 
     defaultConfig {
         minSdkVersion 26
-        targetSdkVersion 32
+        targetSdkVersion 34
 
-        kapt {
-            arguments {
-                arg("room.schemaLocation", "$projectDir/schemas".toString())
-                arg("room.incremental", true)
-            }
+        ksp {
+            arg("room.schemaLocation", "$projectDir/schemas".toString())
         }
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -37,9 +35,12 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
-
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
     kotlinOptions {
-        jvmTarget = "11"
+        jvmTarget = "17"
     }
 
 }
@@ -52,9 +53,9 @@ dependencies {
     implementation 'io.reactivex.rxjava2:rxandroid:2.1.1'
 
     // Room
-    implementation "androidx.room:room-runtime:$room_version"
-    implementation "androidx.room:room-rxjava2:$room_version"
-    kapt "androidx.room:room-compiler:$room_version"
+    implementation libs.room.runtime
+    implementation libs.room.rxjava2
+    ksp libs.room.compiler
 
     testImplementation 'junit:junit:4.13.2'
     androidTestImplementation 'androidx.test.ext:junit:1.1.3'

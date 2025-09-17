@@ -9,9 +9,9 @@ import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
 import com.google.android.material.bottomnavigation.BottomNavigationView
 import io.horizontalsystems.ethereumkit.sample.R
+import io.horizontalsystems.ethereumkit.sample.databinding.ActivityMainBinding
 import io.horizontalsystems.ethereumkit.sample.modules.addresswatch.AddressWatchActivity
 import io.horizontalsystems.ethereumkit.sample.modules.uniswapV3.UniswapV3Fragment
-import kotlinx.android.synthetic.main.activity_main.*
 
 class MainActivity : AppCompatActivity(), BottomNavigationView.OnNavigationItemSelectedListener {
 
@@ -26,11 +26,14 @@ class MainActivity : AppCompatActivity(), BottomNavigationView.OnNavigationItemS
 
     lateinit var viewModel: MainViewModel
 
+    private lateinit var binding: ActivityMainBinding
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main)
+        binding = ActivityMainBinding.inflate(layoutInflater)
+        setContentView(binding.root)
 
-        toolbar.setOnMenuItemClickListener { item ->
+        binding.toolbar.setOnMenuItemClickListener { item ->
             when (item.itemId) {
                 R.id.menuAddressWatch -> {
                     val intent = Intent(this, AddressWatchActivity::class.java)
@@ -55,6 +58,10 @@ class MainActivity : AppCompatActivity(), BottomNavigationView.OnNavigationItemS
 
         viewModel = ViewModelProvider(this).get(MainViewModel::class.java)
         viewModel.init()
+    }
+
+    fun setToolbarTitle(title: String) {
+        binding.toolbar.title = title
     }
 
     override fun onNavigationItemSelected(item: MenuItem): Boolean {

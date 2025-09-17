@@ -27,15 +27,14 @@ import io.horizontalsystems.ethereumkit.models.RpcSource
 import io.horizontalsystems.ethereumkit.sample.core.Erc20Adapter
 import io.horizontalsystems.ethereumkit.sample.core.EthereumAdapter
 import io.horizontalsystems.ethereumkit.sample.modules.main.GasPriceHelper
+import io.horizontalsystems.ethereumkit.sample.modules.main.MainActivity
 import io.horizontalsystems.ethereumkit.sample.modules.main.MainViewModel
-import io.horizontalsystems.uniswapkit.models.TradeType
-import kotlinx.android.synthetic.main.activity_main.*
 import java.math.BigDecimal
 
 class UniswapV3Fragment : Fragment() {
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
-        toolbar?.title = "Uniswap V3"
+        (requireActivity() as MainActivity).setToolbarTitle("Uniswap V3")
 
         val mainViewModel = activity?.let { ViewModelProvider(it)[MainViewModel::class.java] } ?: return null
 

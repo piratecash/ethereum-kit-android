@@ -31,6 +31,7 @@ import io.horizontalsystems.uniswapkit.models.TradeOptions
 import io.reactivex.android.schedulers.AndroidSchedulers
 import io.reactivex.disposables.CompositeDisposable
 import io.reactivex.schedulers.Schedulers
+import kotlinx.coroutines.runBlocking
 import java.math.BigDecimal
 import java.net.URI
 import java.util.logging.Logger
@@ -434,7 +435,7 @@ class MainViewModel : ViewModel() {
                 ethereumKit.rawTransaction(transactionData, gasPrice, gasLimit)
             }
             .flatMap { rawTransaction ->
-                val signature = signer.signature(rawTransaction)
+                val signature = runBlocking { signer.signature(rawTransaction) }
                 ethereumKit.send(rawTransaction, signature)
             }
             .subscribeOn(Schedulers.io())
@@ -491,7 +492,7 @@ class MainViewModel : ViewModel() {
                     ethereumKit.rawTransaction(transactionData, gasPrice, gasLimit)
                 }
                 .flatMap { rawTransaction ->
-                    val signature = signer.signature(rawTransaction)
+                    val signature = runBlocking { signer.signature(rawTransaction) }
                     ethereumKit.send(rawTransaction, signature)
                 }
                 .subscribeOn(Schedulers.io())

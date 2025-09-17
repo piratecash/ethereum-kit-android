@@ -14,13 +14,13 @@ import io.horizontalsystems.hdwalletkit.HDWallet
 import io.horizontalsystems.hdwalletkit.Mnemonic
 import java.math.BigInteger
 
-class Signer(
+open class Signer(
     private val transactionBuilder: TransactionBuilder,
     private val transactionSigner: TransactionSigner,
     private val ethSigner: EthSigner
 ) {
 
-    fun signature(rawTransaction: RawTransaction): Signature {
+    open suspend fun signature(rawTransaction: RawTransaction): Signature {
         return transactionSigner.signature(rawTransaction)
     }
 

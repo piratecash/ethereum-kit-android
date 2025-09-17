@@ -8,6 +8,7 @@ import io.horizontalsystems.ethereumkit.models.FullTransaction
 import io.horizontalsystems.ethereumkit.models.GasPrice
 import io.horizontalsystems.ethereumkit.sample.modules.main.Erc20Token
 import io.reactivex.Single
+import kotlinx.coroutines.runBlocking
 import java.math.BigDecimal
 
 class Erc20Adapter(
@@ -24,7 +25,7 @@ class Erc20Adapter(
         return ethereumKit
             .rawTransaction(transactionData, gasPrice, gasLimit)
             .flatMap { rawTransaction ->
-                val signature = signer.signature(rawTransaction)
+                val signature = runBlocking { signer.signature(rawTransaction) }
                 ethereumKit.send(rawTransaction, signature)
             }
     }

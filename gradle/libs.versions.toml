@@ -1,0 +1,11 @@
+[versions]
+room = "2.7.1"
+kotlinxCoroutinesCore = "1.10.1"
+
+[libraries]
+room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
+room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
+room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
+room-rxjava2 = { module = "androidx.room:room-rxjava2", version.ref = "room" }
+kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "kotlinxCoroutinesCore" }
+kotlinx-coroutines-rx2 = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-rx2", version.ref = "kotlinxCoroutinesCore" }
