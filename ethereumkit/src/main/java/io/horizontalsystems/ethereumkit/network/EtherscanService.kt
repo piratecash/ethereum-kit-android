@@ -5,7 +5,7 @@ import com.google.gson.GsonBuilder
 import com.google.gson.JsonElement
 import com.google.gson.reflect.TypeToken
 import io.horizontalsystems.ethereumkit.api.models.EtherscanResponse
-import io.horizontalsystems.ethereumkit.core.retryWhenError
+import io.horizontalsystems.ethereumkit.core.retryWhenErrors
 import io.horizontalsystems.ethereumkit.core.toHexString
 import io.horizontalsystems.ethereumkit.models.Address
 import io.reactivex.Single
@@ -16,7 +16,10 @@ import retrofit2.adapter.rxjava2.RxJava2CallAdapterFactory
 import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.http.GET
 import retrofit2.http.Query
+import timber.log.Timber
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.logging.Logger
+import kotlin.random.Random
 
 class EtherscanService(
     baseUrl: String,
@@ -24,7 +27,10 @@ class EtherscanService(
     private val chainId: Int,
 ) {
     private val apiKeysSize = apiKeys.size
-    private var apiKeyIndex = 0
+    private val apiKeyIndex = AtomicInteger(Random.nextInt(apiKeysSize))
+
+    @Volatile
+    private var lastUsedApiKey: String? = null
 
     private val logger = Logger.getLogger("EtherscanService")
 
@@ -71,9 +77,12 @@ class EtherscanService(
     }
 
     private fun getNextApiKey(): String {
-        if (apiKeyIndex >= apiKeysSize) apiKeyIndex = 0
-
-        return apiKeys[apiKeyIndex++]
+        val index = apiKeyIndex.getAndUpdate { i ->
+            if (i + 1 >= apiKeysSize) 0 else i + 1
+        }
+        return apiKeys[index].also {
+            lastUsedApiKey = it
+        }
     }
 
     fun getTransactionList(address: Address, startBlock: Long): Single<EtherscanResponse> {
@@ -83,7 +92,7 @@ class EtherscanService(
             startBlock = startBlock,
         ).map {
             parseResponse(it)
-        }.retryWhenError(RequestError.RateLimitExceed::class)
+        }.retryInCaseErrorWithLogging("getTransactionList")
     }
 
     fun getInternalTransactionList(address: Address, startBlock: Long): Single<EtherscanResponse> {
@@ -93,7 +102,7 @@ class EtherscanService(
             startBlock = startBlock,
         ).map {
             parseResponse(it)
-        }.retryWhenError(RequestError.RateLimitExceed::class)
+        }.retryInCaseErrorWithLogging("getInternalTransactionList")
     }
 
     fun getTokenTransactions(address: Address, startBlock: Long): Single<EtherscanResponse> {
@@ -103,7 +112,7 @@ class EtherscanService(
             startBlock = startBlock,
         ).map {
             parseResponse(it)
-        }.retryWhenError(RequestError.RateLimitExceed::class)
+        }.retryInCaseErrorWithLogging("getTokenTransactions")
     }
 
     fun getInternalTransactionsAsync(transactionHash: ByteArray): Single<EtherscanResponse> {
@@ -112,7 +121,7 @@ class EtherscanService(
             txHash = transactionHash.toHexString(),
         ).map {
             parseResponse(it)
-        }.retryWhenError(RequestError.RateLimitExceed::class)
+        }.retryInCaseErrorWithLogging("getInternalTransactionsAsync")
     }
 
     fun getEip721Transactions(address: Address, startBlock: Long): Single<EtherscanResponse> {
@@ -122,7 +131,7 @@ class EtherscanService(
             startBlock = startBlock,
         ).map {
             parseResponse(it)
-        }.retryWhenError(RequestError.RateLimitExceed::class)
+        }.retryInCaseErrorWithLogging("getEip721Transactions")
     }
 
     fun getEip1155Transactions(address: Address, startBlock: Long): Single<EtherscanResponse> {
@@ -132,7 +141,7 @@ class EtherscanService(
             startBlock = startBlock,
         ).map {
             parseResponse(it)
-        }.retryWhenError(RequestError.RateLimitExceed::class)
+        }.retryInCaseErrorWithLogging("getEip1155Transactions")
     }
 
     private fun parseResponse(response: JsonElement): EtherscanResponse {
@@ -143,23 +152,51 @@ class EtherscanService(
 
             if (status == "0" && message != "No transactions found") {
                 val result = responseObj["result"].asJsonPrimitive.asString
-                if (message == "NOTOK" && result == "Max rate limit reached") {
-                    throw RequestError.RateLimitExceed()
+                if (message == "NOTOK") {
+                    if (result == "Max rate limit reached") {
+                        throw RequestError.RateLimitExceed()
+                    } else if (result.startsWith("Invalid API Key") ||
+                        result.startsWith("Too many invalid api key attempts")
+                    ) {
+                        throw RequestError.InvalidApiKey()
+                    }
                 }
             }
-            val result: List<Map<String, String>> = gson.fromJson(responseObj["result"], object : TypeToken<List<Map<String, String>>>() {}.type)
+            val result: List<Map<String, String>> = gson.fromJson(
+                responseObj["result"],
+                object : TypeToken<List<Map<String, String>>>() {}.type
+            )
             return EtherscanResponse(status, message, result)
 
         } catch (rateLimitExceeded: RequestError.RateLimitExceed) {
             throw rateLimitExceeded
+        } catch (invalidApiKey: RequestError.InvalidApiKey) {
+            throw invalidApiKey
         } catch (err: Throwable) {
             throw RequestError.ResponseError("Unexpected response: $response")
         }
     }
 
+    private fun <T> Single<T>.retryInCaseErrorWithLogging(methodName: String) =
+        this.doOnError { error ->
+            val currentApiKey = lastUsedApiKey ?: "unknown"
+            when (error) {
+                is RequestError.RateLimitExceed -> {
+                    Timber.d("EtherscanService: Retrying $methodName due to RateLimitExceed. API key: $currentApiKey")
+                }
+                is RequestError.InvalidApiKey -> {
+                    Timber.d("EtherscanService: Retrying $methodName due to InvalidApiKey. API key: $currentApiKey")
+                }
+            }
+        }.retryWhenErrors(
+            RequestError.RateLimitExceed::class,
+            RequestError.InvalidApiKey::class
+        )
+
     open class RequestError(message: String? = null) : Exception(message ?: "") {
         class ResponseError(message: String) : RequestError(message)
         class RateLimitExceed : RequestError()
+        class InvalidApiKey : RequestError()
     }
 
     private interface EtherscanServiceAPI {
@@ -174,5 +211,4 @@ class EtherscanService(
             @Query("sort") sort: String? = "desc"
         ): Single<JsonElement>
     }
-
 }
