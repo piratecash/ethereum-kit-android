@@ -104,6 +104,22 @@ fun <T> Single<T>.retryWhenError(errorForRetry: KClass<*>, maxRetries: Int = 3):
     }
 }
 
+fun <T> Single<T>.retryWhenErrors(
+    vararg errorForRetry: KClass<*>,
+    maxRetries: Int = 5
+): Single<T> {
+    return retryWhen { errors ->
+        var retryCounter = 0L
+        errors.flatMap { error ->
+            if (errorForRetry.any { it == error::class } && retryCounter++ < maxRetries) {
+                Flowable.timer(retryCounter, TimeUnit.SECONDS)
+            } else {
+                Flowable.error(error)
+            }
+        }
+    }
+}
+
 object MustRetry : Exception()
 
 data class RetryOptions<T : Any>(
