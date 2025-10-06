@@ -17,7 +17,14 @@ class InternalTransactionSyncer(
         if (transactions.isEmpty()) return
 
         val internalTransactions = transactions.map { tx ->
-            InternalTransaction(tx.hash, tx.blockNumber, tx.from, tx.to, tx.value)
+            InternalTransaction(
+                hash = tx.hash,
+                traceId = tx.traceId,
+                blockNumber = tx.blockNumber,
+                from = tx.from,
+                to = tx.to,
+                value = tx.value
+            )
         }
 
         storage.saveInternalTransactions(internalTransactions)

@@ -9,7 +9,7 @@ import io.horizontalsystems.ethereumkit.models.Eip20Event
     entities = [
         Eip20Event::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 @TypeConverters(RoomTypeConverters::class, Eip20Database.TypeConverters::class)
@@ -21,6 +21,7 @@ abstract class Eip20Database : RoomDatabase() {
 
         fun getInstance(context: Context, databaseName: String): Eip20Database {
             return Room.databaseBuilder(context, Eip20Database::class.java, databaseName)
+                .addMigrations(migration2_3)
                 .fallbackToDestructiveMigration()
                 .allowMainThreadQueries()
                 .build()

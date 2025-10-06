@@ -53,7 +53,14 @@ data class ProviderInternalTransaction(
     val traceId: String
 ) {
 
-    fun internalTransaction() = InternalTransaction(hash, blockNumber, from, to, value)
+    fun internalTransaction() = InternalTransaction(
+        hash = hash,
+        traceId = traceId,
+        blockNumber = blockNumber,
+        from = from,
+        to = to,
+        value = value
+    )
 
 }
 

@@ -19,7 +19,7 @@ import io.horizontalsystems.ethereumkit.models.TransactionTag
             TransactionTag::class,
             TransactionSyncerState::class
         ],
-        version = 13,
+        version = 14,
         exportSchema = false
 )
 @TypeConverters(RoomTypeConverters::class, TransactionDatabase.TypeConverters::class)
@@ -33,10 +33,12 @@ abstract class TransactionDatabase : RoomDatabase() {
 
         fun getInstance(context: Context, databaseName: String): TransactionDatabase {
             return Room.databaseBuilder(context, TransactionDatabase::class.java, databaseName)
+                    .addMigrations(migration13_14)
                     .fallbackToDestructiveMigration()
                     .allowMainThreadQueries()
                     .build()
         }
+
     }
 
     class TypeConverters {

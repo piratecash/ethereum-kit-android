@@ -17,7 +17,17 @@ class Erc20TransactionSyncer(
         if (transactions.isEmpty()) return
 
         val events = transactions.map { tx ->
-            Eip20Event(tx.hash, tx.blockNumber, tx.contractAddress, tx.from, tx.to, tx.value, tx.tokenName, tx.tokenSymbol, tx.tokenDecimal)
+            Eip20Event(
+                hash = tx.hash,
+                blockNumber = tx.blockNumber,
+                contractAddress = tx.contractAddress,
+                from = tx.from,
+                to = tx.to,
+                value = tx.value,
+                tokenName = tx.tokenName,
+                tokenSymbol = tx.tokenSymbol,
+                tokenDecimal = tx.tokenDecimal
+            )
         }
 
         storage.save(events)
