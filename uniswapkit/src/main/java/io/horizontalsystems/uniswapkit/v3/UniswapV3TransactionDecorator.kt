@@ -259,9 +259,9 @@ class UniswapV3TransactionDecorator(private val wethAddress: Address) : ITransac
     }
 
     private fun findEip20Token(eventInstances: List<ContractEventInstance>, tokenAddress: Address): SwapDecoration.Token {
-        val tokenInfo = eventInstances
-            .mapNotNull { it as? TransferEventInstance }
-            .firstOrNull { it.contractAddress == tokenAddress }?.tokenInfo
+        val tokenInfo = null //eventInstances
+//            .mapNotNull { it as? TransferEventInstance }
+//            .firstOrNull { it.contractAddress == tokenAddress }?.tokenInfo
 
         return SwapDecoration.Token.Eip20Coin(tokenAddress, tokenInfo)
     }
