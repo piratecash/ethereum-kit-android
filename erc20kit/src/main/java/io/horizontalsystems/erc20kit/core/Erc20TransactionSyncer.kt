@@ -30,6 +30,18 @@ class Erc20TransactionSyncer(
             )
         }
 
+        // Delete zero-value duplicates before saving new events with correct values
+        events.forEach { newEvent ->
+            if (newEvent.value > java.math.BigInteger.ZERO) {
+                storage.deleteZeroValueDuplicate(
+                    hash = newEvent.hash,
+                    contractAddress = newEvent.contractAddress,
+                    from = newEvent.from,
+                    to = newEvent.to
+                )
+            }
+        }
+
         storage.save(events)
     }
 
@@ -37,7 +49,15 @@ class Erc20TransactionSyncer(
         val lastTransactionBlockNumber = storage.getLastEvent()?.blockNumber ?: 0
         val initial: Boolean = lastTransactionBlockNumber == 0L
 
-        return transactionProvider.getTokenTransactions(lastTransactionBlockNumber + 1)
+        // Request with overlap to catch late-indexed events from BSCScan
+        val SAFETY_OVERLAP = 3
+        val startBlock = if (lastTransactionBlockNumber > SAFETY_OVERLAP) {
+            lastTransactionBlockNumber - SAFETY_OVERLAP
+        } else {
+            0L
+        }
+
+        return transactionProvider.getTokenTransactions(startBlock)
                 .doOnSuccess { providerTokenTransactions -> handle(providerTokenTransactions) }
                 .map { providerTokenTransactions ->
                     val array = providerTokenTransactions.map { transaction ->

@@ -21,4 +21,19 @@ interface Eip20EventDao {
     @Query("SELECT * FROM Eip20Event WHERE hash IN (:hashes)")
     fun getEip20EventsByHashes(hashes: List<ByteArray>): List<Eip20Event>
 
+    @Query("""
+        DELETE FROM Eip20Event
+        WHERE hash = :hash
+          AND contractAddress = :contractAddress
+          AND `from` = :from
+          AND `to` = :to
+          AND value = 0
+    """)
+    fun deleteZeroValueDuplicate(
+        hash: ByteArray,
+        contractAddress: ByteArray,
+        from: ByteArray,
+        to: ByteArray
+    )
+
 }

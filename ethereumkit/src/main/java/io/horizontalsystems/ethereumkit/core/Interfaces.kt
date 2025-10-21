@@ -105,6 +105,7 @@ interface IEip20Storage {
     fun save(events: List<Eip20Event>)
     fun getEvents(): List<Eip20Event>
     fun getEventsByHashes(hashes: List<ByteArray>): List<Eip20Event>
+    fun deleteZeroValueDuplicate(hash: ByteArray, contractAddress: Address, from: Address, to: Address)
 }
 
 interface ITransactionSyncer {

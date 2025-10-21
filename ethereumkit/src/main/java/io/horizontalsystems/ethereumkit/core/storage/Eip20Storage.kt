@@ -1,6 +1,7 @@
 package io.horizontalsystems.ethereumkit.core.storage
 
 import io.horizontalsystems.ethereumkit.core.IEip20Storage
+import io.horizontalsystems.ethereumkit.models.Address
 import io.horizontalsystems.ethereumkit.models.Eip20Event
 
 class Eip20Storage(database: Eip20Database) : IEip20Storage {
@@ -18,5 +19,9 @@ class Eip20Storage(database: Eip20Database) : IEip20Storage {
 
     override fun getEventsByHashes(hashes: List<ByteArray>): List<Eip20Event> =
         erc20EventDao.getEip20EventsByHashes(hashes)
+
+    override fun deleteZeroValueDuplicate(hash: ByteArray, contractAddress: Address, from: Address, to: Address) {
+        erc20EventDao.deleteZeroValueDuplicate(hash, contractAddress.raw, from.raw, to.raw)
+    }
 
 }

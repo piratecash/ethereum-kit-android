@@ -276,9 +276,9 @@ class UniswapV3TransactionDecorator(private val wethAddress: Address) : ITransac
                     if (transferEventDecoration.from == userAddress) {
                         amountIn += transferEventDecoration.value
                     }
-                    /*if (transferEventDecoration.to == userAddress) {
+                    if (transferEventDecoration.to == userAddress) {
                         amountOut += transferEventDecoration.value
-                    }*/
+                    }
                 }
             }
         }
