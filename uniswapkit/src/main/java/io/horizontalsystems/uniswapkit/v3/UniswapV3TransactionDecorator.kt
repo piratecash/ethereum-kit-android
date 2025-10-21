@@ -239,11 +239,11 @@ class UniswapV3TransactionDecorator(private val wethAddress: Address) : ITransac
                 )
             }
             SwapType.TokenToToken -> {
-                val amountOut = //if (eventInstances.isEmpty()) {
+                val amountOut = if (eventInstances.isEmpty()) {
                     SwapDecoration.Amount.Extremum(amountOutMinimum)
-//                } else {
-//                    SwapDecoration.Amount.Exact(totalTokenAmount(recipient, tokenOut, eventInstances, false))
-//                }
+                } else {
+                    SwapDecoration.Amount.Exact(totalTokenAmount(recipient, tokenOut, eventInstances, false))
+                }
 
                 return SwapDecoration(
                     to,
@@ -276,9 +276,9 @@ class UniswapV3TransactionDecorator(private val wethAddress: Address) : ITransac
                     if (transferEventDecoration.from == userAddress) {
                         amountIn += transferEventDecoration.value
                     }
-                    if (transferEventDecoration.to == userAddress) {
+                    /*if (transferEventDecoration.to == userAddress) {
                         amountOut += transferEventDecoration.value
-                    }
+                    }*/
                 }
             }
         }
