@@ -8,19 +8,34 @@ class TransactionSource(val name: String, val type: SourceType) {
         }
 
     sealed class SourceType {
-        class Etherscan(val apiBaseUrl: String, val txBaseUrl: String, val apiKeys: List<String>) : SourceType()
+        class Etherscan(val apiBaseUrl: String, val txBaseUrl: String, val apiKeys: List<String>) :
+            SourceType()
     }
 
     companion object {
-        private fun etherscan(apiSubdomain: String, txSubdomain: String?, apiKeys: List<String>): TransactionSource {
+        private fun etherscan(
+            apiSubdomain: String,
+            txSubdomain: String?,
+            apiKeys: List<String>,
+            txBaseUrl: String?
+        ): TransactionSource {
             return TransactionSource(
                 "etherscan.io",
-                SourceType.Etherscan("https://$apiSubdomain.etherscan.io/v2/", "https://${txSubdomain?.let { "$it." } ?: ""}etherscan.io", apiKeys)
+                SourceType.Etherscan(
+                    apiBaseUrl = "https://$apiSubdomain.etherscan.io/v2/",
+                    txBaseUrl = txBaseUrl
+                        ?: "https://${txSubdomain?.let { "$it." } ?: ""}etherscan.io",
+                    apiKeys = apiKeys)
             )
         }
 
-        fun etherscanApi(apiKeys: List<String>): TransactionSource {
-            return etherscan("api", null, apiKeys)
+        fun etherscanApi(apiKeys: List<String>, txBaseUrl: String? = null): TransactionSource {
+            return etherscan(
+                apiSubdomain = "api",
+                txSubdomain = null,
+                apiKeys = apiKeys,
+                txBaseUrl = txBaseUrl
+            )
         }
 
     }
