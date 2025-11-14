@@ -17,11 +17,12 @@ class TransactionSource(val name: String, val type: SourceType) {
             apiSubdomain: String,
             txSubdomain: String?,
             apiKeys: List<String>,
+            name: String?,
             txBaseUrl: String?
         ): TransactionSource {
             return TransactionSource(
-                "etherscan.io",
-                SourceType.Etherscan(
+                name = name ?: "etherscan.io",
+                type = SourceType.Etherscan(
                     apiBaseUrl = "https://$apiSubdomain.etherscan.io/v2/",
                     txBaseUrl = txBaseUrl
                         ?: "https://${txSubdomain?.let { "$it." } ?: ""}etherscan.io",
@@ -29,11 +30,12 @@ class TransactionSource(val name: String, val type: SourceType) {
             )
         }
 
-        fun etherscanApi(apiKeys: List<String>, txBaseUrl: String? = null): TransactionSource {
+        fun etherscanApi(apiKeys: List<String>, name: String? = null, txBaseUrl: String? = null): TransactionSource {
             return etherscan(
                 apiSubdomain = "api",
                 txSubdomain = null,
                 apiKeys = apiKeys,
+                name = name,
                 txBaseUrl = txBaseUrl
             )
         }
