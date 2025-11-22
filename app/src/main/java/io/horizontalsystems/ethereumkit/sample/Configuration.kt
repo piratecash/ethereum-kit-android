@@ -6,10 +6,10 @@ import io.horizontalsystems.ethereumkit.sample.modules.main.Erc20Token
 
 object Configuration {
     const val webSocket: Boolean = false
-    val chain: Chain = Chain.Ethereum
+    val chain: Chain = Chain.BinanceSmartChain
     const val walletId = "walletId"
     val watchAddress: String? = null
-    const val defaultsWords = "apart approve black comfort steel spin real renew tone primary key cherry"
+    const val defaultsWords = BuildConfig.WORDS
 
     const val ethereumRpc = "https://api-dev.blocksdecoded.com/v1/ethereum-rpc/mainnet"
     const val etherscanKey = "GKNHXT22ED7PRVCKZATFZQD1YI7FK9AAYE"
@@ -30,6 +30,8 @@ object Configuration {
                         Erc20Token("Uniswap", "UNI", Address("0xFa7F8980b0f1E64A2062791cc3b0871572f1F7f0"), 18),
                 )
                 Chain.BinanceSmartChain -> listOf(
+                        Erc20Token("wDash", "wDash", Address("0xcbfb0d98151d03ef8bb71fa668f57df5e3fb4673"), 8),
+                        Erc20Token("PirateCash", "PirateCash", Address("0xaFCC12e4040615E7Afe9fb4330eB3D9120acAC05"), 8),
                         Erc20Token("Beefy.Finance", "BIFI", Address("0xCa3F508B8e4Dd382eE878A314789373D80A5190A"), 18),
                         Erc20Token("PancakeSwap", "CAKE", Address("0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82"), 18),
                         Erc20Token("BUSD", "BUSD", Address("0xe9e7cea3dedca5984780bafc599bd69add087d56"), 18)
