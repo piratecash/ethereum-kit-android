@@ -9,7 +9,7 @@ object Configuration {
     val chain: Chain = Chain.BinanceSmartChain
     const val walletId = "walletId"
     val watchAddress: String? = null
-    const val defaultsWords = BuildConfig.WORDS
+    val defaultsWords = BuildConfig.WORDS
 
     const val ethereumRpc = "https://api-dev.blocksdecoded.com/v1/ethereum-rpc/mainnet"
     const val etherscanKey = "GKNHXT22ED7PRVCKZATFZQD1YI7FK9AAYE"
