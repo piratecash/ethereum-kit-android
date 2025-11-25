@@ -3,6 +3,7 @@ package io.horizontalsystems.erc20kit.core
 import io.horizontalsystems.ethereumkit.core.IEip20Storage
 import io.horizontalsystems.ethereumkit.core.ITransactionProvider
 import io.horizontalsystems.ethereumkit.core.ITransactionSyncer
+import io.horizontalsystems.ethereumkit.core.TokenTransactionProvider
 import io.horizontalsystems.ethereumkit.models.Eip20Event
 import io.horizontalsystems.ethereumkit.models.ProviderTokenTransaction
 import io.horizontalsystems.ethereumkit.models.Transaction
@@ -10,6 +11,8 @@ import io.reactivex.Single
 
 class Erc20TransactionSyncer(
         private val transactionProvider: ITransactionProvider,
+        private val tokenTransactionProvider: TokenTransactionProvider,
+        private val fallbackHistoryBlockWindow: Long,
         private val storage: IEip20Storage
 ) : ITransactionSyncer {
 
@@ -57,7 +60,16 @@ class Erc20TransactionSyncer(
             0L
         }
 
-        return transactionProvider.getTokenTransactions(startBlock)
+        val receivedTransactions = if (startBlock == 0L) {
+            requestTokenTransactionsEtherscan(startBlock)
+                .onErrorResumeNext {
+                    tokenTransactionProvider.getTokenTransactions(-fallbackHistoryBlockWindow)
+                }
+        } else {
+            tokenTransactionProvider.getTokenTransactions(startBlock)
+        }
+
+        return receivedTransactions
                 .doOnSuccess { providerTokenTransactions -> handle(providerTokenTransactions) }
                 .map { providerTokenTransactions ->
                     val array = providerTokenTransactions.map { transaction ->
@@ -77,6 +89,10 @@ class Erc20TransactionSyncer(
                     Pair(array, initial)
                 }
                 .onErrorReturnItem(Pair(listOf(), initial))
+    }
+
+    private fun requestTokenTransactionsEtherscan(startBlock: Long): Single<List<ProviderTokenTransaction>> {
+        return transactionProvider.getTokenTransactions(startBlock)
     }
 
 }

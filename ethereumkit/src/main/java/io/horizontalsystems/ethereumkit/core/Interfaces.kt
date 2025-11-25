@@ -145,6 +145,15 @@ interface ITransactionProvider {
     fun getEip1155Transactions(startBlock: Long): Single<List<ProviderEip1155Transaction>>
 }
 
+interface TokenTransactionProvider {
+    /***
+     * Gets token transactions starting from the specified block.
+     * @param startBlock The block number from which to start fetching token transactions.
+     * Negative value means fetch from the latest block.
+     */
+    fun getTokenTransactions(startBlock: Long): Single<List<ProviderTokenTransaction>>
+}
+
 interface INonceProvider {
     fun getNonce(defaultBlockParameter: DefaultBlockParameter): Single<Long>
 }

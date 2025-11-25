@@ -108,8 +108,23 @@ class EtherscanTransactionProvider(
                         val cumulativeGasUsed = tx.getValue("cumulativeGasUsed").toLong()
 
                         ProviderTokenTransaction(
-                            blockNumber, timestamp, hash, nonce, blockHash, from, contractAddress, to, value, tokenName, tokenSymbol, tokenDecimal,
-                            transactionIndex, gasLimit, gasPrice, gasUsed, cumulativeGasUsed
+                            blockNumber = blockNumber,
+                            timestamp = timestamp,
+                            hash = hash,
+                            nonce = nonce,
+                            blockHash = blockHash,
+                            from = from,
+                            contractAddress = contractAddress,
+                            to = to,
+                            value = value,
+                            tokenName = tokenName,
+                            tokenSymbol = tokenSymbol,
+                            tokenDecimal = tokenDecimal,
+                            transactionIndex = transactionIndex,
+                            gasLimit = gasLimit,
+                            gasPrice = gasPrice,
+                            gasUsed = gasUsed,
+                            cumulativeGasUsed = cumulativeGasUsed
                         )
 
                     } catch (throwable: Throwable) {

@@ -4,7 +4,11 @@ import android.content.Context
 import io.horizontalsystems.erc20kit.contract.Eip20ContractMethodFactories
 import io.horizontalsystems.ethereumkit.core.EthereumKit
 import io.horizontalsystems.ethereumkit.core.EthereumKit.SyncState
-import io.horizontalsystems.ethereumkit.models.*
+import io.horizontalsystems.ethereumkit.models.Address
+import io.horizontalsystems.ethereumkit.models.Chain
+import io.horizontalsystems.ethereumkit.models.DefaultBlockParameter
+import io.horizontalsystems.ethereumkit.models.FullTransaction
+import io.horizontalsystems.ethereumkit.models.TransactionData
 import io.reactivex.BackpressureStrategy
 import io.reactivex.Flowable
 import io.reactivex.Single
@@ -13,11 +17,11 @@ import io.reactivex.schedulers.Schedulers
 import java.math.BigInteger
 
 class Erc20Kit(
-        private val ethereumKit: EthereumKit,
-        private val transactionManager: TransactionManager,
-        private val balanceManager: IBalanceManager,
-        private val allowanceManager: AllowanceManager,
-        private val state: KitState = KitState()
+    private val ethereumKit: EthereumKit,
+    private val transactionManager: TransactionManager,
+    private val balanceManager: IBalanceManager,
+    private val allowanceManager: AllowanceManager,
+    private val state: KitState = KitState()
 ) : IBalanceManagerListener {
 
     private val disposables = CompositeDisposable()
@@ -27,19 +31,19 @@ class Erc20Kit(
         state.balance = balanceManager.balance
 
         ethereumKit.syncStateFlowable
-                .subscribe {
-                    onSyncStateUpdate(it)
-                }.let {
-                    disposables.add(it)
-                }
+            .subscribe {
+                onSyncStateUpdate(it)
+            }.let {
+                disposables.add(it)
+            }
 
         transactionManager.transactionsAsync
-                .subscribeOn(Schedulers.io())
-                .subscribe {
-                    balanceManager.sync()
-                }.let {
-                    disposables.add(it)
-                }
+            .subscribeOn(Schedulers.io())
+            .subscribe {
+                balanceManager.sync()
+            }.let {
+                disposables.add(it)
+            }
     }
 
     val syncState: SyncState
@@ -75,7 +79,10 @@ class Erc20Kit(
 
     fun refresh() {}
 
-    fun getAllowanceAsync(spenderAddress: Address, defaultBlockParameter: DefaultBlockParameter = DefaultBlockParameter.Latest): Single<BigInteger> {
+    fun getAllowanceAsync(
+        spenderAddress: Address,
+        defaultBlockParameter: DefaultBlockParameter = DefaultBlockParameter.Latest
+    ): Single<BigInteger> {
         return allowanceManager.allowance(spenderAddress, defaultBlockParameter)
     }
 
@@ -120,23 +127,30 @@ class Erc20Kit(
     companion object {
 
         fun getInstance(
-                context: Context,
-                ethereumKit: EthereumKit,
-                contractAddress: Address
+            context: Context,
+            ethereumKit: EthereumKit,
+            contractAddress: Address
         ): Erc20Kit {
 
             val address = ethereumKit.receiveAddress
 
-            val erc20KitDatabase = Erc20DatabaseManager.getErc20Database(context, ethereumKit.chain, ethereumKit.walletId, contractAddress)
+            val erc20KitDatabase = Erc20DatabaseManager.getErc20Database(
+                context,
+                ethereumKit.chain,
+                ethereumKit.walletId,
+                contractAddress
+            )
             val roomStorage = Erc20Storage(erc20KitDatabase)
             val balanceStorage: ITokenBalanceStorage = roomStorage
 
             val dataProvider: IDataProvider = DataProvider(ethereumKit)
             val transactionManager = TransactionManager(contractAddress, ethereumKit)
-            val balanceManager: IBalanceManager = BalanceManager(contractAddress, address, balanceStorage, dataProvider)
+            val balanceManager: IBalanceManager =
+                BalanceManager(contractAddress, address, balanceStorage, dataProvider)
             val allowanceManager = AllowanceManager(ethereumKit, contractAddress, address)
 
-            val erc20Kit = Erc20Kit(ethereumKit, transactionManager, balanceManager, allowanceManager)
+            val erc20Kit =
+                Erc20Kit(ethereumKit, transactionManager, balanceManager, allowanceManager)
 
             balanceManager.listener = erc20Kit
 
@@ -144,12 +158,24 @@ class Erc20Kit(
         }
 
         fun addTransactionSyncer(ethereumKit: EthereumKit) {
-            ethereumKit.addTransactionSyncer(Erc20TransactionSyncer(ethereumKit.transactionProvider, ethereumKit.eip20Storage))
+            ethereumKit.addTransactionSyncer(
+                transactionSyncer = Erc20TransactionSyncer(
+                    ethereumKit.transactionProvider,
+                    ethereumKit.tokenTransactionProvider,
+                    ethereumKit.fallbackHistoryBlockWindow,
+                    ethereumKit.eip20Storage
+                )
+            )
         }
 
         fun addDecorators(ethereumKit: EthereumKit) {
             ethereumKit.addMethodDecorator(Eip20MethodDecorator(Eip20ContractMethodFactories))
-            ethereumKit.addEventDecorator(Eip20EventDecorator(ethereumKit.receiveAddress, ethereumKit.eip20Storage))
+            ethereumKit.addEventDecorator(
+                Eip20EventDecorator(
+                    ethereumKit.receiveAddress,
+                    ethereumKit.eip20Storage
+                )
+            )
             ethereumKit.addTransactionDecorator(Eip20TransactionDecorator(ethereumKit.receiveAddress))
         }
 

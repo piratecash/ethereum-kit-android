@@ -72,6 +72,8 @@ class EthereumKit(
     val chain: Chain,
     val walletId: String,
     val transactionProvider: ITransactionProvider,
+    val tokenTransactionProvider: TokenTransactionProvider,
+    val fallbackHistoryBlockWindow: Long,
     val eip20Storage: IEip20Storage,
     private val decorationManager: DecorationManager,
     private val state: EthereumKitState = EthereumKitState()
@@ -161,7 +163,11 @@ class EthereumKit(
         return transactionManager.getFullTransactionsFlowable(tags)
     }
 
-    fun getFullTransactionsAsync(tags: List<List<String>>, fromHash: ByteArray? = null, limit: Int? = null): Single<List<FullTransaction>> {
+    fun getFullTransactionsAsync(
+        tags: List<List<String>>,
+        fromHash: ByteArray? = null,
+        limit: Int? = null
+    ): Single<List<FullTransaction>> {
         return transactionManager.getFullTransactionsAsync(tags, fromHash, limit)
     }
 
@@ -193,12 +199,22 @@ class EthereumKit(
         return blockchain.estimateGas(to, resolvedAmount, chain.gasLimit, gasPrice, null)
     }
 
-    fun estimateGas(to: Address?, value: BigInteger?, gasPrice: GasPrice?, data: ByteArray?): Single<Long> {
+    fun estimateGas(
+        to: Address?,
+        value: BigInteger?,
+        gasPrice: GasPrice?,
+        data: ByteArray?
+    ): Single<Long> {
         return blockchain.estimateGas(to, value, chain.gasLimit, gasPrice, data)
     }
 
     fun estimateGas(transactionData: TransactionData, gasPrice: GasPrice? = null): Single<Long> {
-        return estimateGas(transactionData.to, transactionData.value, gasPrice, transactionData.input)
+        return estimateGas(
+            transactionData.to,
+            transactionData.value,
+            gasPrice,
+            transactionData.input
+        )
     }
 
     fun rawTransaction(
@@ -225,7 +241,8 @@ class EthereumKit(
         gasLimit: Long,
         nonce: Long? = null
     ): Single<RawTransaction> {
-        val nonceSingle = nonce?.let { Single.just(it) } ?: nonceProvider.getNonce(DefaultBlockParameter.Pending)
+        val nonceSingle =
+            nonce?.let { Single.just(it) } ?: nonceProvider.getNonce(DefaultBlockParameter.Pending)
 
         return nonceSingle.flatMap { nonce ->
             Single.just(RawTransaction(gasPrice, gasLimit, address, value, nonce, transactionInput))
@@ -247,11 +264,21 @@ class EthereumKit(
         return transactionManager.etherTransferTransactionData(address = address, value = value)
     }
 
-    fun getLogs(address: Address?, topics: List<ByteArray?>, fromBlock: Long, toBlock: Long, pullTimestamps: Boolean): Single<List<TransactionLog>> {
+    fun getLogs(
+        address: Address?,
+        topics: List<ByteArray?>,
+        fromBlock: Long,
+        toBlock: Long,
+        pullTimestamps: Boolean
+    ): Single<List<TransactionLog>> {
         return blockchain.getLogs(address, topics, fromBlock, toBlock, pullTimestamps)
     }
 
-    fun getStorageAt(contractAddress: Address, position: ByteArray, defaultBlockParameter: DefaultBlockParameter): Single<ByteArray> {
+    fun getStorageAt(
+        contractAddress: Address,
+        position: ByteArray,
+        defaultBlockParameter: DefaultBlockParameter
+    ): Single<ByteArray> {
         return blockchain.getStorageAt(contractAddress, position, defaultBlockParameter)
     }
 
@@ -332,7 +359,7 @@ class EthereumKit(
         decorationManager.addTransactionDecorator(decorator)
     }
 
-    internal fun <T: Any> rpcSingle(rpc: JsonRpc<T>): Single<T> {
+    internal fun <T : Any> rpcSingle(rpc: JsonRpc<T>): Single<T> {
         return blockchain.rpcSingle(rpc)
     }
 
@@ -376,6 +403,9 @@ class EthereumKit(
 
     companion object {
 
+        const val BLOCKS_PER_HOUR = 1200L
+        const val DEFAULT_FALLBACK_HISTORY_BLOCK_WINDOW = 6 * 24 * BLOCKS_PER_HOUR
+
         val gson = GsonBuilder()
             .setLenient()
             .registerTypeAdapter(BigInteger::class.java, BigIntegerTypeAdapter())
@@ -384,7 +414,10 @@ class EthereumKit(
             .registerTypeAdapter(Int::class.java, IntTypeAdapter())
             .registerTypeAdapter(ByteArray::class.java, ByteArrayTypeAdapter())
             .registerTypeAdapter(Address::class.java, AddressTypeAdapter())
-            .registerTypeHierarchyAdapter(DefaultBlockParameter::class.java, DefaultBlockParameterTypeAdapter())
+            .registerTypeHierarchyAdapter(
+                DefaultBlockParameter::class.java,
+                DefaultBlockParameterTypeAdapter()
+            )
             .registerTypeAdapter(
                 object : TypeToken<Optional<RpcTransaction>>() {}.type,
                 OptionalTypeAdapter<RpcTransaction>(RpcTransaction::class.java)
@@ -393,7 +426,10 @@ class EthereumKit(
                 object : TypeToken<Optional<RpcTransactionReceipt>>() {}.type,
                 OptionalTypeAdapter<RpcTransactionReceipt>(RpcTransactionReceipt::class.java)
             )
-            .registerTypeAdapter(object : TypeToken<Optional<RpcBlock>>() {}.type, OptionalTypeAdapter<RpcBlock>(RpcBlock::class.java))
+            .registerTypeAdapter(
+                object : TypeToken<Optional<RpcBlock>>() {}.type,
+                OptionalTypeAdapter<RpcBlock>(RpcBlock::class.java)
+            )
             .create()
 
         fun call(
@@ -416,7 +452,15 @@ class EthereumKit(
             gasPrice: GasPrice,
             data: ByteArray?
         ): Single<Long> {
-            return RpcBlockchain.estimateGas(rpcSource, from, to, value, chain.gasLimit, gasPrice, data)
+            return RpcBlockchain.estimateGas(
+                rpcSource,
+                from,
+                to,
+                value,
+                chain.gasLimit,
+                gasPrice,
+                data
+            )
         }
 
         fun estimateGas(
@@ -426,7 +470,15 @@ class EthereumKit(
             transactionData: TransactionData,
             gasPrice: GasPrice
         ): Single<Long> {
-            return estimateGas(rpcSource, chain, from, transactionData.to, transactionData.value, gasPrice, transactionData.input)
+            return estimateGas(
+                rpcSource,
+                chain,
+                from,
+                transactionData.to,
+                transactionData.value,
+                gasPrice,
+                transactionData.input
+            )
         }
 
         fun init() {
@@ -441,12 +493,21 @@ class EthereumKit(
             chain: Chain,
             rpcSource: RpcSource,
             transactionSource: TransactionSource,
-            walletId: String
+            walletId: String,
+            fallbackHistoryBlockWindow: Long = DEFAULT_FALLBACK_HISTORY_BLOCK_WINDOW
         ): EthereumKit {
             val seed = Mnemonic().toSeed(words, passphrase)
             val privateKey = Signer.privateKey(seed, chain)
             val address = ethereumAddress(privateKey)
-            return getInstance(application, address, chain, rpcSource, transactionSource, walletId)
+            return getInstance(
+                application,
+                address,
+                chain,
+                rpcSource,
+                transactionSource,
+                walletId,
+                fallbackHistoryBlockWindow
+            )
         }
 
         fun getInstance(
@@ -455,7 +516,8 @@ class EthereumKit(
             chain: Chain,
             rpcSource: RpcSource,
             transactionSource: TransactionSource,
-            walletId: String
+            walletId: String,
+            fallbackHistoryBlockWindow: Long = DEFAULT_FALLBACK_HISTORY_BLOCK_WINDOW
         ): EthereumKit {
 
             val connectionManager = ConnectionManager(application)
@@ -479,23 +541,40 @@ class EthereumKit(
             val transactionBuilder = TransactionBuilder(address, chain.id)
             val transactionProvider = transactionProvider(transactionSource, address, chain.id)
 
-            val apiDatabase = EthereumDatabaseManager.getEthereumApiDatabase(application, walletId, chain)
+            val tokenTransactionProvider = BinanceTokenTransactionProvider(
+                RpcSource.binanceSmartChainHttp().uris,
+                address,
+                chain.id
+            )
+
+            val apiDatabase =
+                EthereumDatabaseManager.getEthereumApiDatabase(application, walletId, chain)
             val storage = ApiStorage(apiDatabase)
 
             val blockchain = RpcBlockchain.instance(address, storage, syncer, transactionBuilder)
 
-            val transactionDatabase = EthereumDatabaseManager.getTransactionDatabase(application, walletId, chain)
+            val transactionDatabase =
+                EthereumDatabaseManager.getTransactionDatabase(application, walletId, chain)
             val transactionStorage = TransactionStorage(transactionDatabase)
             val transactionSyncerStateStorage = TransactionSyncerStateStorage(transactionDatabase)
 
-            val erc20Database = EthereumDatabaseManager.getErc20Database(application, walletId, chain)
+            val erc20Database =
+                EthereumDatabaseManager.getErc20Database(application, walletId, chain)
             val erc20Storage = Eip20Storage(erc20Database)
 
-            val ethereumTransactionSyncer = EthereumTransactionSyncer(transactionProvider, transactionSyncerStateStorage)
-            val internalTransactionsSyncer = InternalTransactionSyncer(transactionProvider, transactionStorage)
+            val ethereumTransactionSyncer =
+                EthereumTransactionSyncer(transactionProvider, transactionSyncerStateStorage)
+            val internalTransactionsSyncer =
+                InternalTransactionSyncer(transactionProvider, transactionStorage)
 
             val decorationManager = DecorationManager(address, transactionStorage)
-            val transactionManager = TransactionManager(address, transactionStorage, decorationManager, blockchain, transactionProvider)
+            val transactionManager = TransactionManager(
+                address,
+                transactionStorage,
+                decorationManager,
+                blockchain,
+                transactionProvider
+            )
             val transactionSyncManager = TransactionSyncManager(transactionManager)
 
             transactionSyncManager.add(internalTransactionsSyncer)
@@ -514,6 +593,8 @@ class EthereumKit(
                 chain,
                 walletId,
                 transactionProvider,
+                tokenTransactionProvider,
+                fallbackHistoryBlockWindow,
                 erc20Storage,
                 decorationManager
             )
@@ -529,17 +610,27 @@ class EthereumKit(
             EthereumDatabaseManager.clear(context, chain, walletId)
         }
 
-        private fun transactionProvider(transactionSource: TransactionSource, address: Address, chainId: Int): ITransactionProvider {
+        private fun transactionProvider(
+            transactionSource: TransactionSource,
+            address: Address,
+            chainId: Int
+        ): ITransactionProvider {
             when (transactionSource.type) {
                 is TransactionSource.SourceType.Etherscan -> {
-                    val service = EtherscanService(transactionSource.type.apiBaseUrl, transactionSource.type.apiKeys, chainId)
+                    val service = EtherscanService(
+                        transactionSource.type.apiBaseUrl,
+                        transactionSource.type.apiKeys,
+                        chainId
+                    )
                     return EtherscanTransactionProvider(service, address)
                 }
             }
         }
 
         private fun ethereumAddress(privateKey: BigInteger): Address {
-            val publicKey = CryptoUtils.ecKeyFromPrivate(privateKey).publicKeyPoint.getEncoded(false).drop(1).toByteArray()
+            val publicKey =
+                CryptoUtils.ecKeyFromPrivate(privateKey).publicKeyPoint.getEncoded(false).drop(1)
+                    .toByteArray()
             return Address(CryptoUtils.sha3(publicKey).takeLast(20).toByteArray())
         }
 
