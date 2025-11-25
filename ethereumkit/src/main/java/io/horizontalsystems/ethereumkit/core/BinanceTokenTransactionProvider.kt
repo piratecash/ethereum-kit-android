@@ -132,7 +132,7 @@ class BinanceTokenTransactionProvider(
             val to = minOf(currentFrom + currentChunkSize - 1, endBlock)
             try {
                 val chunkLogs = fetchLogsForChunk(currentFrom, to, uri)
-                Timber.d("Fetched logs (${chunkLogs.size} from $currentFrom to $to (${to-currentFrom}) on $uri for chanid $chainId")
+                Timber.d("Fetched logs (${chunkLogs.size} from $currentFrom to $to (${to-currentFrom}), left ${endBlock-to} blocks on $uri for chanid $chainId")
                 allLogs.addAll(chunkLogs)
                 currentFrom = to + 1
                 // Reset to initial size on success
