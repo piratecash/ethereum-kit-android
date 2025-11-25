@@ -3,9 +3,11 @@ package io.horizontalsystems.ethereumkit.core.storage
 import io.horizontalsystems.ethereumkit.core.IEip20Storage
 import io.horizontalsystems.ethereumkit.models.Address
 import io.horizontalsystems.ethereumkit.models.Eip20Event
+import io.horizontalsystems.ethereumkit.models.Eip20SyncState
 
 class Eip20Storage(database: Eip20Database) : IEip20Storage {
     private val erc20EventDao = database.eip20EventDao()
+    private val syncStateDao = database.eip20SyncStateDao()
 
     override fun getLastEvent(): Eip20Event? =
         erc20EventDao.getLastEip20Event()
@@ -24,4 +26,14 @@ class Eip20Storage(database: Eip20Database) : IEip20Storage {
         erc20EventDao.deleteZeroValueDuplicate(hash, contractAddress.raw, from.raw, to.raw)
     }
 
+    override fun getLastScannedBlock(): Long? =
+        syncStateDao.get(CURSOR_KEY)?.lastScannedBlock
+
+    override fun saveLastScannedBlock(blockNumber: Long) {
+        syncStateDao.insert(Eip20SyncState(CURSOR_KEY, blockNumber))
+    }
+
+    companion object {
+        private const val CURSOR_KEY = "0x0000000000000000000000000000000000000000"
+    }
 }

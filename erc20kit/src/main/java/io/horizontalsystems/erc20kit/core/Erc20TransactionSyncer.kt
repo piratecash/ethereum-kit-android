@@ -8,6 +8,7 @@ import io.horizontalsystems.ethereumkit.models.Eip20Event
 import io.horizontalsystems.ethereumkit.models.ProviderTokenTransaction
 import io.horizontalsystems.ethereumkit.models.Transaction
 import io.reactivex.Single
+import io.horizontalsystems.ethereumkit.models.Address
 
 class Erc20TransactionSyncer(
         private val transactionProvider: ITransactionProvider,
@@ -49,13 +50,13 @@ class Erc20TransactionSyncer(
     }
 
     override fun getTransactionsSingle(): Single<Pair<List<Transaction>, Boolean>> {
-        val lastTransactionBlockNumber = storage.getLastEvent()?.blockNumber ?: 0
-        val initial: Boolean = lastTransactionBlockNumber == 0L
+        val lastScannedBlock = storage.getLastScannedBlock() ?: 0
+        val initial: Boolean = lastScannedBlock == 0L
 
-        // Request with overlap to catch late-indexed events from BSCScan
-        val SAFETY_OVERLAP = 3
-        val startBlock = if (lastTransactionBlockNumber > SAFETY_OVERLAP) {
-            lastTransactionBlockNumber - SAFETY_OVERLAP
+        // Overlap to survive small reorgs/late indexing
+        val SAFETY_OVERLAP = 6
+        val startBlock = if (lastScannedBlock > SAFETY_OVERLAP) {
+            lastScannedBlock - SAFETY_OVERLAP
         } else {
             0L
         }
@@ -70,9 +71,12 @@ class Erc20TransactionSyncer(
         }
 
         return receivedTransactions
-                .doOnSuccess { providerTokenTransactions -> handle(providerTokenTransactions) }
+                .doOnSuccess { result ->
+                    handle(result.transactions)
+                    storage.saveLastScannedBlock(result.lastScannedBlock)
+                }
                 .map { providerTokenTransactions ->
-                    val array = providerTokenTransactions.map { transaction ->
+                    val array = providerTokenTransactions.transactions.map { transaction ->
                         Transaction(
                                 hash = transaction.hash,
                                 timestamp = transaction.timestamp,
@@ -91,8 +95,12 @@ class Erc20TransactionSyncer(
                 .onErrorReturnItem(Pair(listOf(), initial))
     }
 
-    private fun requestTokenTransactionsEtherscan(startBlock: Long): Single<List<ProviderTokenTransaction>> {
+    private fun requestTokenTransactionsEtherscan(startBlock: Long): Single<TokenTransactionProvider.TokenTransactionsResult> {
         return transactionProvider.getTokenTransactions(startBlock)
+            .map { list ->
+                val maxBlock = list.maxOfOrNull { it.blockNumber } ?: startBlock
+                TokenTransactionProvider.TokenTransactionsResult(list, maxBlock)
+            }
     }
 
 }

@@ -39,3 +39,15 @@ val migration2_3 = object : Migration(2, 3) {
         database.execSQL("ALTER TABLE `Eip20Event_new` RENAME TO `Eip20Event`")
     }
 }
+
+val migration3_4 = object : Migration(3, 4) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL("""
+            CREATE TABLE IF NOT EXISTS `Eip20SyncState` (
+                `contractAddress` TEXT NOT NULL,
+                `lastScannedBlock` INTEGER NOT NULL,
+                PRIMARY KEY(`contractAddress`)
+            )
+        """.trimIndent())
+    }
+}

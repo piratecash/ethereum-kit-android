@@ -87,14 +87,13 @@ class BinanceTokenTransactionProvider(
         service = retrofit.create(RpcService::class.java)
     }
 
-    override fun getTokenTransactions(startBlock: Long): Single<List<ProviderTokenTransaction>> {
+    override fun getTokenTransactions(startBlock: Long): Single<TokenTransactionProvider.TokenTransactionsResult> {
         return Single.create { emitter ->
             try {
                 val endBlock = fetchBlockNumber()
-                val realStartBlock = if (startBlock > 0) {
-                    startBlock
-                } else {
-                    endBlock + startBlock
+                val realStartBlock = when {
+                    startBlock > 0 -> startBlock
+                    else -> maxOf(0, endBlock + startBlock)
                 }
                 val allLogs = fetchAllLogsWithAdaptiveChunking(realStartBlock, endBlock)
 
@@ -104,7 +103,12 @@ class BinanceTokenTransactionProvider(
                     .mapNotNull { log -> convertLogToTransaction(log) }
                     .sortedByDescending { it.blockNumber }
 
-                emitter.onSuccess(transactions)
+                emitter.onSuccess(
+                    TokenTransactionProvider.TokenTransactionsResult(
+                        transactions,
+                        endBlock
+                    )
+                )
             } catch (e: Throwable) {
                 emitter.onError(e)
             }
