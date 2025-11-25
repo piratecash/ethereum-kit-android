@@ -130,10 +130,9 @@ class BinanceTokenTransactionProvider(
         while (currentFrom <= endBlock && uriIndex < uris.size) {
             val uri = uris[uriIndex]
             val to = minOf(currentFrom + currentChunkSize - 1, endBlock)
-            Timber.d("Fetching logs from $currentFrom to $to (chunk size: $currentChunkSize) on $uri")
-
             try {
                 val chunkLogs = fetchLogsForChunk(currentFrom, to, uri)
+                Timber.d("Fetched logs (${chunkLogs.size} from $currentFrom to $to (${to-currentFrom}) on $uri for chanid $chainId")
                 allLogs.addAll(chunkLogs)
                 currentFrom = to + 1
                 // Reset to initial size on success
@@ -143,12 +142,12 @@ class BinanceTokenTransactionProvider(
                 if (currentChunkSize > MIN_CHUNK_SIZE) {
                     // Halve the chunk size and retry on same URI
                     currentChunkSize = maxOf(currentChunkSize / 2, MIN_CHUNK_SIZE)
-                    Timber.w(e, "Chunk failed, reducing size to $currentChunkSize")
+                    Timber.w("Chunk failed, reducing size to $currentChunkSize")
                 } else {
                     // Min chunk size failed, switch to next URI and reset chunk size
                     uriIndex++
                     currentChunkSize = INITIAL_CHUNK_SIZE
-                    Timber.w(e, "Min chunk failed on $uri, switching to next URI")
+                    Timber.w("Min chunk failed on $uri, switching to next URI")
                 }
             }
         }
