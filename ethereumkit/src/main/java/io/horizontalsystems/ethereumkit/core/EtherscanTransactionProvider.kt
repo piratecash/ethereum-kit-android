@@ -124,7 +124,8 @@ class EtherscanTransactionProvider(
                             gasLimit = gasLimit,
                             gasPrice = gasPrice,
                             gasUsed = gasUsed,
-                            cumulativeGasUsed = cumulativeGasUsed
+                            cumulativeGasUsed = cumulativeGasUsed,
+                            input = ByteArray(0)
                         )
 
                     } catch (throwable: Throwable) {
