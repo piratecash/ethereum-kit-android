@@ -2,12 +2,14 @@ package io.horizontalsystems.erc20kit.core
 
 import android.content.Context
 import io.horizontalsystems.erc20kit.contract.Eip20ContractMethodFactories
+import io.horizontalsystems.ethereumkit.core.BinanceTokenTransactionProvider
 import io.horizontalsystems.ethereumkit.core.EthereumKit
 import io.horizontalsystems.ethereumkit.core.EthereumKit.SyncState
 import io.horizontalsystems.ethereumkit.models.Address
 import io.horizontalsystems.ethereumkit.models.Chain
 import io.horizontalsystems.ethereumkit.models.DefaultBlockParameter
 import io.horizontalsystems.ethereumkit.models.FullTransaction
+import io.horizontalsystems.ethereumkit.models.RpcSource
 import io.horizontalsystems.ethereumkit.models.TransactionData
 import io.reactivex.BackpressureStrategy
 import io.reactivex.Flowable
@@ -158,14 +160,34 @@ class Erc20Kit(
         }
 
         fun addTransactionSyncer(ethereumKit: EthereumKit) {
+            val transactionSaver = TransactionSaver(ethereumKit.eip20Storage)
+
             ethereumKit.addTransactionSyncer(
                 transactionSyncer = Erc20TransactionSyncer(
-                    ethereumKit.transactionProvider,
-                    ethereumKit.tokenTransactionProvider,
-                    ethereumKit.fallbackHistoryBlockWindow,
-                    ethereumKit.eip20Storage
+                    transactionProvider = ethereumKit.transactionProvider,
+                    tokenTransactionProvider = ethereumKit.tokenTransactionProvider,
+                    fallbackHistoryBlockWindow = ethereumKit.fallbackHistoryBlockWindow,
+                    storage = ethereumKit.eip20Storage,
+                    transactionSaver = transactionSaver
                 )
             )
+
+            if (ethereumKit.scanHistoricalEip20) {
+                // Create separate instance to avoid shared mutable state (caches)
+                val historicalTokenProvider = BinanceTokenTransactionProvider(
+                    uris = RpcSource.binanceSmartChainHttp().uris,
+                    address = ethereumKit.receiveAddress,
+                    chainId = ethereumKit.chain.id
+                )
+
+                val historicalSyncer = HistoricalErc20Syncer(
+                    transactionManager = ethereumKit.transactionManager,
+                    tokenTransactionProvider = historicalTokenProvider,
+                    storage = ethereumKit.eip20Storage,
+                    transactionSaver = transactionSaver,
+                )
+                ethereumKit.setHistoricalSyncer(historicalSyncer)
+            }
         }
 
         fun addDecorators(ethereumKit: EthereumKit) {

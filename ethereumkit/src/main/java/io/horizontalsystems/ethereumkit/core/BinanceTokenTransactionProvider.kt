@@ -4,13 +4,6 @@ import com.google.gson.Gson
 import com.google.gson.GsonBuilder
 import com.google.gson.reflect.TypeToken
 import io.horizontalsystems.ethereumkit.api.core.RpcResponse
-import io.horizontalsystems.ethereumkit.network.AddressTypeAdapter
-import io.horizontalsystems.ethereumkit.network.BigIntegerTypeAdapter
-import io.horizontalsystems.ethereumkit.network.ByteArrayTypeAdapter
-import io.horizontalsystems.ethereumkit.network.DefaultBlockParameterTypeAdapter
-import io.horizontalsystems.ethereumkit.network.IntTypeAdapter
-import io.horizontalsystems.ethereumkit.network.LongTypeAdapter
-import java.math.BigInteger
 import io.horizontalsystems.ethereumkit.api.jsonrpc.BlockNumberJsonRpc
 import io.horizontalsystems.ethereumkit.api.jsonrpc.CallJsonRpc
 import io.horizontalsystems.ethereumkit.api.jsonrpc.GetBlockByNumberJsonRpc
@@ -25,6 +18,12 @@ import io.horizontalsystems.ethereumkit.models.Address
 import io.horizontalsystems.ethereumkit.models.DefaultBlockParameter
 import io.horizontalsystems.ethereumkit.models.ProviderTokenTransaction
 import io.horizontalsystems.ethereumkit.models.TransactionLog
+import io.horizontalsystems.ethereumkit.network.AddressTypeAdapter
+import io.horizontalsystems.ethereumkit.network.BigIntegerTypeAdapter
+import io.horizontalsystems.ethereumkit.network.ByteArrayTypeAdapter
+import io.horizontalsystems.ethereumkit.network.DefaultBlockParameterTypeAdapter
+import io.horizontalsystems.ethereumkit.network.IntTypeAdapter
+import io.horizontalsystems.ethereumkit.network.LongTypeAdapter
 import io.reactivex.Single
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
@@ -36,9 +35,10 @@ import retrofit2.http.Body
 import retrofit2.http.Headers
 import retrofit2.http.POST
 import retrofit2.http.Url
+import timber.log.Timber
+import java.math.BigInteger
 import java.net.URI
 import java.util.concurrent.atomic.AtomicInteger
-import timber.log.Timber
 
 class BinanceTokenTransactionProvider(
     private val uris: List<URI>,
@@ -87,35 +87,36 @@ class BinanceTokenTransactionProvider(
         service = retrofit.create(RpcService::class.java)
     }
 
-    override fun getTokenTransactions(startBlock: Long): Single<TokenTransactionProvider.TokenTransactionsResult> {
-        return Single.create { emitter ->
-            try {
-                val endBlock = fetchBlockNumber()
-                val realStartBlock = when {
-                    startBlock > 0 -> startBlock
-                    else -> maxOf(0, endBlock + startBlock)
-                }
-                val allLogs = fetchAllLogsWithAdaptiveChunking(realStartBlock, endBlock)
-
-                // Convert logs to ProviderTokenTransaction
-                val transactions = allLogs
-                    .distinctBy { it.transactionHash.toHexString() + it.logIndex }
-                    .mapNotNull { log -> convertLogToTransaction(log) }
-                    .sortedByDescending { it.blockNumber }
-
-                emitter.onSuccess(
-                    TokenTransactionProvider.TokenTransactionsResult(
-                        transactions,
-                        endBlock
-                    )
-                )
-            } catch (e: Throwable) {
-                emitter.onError(e)
-            }
+    override suspend fun getTokenTransactions(startBlock: Long): TokenTransactionProvider.TokenTransactionsResult {
+        val endBlock = fetchBlockNumber()
+        val realStartBlock = when {
+            startBlock > 0 -> startBlock
+            else -> maxOf(0, endBlock + startBlock)
         }
+        return getTokenTransactions(realStartBlock, endBlock)
     }
 
-    private fun fetchBlockNumber(): Long {
+    override suspend fun getTokenTransactions(
+        fromBlock: Long,
+        toBlock: Long
+    ): TokenTransactionProvider.TokenTransactionsResult {
+        val minBlock = minOf(fromBlock, toBlock)
+        val maxBlock = maxOf(fromBlock, toBlock)
+        val allLogs = fetchAllLogsWithAdaptiveChunking(minBlock, maxBlock)
+
+        // Convert logs to ProviderTokenTransaction
+        val transactions = allLogs
+            .distinctBy { it.transactionHash.toHexString() + it.logIndex }
+            .mapNotNull { log -> convertLogToTransaction(log) }
+            .sortedByDescending { it.blockNumber }
+
+        return TokenTransactionProvider.TokenTransactionsResult(
+            transactions,
+            maxBlock
+        )
+    }
+
+    override suspend fun fetchBlockNumber(): Long {
         val rpc = BlockNumberJsonRpc()
         return executeRpcWithFallback(rpc)
     }
@@ -124,7 +125,10 @@ class BinanceTokenTransactionProvider(
      * Adaptive chunking: start with large chunk (10M), halve on error until MIN_CHUNK_SIZE.
      * If MIN_CHUNK_SIZE fails, switch to next URI and continue from current position.
      */
-    private fun fetchAllLogsWithAdaptiveChunking(startBlock: Long, endBlock: Long): List<TransactionLog> {
+    private fun fetchAllLogsWithAdaptiveChunking(
+        startBlock: Long,
+        endBlock: Long
+    ): List<TransactionLog> {
         val allLogs = mutableListOf<TransactionLog>()
         var currentFrom = startBlock
         var currentChunkSize = INITIAL_CHUNK_SIZE
@@ -136,7 +140,7 @@ class BinanceTokenTransactionProvider(
             val to = minOf(currentFrom + currentChunkSize - 1, endBlock)
             try {
                 val chunkLogs = fetchLogsForChunk(currentFrom, to, uri)
-                Timber.d("Fetched logs (${chunkLogs.size} from $currentFrom to $to (${to-currentFrom}), left ${endBlock-to} blocks on $uri for chanid $chainId")
+                Timber.d("Fetched logs (${chunkLogs.size} from $currentFrom to $to (${to - currentFrom}), left ${endBlock - to} blocks on $uri for chanid $chainId")
                 allLogs.addAll(chunkLogs)
                 currentFrom = to + 1
                 // Reset to initial size on success

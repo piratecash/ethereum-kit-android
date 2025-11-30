@@ -7,5 +7,6 @@ import androidx.room.PrimaryKey
 data class Eip20SyncState(
     @PrimaryKey
     val contractAddress: String,
-    val lastScannedBlock: Long
+    val lastScannedBlock: Long?,
+    val historicalMinScannedBlock: Long?
 )

@@ -33,6 +33,7 @@ import io.horizontalsystems.ethereumkit.models.GasPrice
 import io.horizontalsystems.ethereumkit.models.RawTransaction
 import io.horizontalsystems.ethereumkit.models.RpcSource
 import io.horizontalsystems.ethereumkit.models.Signature
+import io.horizontalsystems.ethereumkit.models.Transaction
 import io.horizontalsystems.ethereumkit.models.TransactionData
 import io.horizontalsystems.ethereumkit.models.TransactionLog
 import io.horizontalsystems.ethereumkit.models.TransactionSource
@@ -76,6 +77,7 @@ class EthereumKit(
     val fallbackHistoryBlockWindow: Long,
     val eip20Storage: IEip20Storage,
     private val decorationManager: DecorationManager,
+    val scanHistoricalEip20: Boolean,
     private val state: EthereumKitState = EthereumKitState()
 ) : IBlockchainListener {
 
@@ -90,6 +92,13 @@ class EthereumKit(
     private val defaultMinAmount: BigInteger = BigInteger.ONE
 
     private var started = false
+
+    interface HistoricalSyncer {
+        fun start()
+        fun stop()
+    }
+
+    private var historicalSyncer: HistoricalSyncer? = null
 
     init {
         state.lastBlockHeight = blockchain.lastBlockHeight
@@ -141,10 +150,15 @@ class EthereumKit(
 
         blockchain.start()
         transactionSyncManager.sync()
+
+        if (scanHistoricalEip20) {
+            historicalSyncer?.start()
+        }
     }
 
     fun stop() {
         started = false
+        historicalSyncer?.stop()
         blockchain.stop()
         state.clear()
         connectionManager.stop()
@@ -339,6 +353,10 @@ class EthereumKit(
         transactionSyncManager.add(transactionSyncer)
     }
 
+    fun setHistoricalSyncer(syncer: HistoricalSyncer) {
+        historicalSyncer = syncer
+    }
+
     fun addNonceProvider(provider: INonceProvider) {
         nonceProvider.addProvider(provider)
     }
@@ -494,7 +512,8 @@ class EthereumKit(
             rpcSource: RpcSource,
             transactionSource: TransactionSource,
             walletId: String,
-            fallbackHistoryBlockWindow: Long = DEFAULT_FALLBACK_HISTORY_BLOCK_WINDOW
+            fallbackHistoryBlockWindow: Long = DEFAULT_FALLBACK_HISTORY_BLOCK_WINDOW,
+            scanHistoricalEip20: Boolean = true
         ): EthereumKit {
             val seed = Mnemonic().toSeed(words, passphrase)
             val privateKey = Signer.privateKey(seed, chain)
@@ -506,7 +525,8 @@ class EthereumKit(
                 rpcSource,
                 transactionSource,
                 walletId,
-                fallbackHistoryBlockWindow
+                fallbackHistoryBlockWindow,
+                scanHistoricalEip20
             )
         }
 
@@ -517,7 +537,8 @@ class EthereumKit(
             rpcSource: RpcSource,
             transactionSource: TransactionSource,
             walletId: String,
-            fallbackHistoryBlockWindow: Long = DEFAULT_FALLBACK_HISTORY_BLOCK_WINDOW
+            fallbackHistoryBlockWindow: Long = DEFAULT_FALLBACK_HISTORY_BLOCK_WINDOW,
+            scanHistoricalEip20: Boolean = true
         ): EthereumKit {
 
             val connectionManager = ConnectionManager(application)
@@ -542,9 +563,9 @@ class EthereumKit(
             val transactionProvider = transactionProvider(transactionSource, address, chain.id)
 
             val tokenTransactionProvider = BinanceTokenTransactionProvider(
-                RpcSource.binanceSmartChainHttp().uris,
-                address,
-                chain.id
+                uris = RpcSource.binanceSmartChainHttp().uris,
+                address = address,
+                chainId = chain.id
             )
 
             val apiDatabase =
@@ -596,7 +617,8 @@ class EthereumKit(
                 tokenTransactionProvider,
                 fallbackHistoryBlockWindow,
                 erc20Storage,
-                decorationManager
+                decorationManager,
+                scanHistoricalEip20
             )
 
             blockchain.listener = ethereumKit

@@ -102,12 +102,14 @@ interface ITransactionStorage {
 
 interface IEip20Storage {
     fun getLastEvent(): Eip20Event?
+    fun getEarliestEip20Event(): Eip20Event?
     fun save(events: List<Eip20Event>)
     fun getEvents(): List<Eip20Event>
     fun getEventsByHashes(hashes: List<ByteArray>): List<Eip20Event>
     fun deleteZeroValueDuplicate(hash: ByteArray, contractAddress: Address, from: Address, to: Address)
     fun getLastScannedBlock(): Long?
-    fun saveLastScannedBlock(blockNumber: Long)
+    fun getHistoricalMinScannedBlock(): Long?
+    suspend fun saveSyncBlockInfo(lastScannedBlock: Long?, historicalMinScannedBlock: Long?)
 }
 
 interface ITransactionSyncer {
@@ -153,7 +155,11 @@ interface TokenTransactionProvider {
      * @param startBlock The block number from which to start fetching token transactions.
      * Negative value means fetch from the latest block.
      */
-    fun getTokenTransactions(startBlock: Long): Single<TokenTransactionsResult>
+    suspend fun getTokenTransactions(startBlock: Long): TokenTransactionsResult
+
+    suspend fun getTokenTransactions(fromBlock: Long, toBlock: Long): TokenTransactionsResult
+
+    suspend fun fetchBlockNumber(): Long
 
     data class TokenTransactionsResult(
         val transactions: List<ProviderTokenTransaction>,

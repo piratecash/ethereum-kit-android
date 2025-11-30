@@ -12,6 +12,9 @@ interface Eip20EventDao {
     @Query("SELECT * FROM Eip20Event ORDER BY blockNumber DESC LIMIT 1")
     fun getLastEip20Event(): Eip20Event?
 
+    @Query("SELECT * FROM Eip20Event ORDER BY blockNumber ASC LIMIT 1")
+    fun getEarliestEip20Event(): Eip20Event?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     fun insertEip20Events(events: List<Eip20Event>)
 

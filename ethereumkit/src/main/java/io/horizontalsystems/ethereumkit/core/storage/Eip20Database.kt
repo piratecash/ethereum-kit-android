@@ -11,7 +11,7 @@ import io.horizontalsystems.ethereumkit.models.Eip20SyncState
         Eip20Event::class,
         Eip20SyncState::class
     ],
-    version = 4,
+    version = 6,
     exportSchema = false
 )
 @TypeConverters(RoomTypeConverters::class, Eip20Database.TypeConverters::class)
@@ -24,7 +24,7 @@ abstract class Eip20Database : RoomDatabase() {
 
         fun getInstance(context: Context, databaseName: String): Eip20Database {
             return Room.databaseBuilder(context, Eip20Database::class.java, databaseName)
-                .addMigrations(migration2_3, migration3_4)
+                .addMigrations(migration2_3, migration3_4, migration4_5, migration5_6)
                 .fallbackToDestructiveMigration()
                 .allowMainThreadQueries()
                 .build()

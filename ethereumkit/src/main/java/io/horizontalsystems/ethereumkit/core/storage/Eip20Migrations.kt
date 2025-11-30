@@ -51,3 +51,35 @@ val migration3_4 = object : Migration(3, 4) {
         """.trimIndent())
     }
 }
+
+val migration4_5 = object : Migration(4, 5) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL("""
+            ALTER TABLE `Eip20SyncState`
+            ADD COLUMN `historicalMinScannedBlock` INTEGER
+        """.trimIndent())
+    }
+}
+
+val migration5_6 = object : Migration(5, 6) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        // SQLite doesn't support ALTER COLUMN, so we need to recreate the table
+        database.execSQL("""
+            CREATE TABLE IF NOT EXISTS `Eip20SyncState_new` (
+                `contractAddress` TEXT NOT NULL,
+                `lastScannedBlock` INTEGER,
+                `historicalMinScannedBlock` INTEGER,
+                PRIMARY KEY(`contractAddress`)
+            )
+        """.trimIndent())
+
+        database.execSQL("""
+            INSERT INTO `Eip20SyncState_new` (`contractAddress`, `lastScannedBlock`, `historicalMinScannedBlock`)
+            SELECT `contractAddress`, `lastScannedBlock`, `historicalMinScannedBlock`
+            FROM `Eip20SyncState`
+        """.trimIndent())
+
+        database.execSQL("DROP TABLE `Eip20SyncState`")
+        database.execSQL("ALTER TABLE `Eip20SyncState_new` RENAME TO `Eip20SyncState`")
+    }
+}
