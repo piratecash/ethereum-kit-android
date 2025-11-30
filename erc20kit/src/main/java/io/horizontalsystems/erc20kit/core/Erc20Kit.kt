@@ -185,6 +185,7 @@ class Erc20Kit(
                     tokenTransactionProvider = historicalTokenProvider,
                     storage = ethereumKit.eip20Storage,
                     transactionSaver = transactionSaver,
+                    connectionManager = ethereumKit.connectionManager
                 )
                 ethereumKit.setHistoricalSyncer(historicalSyncer)
             }

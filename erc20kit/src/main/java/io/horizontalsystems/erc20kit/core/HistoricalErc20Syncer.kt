@@ -1,10 +1,12 @@
 package io.horizontalsystems.erc20kit.core
 
+import io.horizontalsystems.ethereumkit.core.EthereumKit
 import io.horizontalsystems.ethereumkit.core.IEip20Storage
 import io.horizontalsystems.ethereumkit.core.TokenTransactionProvider
 import io.horizontalsystems.ethereumkit.core.TransactionManager
 import io.horizontalsystems.ethereumkit.models.ProviderTokenTransaction
 import io.horizontalsystems.ethereumkit.models.Transaction
+import io.horizontalsystems.ethereumkit.network.ConnectionManager
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -19,8 +21,9 @@ class HistoricalErc20Syncer(
     private val transactionManager: TransactionManager,
     private val tokenTransactionProvider: TokenTransactionProvider,
     private val storage: IEip20Storage,
-    private val transactionSaver: TransactionSaver
-) : io.horizontalsystems.ethereumkit.core.EthereumKit.HistoricalSyncer {
+    private val transactionSaver: TransactionSaver,
+    private val connectionManager: ConnectionManager
+) : EthereumKit.HistoricalSyncer, ConnectionManager.Listener {
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var syncJob: Job? = null
@@ -28,6 +31,10 @@ class HistoricalErc20Syncer(
     companion object {
         private const val HIST_WINDOW = 50_000L
         private const val SAFETY_OVERLAP = 6L
+    }
+
+    init {
+        connectionManager.addListener(this)
     }
 
     override fun start() {
@@ -127,6 +134,14 @@ class HistoricalErc20Syncer(
                 historicalMinScannedBlock = fromBlock
             )
             Timber.i("Historical sync: updated cursor to $fromBlock")
+        }
+    }
+
+    override fun onConnectionChange() {
+        if (connectionManager.isConnected) {
+            start()
+        } else {
+            stop()
         }
     }
 }

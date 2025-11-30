@@ -14,17 +14,13 @@ class ApiRpcSyncer(
     private val rpcApiProvider: IRpcApiProvider,
     private val connectionManager: ConnectionManager,
     private val syncInterval: Long,
-) : IRpcSyncer {
+) : IRpcSyncer, ConnectionManager.Listener {
     private val disposables = CompositeDisposable()
     private var isStarted = false
     private var timer: Timer? = null
 
     init {
-        connectionManager.listener = object : ConnectionManager.Listener {
-            override fun onConnectionChange() {
-                handleConnectionChange()
-            }
-        }
+        connectionManager.addListener(this)
     }
 
     //region IRpcSyncer
@@ -94,4 +90,7 @@ class ApiRpcSyncer(
                 }
     }
 
+    override fun onConnectionChange() {
+        handleConnectionChange()
+    }
 }

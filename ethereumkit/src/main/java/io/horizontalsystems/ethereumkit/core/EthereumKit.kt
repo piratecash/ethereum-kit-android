@@ -68,7 +68,7 @@ class EthereumKit(
     private val nonceProvider: NonceProvider,
     val transactionManager: TransactionManager,
     private val transactionSyncManager: TransactionSyncManager,
-    private val connectionManager: ConnectionManager,
+    val connectionManager: ConnectionManager,
     private val address: Address,
     val chain: Chain,
     val walletId: String,
