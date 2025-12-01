@@ -8,6 +8,7 @@ import io.horizontalsystems.ethereumkit.models.ProviderTokenTransaction
 import io.horizontalsystems.ethereumkit.models.Transaction
 import io.horizontalsystems.ethereumkit.network.ConnectionManager
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -50,7 +51,7 @@ class HistoricalErc20Syncer(
                 syncHistoricalBatches()
             } catch (e: CancellationException) {
                 Timber.i("Historical sync cancelled")
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
                 Timber.e(e, "Historical sync failed")
             }
         }
@@ -92,7 +93,7 @@ class HistoricalErc20Syncer(
             val result = tokenTransactionProvider.getTokenTransactions(fromBlock, toBlock)
             handleBatchResult(result.transactions, fromBlock)
             true
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             Timber.e(e, "Historical sync batch failed for blocks $fromBlock-$toBlock")
             false
         }
@@ -102,7 +103,10 @@ class HistoricalErc20Syncer(
         transactions: List<ProviderTokenTransaction>,
         fromBlock: Long
     ) {
-        withContext(Dispatchers.IO) {
+        withContext(Dispatchers.IO + CoroutineExceptionHandler {
+            _, exception ->
+            Timber.e(exception, "Error handling historical sync batch result")
+        }) {
             transactionSaver.handle(transactions)
 
             // Create Transaction objects and process them through TransactionManager
