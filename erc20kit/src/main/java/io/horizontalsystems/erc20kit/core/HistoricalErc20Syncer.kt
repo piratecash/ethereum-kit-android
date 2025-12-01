@@ -13,6 +13,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -64,12 +65,23 @@ class HistoricalErc20Syncer(
 
     private suspend fun syncHistoricalBatches() {
         var repeat = true
+        var retryAttemptsRemaining = 3
         while (repeat) {
             val latest = storage.getHistoricalMinScannedBlock()
                 ?: storage.getEarliestEip20Event()?.blockNumber
                 ?: tokenTransactionProvider.fetchBlockNumber()
 
             repeat = performBatchSync(latest)
+            if (repeat) {
+                retryAttemptsRemaining = 3
+            }
+            if (!repeat && latest > 0 && retryAttemptsRemaining > 0) {
+                // Wait random time to avoid limits
+                Timber.i("Waiting before next historical sync attempt")
+                delay((1_000L..10_000L).random())
+                --retryAttemptsRemaining
+                repeat = true
+            }
         }
     }
 
