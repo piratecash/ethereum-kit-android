@@ -13,33 +13,56 @@ class TransactionSource(val name: String, val type: SourceType) {
     }
 
     companion object {
-        private fun etherscan(
-            apiSubdomain: String,
-            txSubdomain: String?,
-            apiKeys: List<String>,
-            name: String?,
-            txBaseUrl: String?
-        ): TransactionSource {
+        private fun etherscan(name: String, explorerUrl: String, apiKeys: List<String>): TransactionSource {
             return TransactionSource(
-                name = name ?: "etherscan.io",
-                type = SourceType.Etherscan(
-                    apiBaseUrl = "https://$apiSubdomain.etherscan.io/v2/",
-                    txBaseUrl = txBaseUrl
-                        ?: "https://${txSubdomain?.let { "$it." } ?: ""}etherscan.io",
-                    apiKeys = apiKeys)
-            )
-        }
-
-        fun etherscanApi(apiKeys: List<String>, name: String? = null, txBaseUrl: String? = null): TransactionSource {
-            return etherscan(
-                apiSubdomain = "api",
-                txSubdomain = null,
-                apiKeys = apiKeys,
                 name = name,
-                txBaseUrl = txBaseUrl
+                type = SourceType.Etherscan(
+                    apiBaseUrl = "https://api.etherscan.io/v2/",
+                    txBaseUrl = explorerUrl,
+                    apiKeys = apiKeys
+                )
             )
         }
 
+        fun ethereum(apiKeys: List<String>): TransactionSource {
+            return etherscan("etherscan.io", "https://etherscan.io", apiKeys)
+        }
+
+        fun binance(apiKeys: List<String>): TransactionSource {
+            return etherscan("bscscan.com", "https://bscscan.com", apiKeys)
+        }
+
+        fun polygon(apiKeys: List<String>): TransactionSource {
+            return etherscan("polygonscan.com", "https://polygonscan.com", apiKeys)
+        }
+
+        fun optimism(apiKeys: List<String>): TransactionSource {
+            return etherscan("optimistic.etherscan.io", "https://optimistic.etherscan.io", apiKeys)
+        }
+
+        fun arbitrumOne(apiKeys: List<String>): TransactionSource {
+            return etherscan("arbiscan.io", "https://arbiscan.io", apiKeys)
+        }
+
+        fun avalanche(apiKeys: List<String>): TransactionSource {
+            return etherscan("snowtrace.io", "https://snowtrace.io", apiKeys)
+        }
+
+        fun gnosis(apiKeys: List<String>): TransactionSource {
+            return etherscan("gnosisscan.io", "https://gnosisscan.io", apiKeys)
+        }
+
+        fun base(apiKeys: List<String>): TransactionSource {
+            return etherscan("basescan.org", "https://basescan.org", apiKeys)
+        }
+
+        fun fantom(apiKeys: List<String>): TransactionSource {
+            return etherscan("ftmscan.com", "https://ftmscan.com", apiKeys)
+        }
+
+        fun zkSync(apiKeys: List<String>): TransactionSource {
+            return etherscan("era.zksync.network", "https://era.zksync.network", apiKeys)
+        }
     }
 
 }
