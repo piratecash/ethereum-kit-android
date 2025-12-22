@@ -23,18 +23,14 @@ import io.horizontalsystems.ethereumkit.network.BigIntegerTypeAdapter
 import io.horizontalsystems.ethereumkit.network.ByteArrayTypeAdapter
 import io.horizontalsystems.ethereumkit.network.DefaultBlockParameterTypeAdapter
 import io.horizontalsystems.ethereumkit.network.IntTypeAdapter
+import io.horizontalsystems.ethereumkit.network.JsonRpcService
 import io.horizontalsystems.ethereumkit.network.LongTypeAdapter
-import io.reactivex.Single
-import okhttp3.OkHttpClient
+import io.horizontalsystems.ethereumkit.network.SharedHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.adapter.rxjava2.RxJava2CallAdapterFactory
 import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.converter.scalars.ScalarsConverterFactory
-import retrofit2.http.Body
-import retrofit2.http.Headers
-import retrofit2.http.POST
-import retrofit2.http.Url
 import timber.log.Timber
 import java.math.BigInteger
 import java.net.URI
@@ -46,7 +42,7 @@ class BinanceTokenTransactionProvider(
     private val chainId: Int
 ) : TokenTransactionProvider {
 
-    private val service: RpcService
+    private val service: JsonRpcService
     private var currentRpcId = AtomicInteger(0)
 
     private val gson: Gson
@@ -61,8 +57,9 @@ class BinanceTokenTransactionProvider(
         val loggingInterceptor = HttpLoggingInterceptor { message -> Timber.d(message) }
             .setLevel(HttpLoggingInterceptor.Level.BASIC)
 
-        val httpClient = OkHttpClient.Builder()
-            .addInterceptor(loggingInterceptor)
+        val httpClient = SharedHttpClient.newClient {
+            addInterceptor(loggingInterceptor)
+        }
 
         gson = GsonBuilder()
             .setLenient()
@@ -81,10 +78,10 @@ class BinanceTokenTransactionProvider(
             .addCallAdapterFactory(RxJava2CallAdapterFactory.create())
             .addConverterFactory(ScalarsConverterFactory.create())
             .addConverterFactory(GsonConverterFactory.create(gson))
-            .client(httpClient.build())
+            .client(httpClient)
             .build()
 
-        service = retrofit.create(RpcService::class.java)
+        service = retrofit.create(JsonRpcService::class.java)
     }
 
     override suspend fun getTokenTransactions(startBlock: Long): TokenTransactionProvider.TokenTransactionsResult {
@@ -382,7 +379,7 @@ class BinanceTokenTransactionProvider(
 
     private fun <T : Any> executeRpcOnUri(rpc: JsonRpc<T>, uri: URI): T {
         rpc.id = currentRpcId.incrementAndGet()
-        val response = service.rpcCall(uri, gson.toJson(rpc)).blockingGet()
+        val response = service.call(uri, gson.toJson(rpc)).blockingGet()
         return rpc.parseResponse(response, gson)
     }
 
@@ -406,12 +403,6 @@ class BinanceTokenTransactionProvider(
         val symbol: String,
         val decimals: Int
     )
-
-    private interface RpcService {
-        @POST
-        @Headers("Content-Type: application/json", "Accept: application/json")
-        fun rpcCall(@Url uri: URI, @Body jsonRpc: String): Single<RpcResponse>
-    }
 
     companion object {
         private const val INITIAL_CHUNK_SIZE = 50_000L

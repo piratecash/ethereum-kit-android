@@ -9,7 +9,6 @@ import io.horizontalsystems.ethereumkit.core.retryWhenErrors
 import io.horizontalsystems.ethereumkit.core.toHexString
 import io.horizontalsystems.ethereumkit.models.Address
 import io.reactivex.Single
-import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.adapter.rxjava2.RxJava2CallAdapterFactory
@@ -43,8 +42,8 @@ class EtherscanService(
             logger.info(it)
         }.setLevel(HttpLoggingInterceptor.Level.BASIC)
 
-        val httpClient = OkHttpClient.Builder()
-            .addInterceptor { chain ->
+        val httpClient = SharedHttpClient.newClient {
+            addInterceptor { chain ->
                 val originalRequest = chain.request()
                 val originalUrl = originalRequest.url
 
@@ -60,7 +59,8 @@ class EtherscanService(
 
                 chain.proceed(request)
             }
-            .addInterceptor(loggingInterceptor)
+            addInterceptor(loggingInterceptor)
+        }
 
         gson = GsonBuilder()
             .setLenient()
@@ -70,7 +70,7 @@ class EtherscanService(
             .baseUrl(baseUrl)
             .addCallAdapterFactory(RxJava2CallAdapterFactory.create())
             .addConverterFactory(GsonConverterFactory.create(gson))
-            .client(httpClient.build())
+            .client(httpClient)
             .build()
 
         service = retrofit.create(EtherscanServiceAPI::class.java)

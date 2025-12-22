@@ -62,6 +62,8 @@ class NodeWebSocket(
             chain.proceed(requestBuilder.build())
         }
 
+        // WebSocket uses its own OkHttpClient to avoid coupling long-lived WebSocket
+        // connections with REST/RPC traffic in the shared connection pool
         val okHttpClient = OkHttpClient.Builder()
                 .addInterceptor(headersInterceptor)
                 .addInterceptor(loggingInterceptor)
