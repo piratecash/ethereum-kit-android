@@ -41,7 +41,7 @@ data class ProviderTokenTransaction(
     val gasPrice: Long,
     var gasUsed: Long,
     var cumulativeGasUsed: Long,
-    val input: ByteArray
+    val input: ByteArray?
 )
 
 data class ProviderInternalTransaction(

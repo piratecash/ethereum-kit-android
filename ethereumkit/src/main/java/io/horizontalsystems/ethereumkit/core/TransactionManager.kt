@@ -78,7 +78,7 @@ class TransactionManager(
                     from = newTx.from ?: existingTx.from,
                     to = newTx.to ?: existingTx.to,
                     value = newTx.value ?: existingTx.value,
-                    input = newTx.input ?: existingTx.input,
+                    input = newTx.input.takeIf { it?.isNotEmpty() == true } ?: existingTx.input,
                     nonce = newTx.nonce ?: existingTx.nonce,
                     gasPrice = newTx.gasPrice ?: existingTx.gasPrice,
                     maxFeePerGas = newTx.maxFeePerGas ?: existingTx.maxFeePerGas,
