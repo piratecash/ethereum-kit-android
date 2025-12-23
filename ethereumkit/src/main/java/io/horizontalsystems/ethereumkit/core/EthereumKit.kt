@@ -33,7 +33,6 @@ import io.horizontalsystems.ethereumkit.models.GasPrice
 import io.horizontalsystems.ethereumkit.models.RawTransaction
 import io.horizontalsystems.ethereumkit.models.RpcSource
 import io.horizontalsystems.ethereumkit.models.Signature
-import io.horizontalsystems.ethereumkit.models.Transaction
 import io.horizontalsystems.ethereumkit.models.TransactionData
 import io.horizontalsystems.ethereumkit.models.TransactionLog
 import io.horizontalsystems.ethereumkit.models.TransactionSource
@@ -57,6 +56,7 @@ import io.reactivex.disposables.CompositeDisposable
 import io.reactivex.schedulers.Schedulers
 import io.reactivex.subjects.PublishSubject
 import org.bouncycastle.jce.provider.BouncyCastleProvider
+import timber.log.Timber
 import java.math.BigInteger
 import java.security.Security
 import java.util.Objects
@@ -94,6 +94,7 @@ class EthereumKit(
     private var started = false
 
     interface HistoricalSyncer {
+        var isEnabled: Boolean
         fun start()
         fun stop()
     }
@@ -111,6 +112,35 @@ class EthereumKit(
             }.let {
                 disposables.add(it)
             }
+
+        // Start historical syncer only if initial sync returned no ERC20 transactions
+        if (scanHistoricalEip20) {
+            transactionSyncManager.syncStateAsync
+                .filter { it is SyncState.Synced }
+                .take(1)
+                .subscribeOn(Schedulers.io())
+                .subscribe {
+                    val historicalMin = eip20Storage.getHistoricalMinScannedBlock()
+                    val shouldStartHistorical = when {
+                        // Historical sync in progress (partial) - resume it
+                        historicalMin != null && historicalMin > 0 -> true
+                        // No events at all - start historical
+                        eip20Storage.getLastEvent() == null -> true
+                        // Complete historical sync (reached 0) or Etherscan provided data
+                        else -> false
+                    }
+
+                    if (shouldStartHistorical) {
+                        Timber.i("Starting historical sync (historicalMin=$historicalMin)")
+                        historicalSyncer?.isEnabled = true
+                        historicalSyncer?.start()
+                    } else {
+                        Timber.i("Historical sync not needed (historicalMin=$historicalMin)")
+                    }
+                }.let {
+                    disposables.add(it)
+                }
+        }
     }
 
     val lastBlockHeight: Long?
@@ -150,10 +180,7 @@ class EthereumKit(
 
         blockchain.start()
         transactionSyncManager.sync()
-
-        if (scanHistoricalEip20) {
-            historicalSyncer?.start()
-        }
+        // Historical syncer is started conditionally after sync completes (see init block)
     }
 
     fun stop() {

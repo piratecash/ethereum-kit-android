@@ -30,6 +30,9 @@ class HistoricalErc20Syncer(
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var syncJob: Job? = null
 
+    // Only start if explicitly enabled by EthereumKit (when Etherscan returns no data)
+    override var isEnabled: Boolean = false
+
     companion object {
         private const val HIST_WINDOW = 50_000L
         private const val SAFETY_OVERLAP = 6L
@@ -40,6 +43,11 @@ class HistoricalErc20Syncer(
     }
 
     override fun start() {
+        if (!isEnabled) {
+            Timber.i("Historical sync not enabled, skipping")
+            return
+        }
+
         if (syncJob?.isActive == true) {
             Timber.i("Historical sync already running")
             return

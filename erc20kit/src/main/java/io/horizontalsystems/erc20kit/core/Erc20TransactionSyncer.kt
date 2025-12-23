@@ -7,10 +7,7 @@ import io.horizontalsystems.ethereumkit.core.ITransactionSyncer
 import io.horizontalsystems.ethereumkit.core.TokenTransactionProvider
 import io.horizontalsystems.ethereumkit.models.Transaction
 import io.reactivex.Single
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.rx2.rxSingle
 
 class Erc20TransactionSyncer(
@@ -34,18 +31,15 @@ class Erc20TransactionSyncer(
             0L
         }
 
-        val receivedTransactions = if (startBlock == 0L) {
-            requestTokenTransactionsEtherscan(startBlock)
-                .onErrorResumeNext {
-                    rxSingle(Dispatchers.IO) {
-                        tokenTransactionProvider.getTokenTransactions(-fallbackHistoryBlockWindow)
-                    }
+        // Always try Etherscan first (faster, indexed), fallback to RPC on error
+        val receivedTransactions = requestTokenTransactionsEtherscan(startBlock)
+            .onErrorResumeNext {
+                rxSingle(Dispatchers.IO) {
+                    val fromBlock =
+                        if (startBlock == 0L) -fallbackHistoryBlockWindow else startBlock
+                    tokenTransactionProvider.getTokenTransactions(fromBlock)
                 }
-        } else {
-            rxSingle(Dispatchers.IO) {
-                tokenTransactionProvider.getTokenTransactions(startBlock)
             }
-        }
 
         return receivedTransactions
             .doOnSuccess { result ->
