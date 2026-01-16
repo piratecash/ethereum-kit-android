@@ -47,6 +47,7 @@ import io.horizontalsystems.ethereumkit.network.LongTypeAdapter
 import io.horizontalsystems.ethereumkit.network.OptionalTypeAdapter
 import io.horizontalsystems.ethereumkit.transactionsyncers.EthereumTransactionSyncer
 import io.horizontalsystems.ethereumkit.transactionsyncers.InternalTransactionSyncer
+import io.horizontalsystems.ethereumkit.transactionsyncers.PendingTransactionSyncer
 import io.horizontalsystems.ethereumkit.transactionsyncers.TransactionSyncManager
 import io.horizontalsystems.hdwalletkit.Mnemonic
 import io.reactivex.BackpressureStrategy
@@ -627,6 +628,9 @@ class EthereumKit(
 
             transactionSyncManager.add(internalTransactionsSyncer)
             transactionSyncManager.add(ethereumTransactionSyncer)
+
+            val pendingTransactionSyncer = PendingTransactionSyncer(transactionStorage, blockchain)
+            transactionSyncManager.add(pendingTransactionSyncer)
 
             val nonceProvider = NonceProvider()
             nonceProvider.addProvider(blockchain)
