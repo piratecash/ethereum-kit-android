@@ -61,8 +61,8 @@ class PendingTransactionSyncer(
 
         return Single.zip(singles) { results ->
             @Suppress("UNCHECKED_CAST")
-            val confirmedTransactions = (results as Array<Transaction?>)
-                .filterNotNull()
+            val confirmedTransactions = results
+                .mapNotNull { it as? Transaction }
                 .filter { it.blockNumber != null }
 
             if (confirmedTransactions.isNotEmpty()) {
