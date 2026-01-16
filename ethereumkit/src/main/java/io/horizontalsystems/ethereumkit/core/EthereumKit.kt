@@ -629,7 +629,7 @@ class EthereumKit(
             transactionSyncManager.add(internalTransactionsSyncer)
             transactionSyncManager.add(ethereumTransactionSyncer)
 
-            val pendingTransactionSyncer = PendingTransactionSyncer(transactionStorage, blockchain)
+            val pendingTransactionSyncer = PendingTransactionSyncer(transactionStorage, blockchain, transactionManager)
             transactionSyncManager.add(pendingTransactionSyncer)
 
             val nonceProvider = NonceProvider()

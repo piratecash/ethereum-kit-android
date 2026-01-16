@@ -4,6 +4,7 @@ import io.horizontalsystems.ethereumkit.api.jsonrpc.models.RpcTransactionReceipt
 import io.horizontalsystems.ethereumkit.core.IBlockchain
 import io.horizontalsystems.ethereumkit.core.ITransactionStorage
 import io.horizontalsystems.ethereumkit.core.ITransactionSyncer
+import io.horizontalsystems.ethereumkit.core.TransactionManager
 import io.horizontalsystems.ethereumkit.models.Transaction
 import io.reactivex.Single
 import timber.log.Timber
@@ -17,7 +18,8 @@ import timber.log.Timber
  */
 class PendingTransactionSyncer(
     private val storage: ITransactionStorage,
-    private val blockchain: IBlockchain
+    private val blockchain: IBlockchain,
+    private val transactionManager: TransactionManager
 ) : ITransactionSyncer {
 
     override fun getTransactionsSingle(): Single<Pair<List<Transaction>, Boolean>> {
@@ -31,20 +33,20 @@ class PendingTransactionSyncer(
 
         val singles = pendingTransactions.map { pendingTx ->
             blockchain.getTransactionReceipt(pendingTx.hash)
-                .map { receipt ->
-                    // Transaction is confirmed - update with block info
+                .map<Transaction?> { receipt ->
+                    // Build confirmed transaction from receipt
                     Transaction(
                         hash = pendingTx.hash,
                         timestamp = pendingTx.timestamp,
                         isFailed = determineFailedStatus(receipt, pendingTx.gasLimit),
                         blockNumber = receipt.blockNumber,
                         transactionIndex = receipt.transactionIndex.toInt(),
-                        from = receipt.from,  // Use authoritative source from receipt
-                        to = receipt.to ?: pendingTx.to,  // Receipt to can be null for contract deployments
+                        from = receipt.from,
+                        to = receipt.to ?: pendingTx.to,
                         value = pendingTx.value,
                         input = pendingTx.input,
                         nonce = pendingTx.nonce,
-                        gasPrice = receipt.effectiveGasPrice,  // Use actual gas price paid
+                        gasPrice = receipt.effectiveGasPrice,
                         maxFeePerGas = pendingTx.maxFeePerGas,
                         maxPriorityFeePerGas = pendingTx.maxPriorityFeePerGas,
                         gasLimit = pendingTx.gasLimit,
@@ -52,21 +54,25 @@ class PendingTransactionSyncer(
                     )
                 }
                 .onErrorResumeNext { error ->
-                    Timber.e("Network error checking ${pendingTx.hashString}: ${error.message}")
-                    Single.just(pendingTx)
+                    Timber.e("Error checking ${pendingTx.hashString}: ${error.message}")
+                    Single.just(null)
                 }
         }
 
         return Single.zip(singles) { results ->
-            val transactions = results.map { it as Transaction }
-            val confirmedTransactions = transactions.filter { it.blockNumber != null }
+            @Suppress("UNCHECKED_CAST")
+            val confirmedTransactions = (results as Array<Transaction?>)
+                .filterNotNull()
+                .filter { it.blockNumber != null }
 
             if (confirmedTransactions.isNotEmpty()) {
-                Timber.i("Found ${confirmedTransactions.size} confirmed transaction(s) out of ${transactions.size}")
+                // Single call to handle() with all confirmed transactions - avoids race condition
+                transactionManager.handle(confirmedTransactions)
+                Timber.i("Persisted ${confirmedTransactions.size} confirmed transaction(s)")
             }
 
-            // Only return transactions that have been updated (confirmed)
-            Pair(confirmedTransactions, false)
+            // Return empty list since we've already handled via transactionManager
+            Pair(listOf<Transaction>(), false)
         }
     }
 
