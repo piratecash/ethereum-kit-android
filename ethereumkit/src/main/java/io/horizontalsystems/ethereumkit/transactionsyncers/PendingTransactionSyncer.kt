@@ -59,14 +59,13 @@ class PendingTransactionSyncer(
 
         return Single.zip(singles) { results ->
             val transactions = results.map { it as Transaction }
-            val confirmedCount = transactions.count { it.blockNumber != null }
+            val confirmedTransactions = transactions.filter { it.blockNumber != null }
 
-            if (confirmedCount > 0) {
-                Timber.i("Found $confirmedCount confirmed transaction(s) out of ${transactions.size}")
+            if (confirmedTransactions.isNotEmpty()) {
+                Timber.i("Found ${confirmedTransactions.size} confirmed transaction(s) out of ${transactions.size}")
             }
 
             // Only return transactions that have been updated (confirmed)
-            val confirmedTransactions = transactions.filter { it.blockNumber != null }
             Pair(confirmedTransactions, false)
         }
     }
