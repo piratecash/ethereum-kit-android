@@ -60,7 +60,7 @@ class Erc20TransactionSyncer(
                         blockNumber = transaction.blockNumber,
                         transactionIndex = transaction.transactionIndex,
                         from = transaction.from,
-                        to = transaction.contractAddress,
+                        to = null,
                         value = transaction.value,
                         input = transaction.input,
                         nonce = transaction.nonce,
