@@ -168,7 +168,8 @@ class Erc20Kit(
                     tokenTransactionProvider = ethereumKit.tokenTransactionProvider,
                     fallbackHistoryBlockWindow = ethereumKit.fallbackHistoryBlockWindow,
                     storage = ethereumKit.eip20Storage,
-                    transactionSaver = transactionSaver
+                    transactionSaver = transactionSaver,
+                    syncSourceStorage = ethereumKit.transactionSyncSourceStorage
                 )
             )
 

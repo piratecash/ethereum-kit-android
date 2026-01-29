@@ -3,6 +3,8 @@ package io.horizontalsystems.merkleiokit
 import io.horizontalsystems.ethereumkit.core.IExtraDecorator
 import io.horizontalsystems.ethereumkit.core.ITransactionSyncer
 import io.horizontalsystems.ethereumkit.core.TransactionManager
+import io.horizontalsystems.ethereumkit.core.storage.TransactionSyncSourceStorage
+import io.horizontalsystems.ethereumkit.models.SyncSource
 import io.horizontalsystems.ethereumkit.models.Transaction
 import io.reactivex.Single
 import kotlin.jvm.optionals.getOrNull
@@ -11,6 +13,7 @@ class MerkleTransactionSyncer(
     private val manager: MerkleTransactionHashManager,
     private val blockchain: MerkleRpcBlockchain,
     private val transactionManager: TransactionManager,
+    private val syncSourceStorage: TransactionSyncSourceStorage? = null
 ) : ITransactionSyncer, IExtraDecorator {
 
     @OptIn(ExperimentalStdlibApi::class)
@@ -48,6 +51,7 @@ class MerkleTransactionSyncer(
             }
 
             manager.handle(completedTxHashes + failedTxHashes)
+            syncSourceStorage?.saveAll(completedTxHashes + failedTxHashes, SyncSource.MERKLE)
 
             Pair(failedTxs, false)
         }

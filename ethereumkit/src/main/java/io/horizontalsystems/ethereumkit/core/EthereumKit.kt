@@ -19,6 +19,7 @@ import io.horizontalsystems.ethereumkit.api.storage.ApiStorage
 import io.horizontalsystems.ethereumkit.core.signer.Signer
 import io.horizontalsystems.ethereumkit.core.storage.Eip20Storage
 import io.horizontalsystems.ethereumkit.core.storage.TransactionStorage
+import io.horizontalsystems.ethereumkit.core.storage.TransactionSyncSourceStorage
 import io.horizontalsystems.ethereumkit.core.storage.TransactionSyncerStateStorage
 import io.horizontalsystems.ethereumkit.crypto.CryptoUtils
 import io.horizontalsystems.ethereumkit.crypto.InternalBouncyCastleProvider
@@ -79,6 +80,7 @@ class EthereumKit(
     val eip20Storage: IEip20Storage,
     private val decorationManager: DecorationManager,
     val scanHistoricalEip20: Boolean,
+    val transactionSyncSourceStorage: TransactionSyncSourceStorage,
     private val state: EthereumKitState = EthereumKitState()
 ) : IBlockchainListener {
 
@@ -606,13 +608,14 @@ class EthereumKit(
                 EthereumDatabaseManager.getTransactionDatabase(application, walletId, chain)
             val transactionStorage = TransactionStorage(transactionDatabase)
             val transactionSyncerStateStorage = TransactionSyncerStateStorage(transactionDatabase)
+            val transactionSyncSourceStorage = TransactionSyncSourceStorage(transactionDatabase.transactionSyncSourceDao())
 
             val erc20Database =
                 EthereumDatabaseManager.getErc20Database(application, walletId, chain)
             val erc20Storage = Eip20Storage(erc20Database)
 
             val ethereumTransactionSyncer =
-                EthereumTransactionSyncer(transactionProvider, transactionSyncerStateStorage)
+                EthereumTransactionSyncer(transactionProvider, transactionSyncerStateStorage, transactionSyncSourceStorage)
             val internalTransactionsSyncer =
                 InternalTransactionSyncer(transactionProvider, transactionStorage)
 
@@ -649,7 +652,8 @@ class EthereumKit(
                 fallbackHistoryBlockWindow,
                 erc20Storage,
                 decorationManager,
-                scanHistoricalEip20
+                scanHistoricalEip20,
+                transactionSyncSourceStorage
             )
 
             blockchain.listener = ethereumKit

@@ -2,15 +2,18 @@ package io.horizontalsystems.ethereumkit.transactionsyncers
 
 import io.horizontalsystems.ethereumkit.core.ITransactionProvider
 import io.horizontalsystems.ethereumkit.core.ITransactionSyncer
+import io.horizontalsystems.ethereumkit.core.storage.TransactionSyncSourceStorage
 import io.horizontalsystems.ethereumkit.core.storage.TransactionSyncerStateStorage
 import io.horizontalsystems.ethereumkit.models.ProviderTransaction
+import io.horizontalsystems.ethereumkit.models.SyncSource
 import io.horizontalsystems.ethereumkit.models.Transaction
 import io.horizontalsystems.ethereumkit.models.TransactionSyncerState
 import io.reactivex.Single
 
 class EthereumTransactionSyncer(
         private val transactionProvider: ITransactionProvider,
-        private val storage: TransactionSyncerStateStorage
+        private val storage: TransactionSyncerStateStorage,
+        private val syncSourceStorage: TransactionSyncSourceStorage? = null
 ) : ITransactionSyncer {
 
     companion object {
@@ -22,7 +25,13 @@ class EthereumTransactionSyncer(
         val initial = lastTransactionBlockNumber == 0L
 
         return transactionProvider.getTransactions(lastTransactionBlockNumber + 1)
-                .doOnSuccess { providerTransactions -> handle(providerTransactions) }
+                .doOnSuccess { providerTransactions ->
+                    handle(providerTransactions)
+                    syncSourceStorage?.saveAll(
+                        providerTransactions.map { it.hash },
+                        SyncSource.ETHERSCAN
+                    )
+                }
                 .map { providerTransactions ->
                     val array = providerTransactions.map { transaction ->
                         val isFailed = when {

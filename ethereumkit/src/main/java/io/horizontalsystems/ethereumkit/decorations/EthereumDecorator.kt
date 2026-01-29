@@ -6,13 +6,28 @@ import io.horizontalsystems.ethereumkit.contracts.EmptyMethod
 import io.horizontalsystems.ethereumkit.core.ITransactionDecorator
 import io.horizontalsystems.ethereumkit.models.Address
 import io.horizontalsystems.ethereumkit.models.InternalTransaction
+import io.horizontalsystems.ethereumkit.models.TransactionTag
 import java.math.BigInteger
 
 class EthereumDecorator(private val address: Address) : ITransactionDecorator {
 
     override fun decoration(from: Address?, to: Address?, value: BigInteger?, contractMethod: ContractMethod?, internalTransactions: List<InternalTransaction>, eventInstances: List<ContractEventInstance>): TransactionDecoration? {
         if (from == null || value == null) return null
-        if (to == null) return ContractCreationDecoration()
+
+        if (to == null) {
+            // Check if there are token transfers involving the user before marking as contract creation
+            // This handles cases where ERC20 tokens are received via contract calls with no explicit "to" address
+            val hasUserTransfers = eventInstances.any { event ->
+                val tags = event.tags(address)
+                tags.contains(TransactionTag.INCOMING) || tags.contains(TransactionTag.OUTGOING)
+            }
+            // Only mark as contract creation if no user-related transfers
+            if (!hasUserTransfers) {
+                return ContractCreationDecoration()
+            }
+            // Let other decorators handle it (e.g., Eip20 decorators)
+            return null
+        }
 
         if (contractMethod != null && contractMethod is EmptyMethod) {
             if (from == address) {

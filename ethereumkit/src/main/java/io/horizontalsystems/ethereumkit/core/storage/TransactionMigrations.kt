@@ -36,3 +36,15 @@ val migration13_14 = object : Migration(13, 14) {
         database.execSQL("ALTER TABLE `InternalTransaction_new` RENAME TO `InternalTransaction`")
     }
 }
+
+val migration14_15 = object : Migration(14, 15) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL("""
+            CREATE TABLE IF NOT EXISTS `TransactionSyncSource` (
+                `transactionHash` BLOB NOT NULL,
+                `source` TEXT NOT NULL,
+                PRIMARY KEY(`transactionHash`)
+            )
+        """.trimIndent())
+    }
+}

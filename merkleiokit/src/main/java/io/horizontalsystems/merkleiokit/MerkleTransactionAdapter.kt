@@ -6,6 +6,7 @@ import io.horizontalsystems.ethereumkit.api.core.NodeApiProvider
 import io.horizontalsystems.ethereumkit.core.EthereumKit
 import io.horizontalsystems.ethereumkit.core.TransactionBuilder
 import io.horizontalsystems.ethereumkit.core.TransactionManager
+import io.horizontalsystems.ethereumkit.core.storage.TransactionSyncSourceStorage
 import io.horizontalsystems.ethereumkit.models.Address
 import io.horizontalsystems.ethereumkit.models.Chain
 import io.horizontalsystems.ethereumkit.models.FullTransaction
@@ -53,6 +54,7 @@ class MerkleTransactionAdapter(
             walletId: String,
             transactionManager: TransactionManager,
             sourceTag: String,
+            transactionSyncSourceStorage: TransactionSyncSourceStorage? = null,
         ): MerkleTransactionAdapter? {
             val baseUrl = "https://mempool.merkle.io/rpc/"
             val blockchainPath = blockchainPathMap[chain] ?: return null
@@ -81,7 +83,8 @@ class MerkleTransactionAdapter(
             val syncer = MerkleTransactionSyncer(
                 manager = merkleTransactionHashManager,
                 blockchain = blockchain,
-                transactionManager = transactionManager
+                transactionManager = transactionManager,
+                syncSourceStorage = transactionSyncSourceStorage
             )
 
             return MerkleTransactionAdapter(blockchain, syncer, transactionManager, sourceTag)

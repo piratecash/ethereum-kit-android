@@ -5,6 +5,8 @@ import io.horizontalsystems.ethereumkit.core.IEip20Storage
 import io.horizontalsystems.ethereumkit.core.ITransactionProvider
 import io.horizontalsystems.ethereumkit.core.ITransactionSyncer
 import io.horizontalsystems.ethereumkit.core.TokenTransactionProvider
+import io.horizontalsystems.ethereumkit.core.storage.TransactionSyncSourceStorage
+import io.horizontalsystems.ethereumkit.models.SyncSource
 import io.horizontalsystems.ethereumkit.models.Transaction
 import io.reactivex.Single
 import kotlinx.coroutines.Dispatchers
@@ -15,7 +17,8 @@ class Erc20TransactionSyncer(
     private val tokenTransactionProvider: TokenTransactionProvider,
     private val fallbackHistoryBlockWindow: Long,
     private val storage: IEip20Storage,
-    private val transactionSaver: TransactionSaver
+    private val transactionSaver: TransactionSaver,
+    private val syncSourceStorage: TransactionSyncSourceStorage? = null
 ) : ITransactionSyncer {
 
     @SuppressLint("CheckResult")
@@ -44,6 +47,10 @@ class Erc20TransactionSyncer(
         return receivedTransactions
             .doOnSuccess { result ->
                 transactionSaver.handle(result.transactions)
+                syncSourceStorage?.saveAll(
+                    result.transactions.map { it.hash },
+                    SyncSource.ERC20_SYNCER
+                )
                 rxSingle(Dispatchers.IO) {
                     storage.saveSyncBlockInfo(
                         lastScannedBlock = result.lastScannedBlock,
