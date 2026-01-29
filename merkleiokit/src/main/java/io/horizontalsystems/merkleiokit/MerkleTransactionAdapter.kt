@@ -54,7 +54,7 @@ class MerkleTransactionAdapter(
             walletId: String,
             transactionManager: TransactionManager,
             sourceTag: String,
-            transactionSyncSourceStorage: TransactionSyncSourceStorage? = null,
+            transactionSyncSourceStorage: TransactionSyncSourceStorage,
         ): MerkleTransactionAdapter? {
             val baseUrl = "https://mempool.merkle.io/rpc/"
             val blockchainPath = blockchainPathMap[chain] ?: return null

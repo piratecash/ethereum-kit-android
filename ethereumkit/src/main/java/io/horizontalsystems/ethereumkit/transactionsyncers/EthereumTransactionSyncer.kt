@@ -13,7 +13,7 @@ import io.reactivex.Single
 class EthereumTransactionSyncer(
         private val transactionProvider: ITransactionProvider,
         private val storage: TransactionSyncerStateStorage,
-        private val syncSourceStorage: TransactionSyncSourceStorage? = null
+        private val syncSourceStorage: TransactionSyncSourceStorage
 ) : ITransactionSyncer {
 
     companion object {
@@ -27,7 +27,7 @@ class EthereumTransactionSyncer(
         return transactionProvider.getTransactions(lastTransactionBlockNumber + 1)
                 .doOnSuccess { providerTransactions ->
                     handle(providerTransactions)
-                    syncSourceStorage?.saveAll(
+                    syncSourceStorage.saveAll(
                         providerTransactions.map { it.hash },
                         SyncSource.ETHERSCAN
                     )

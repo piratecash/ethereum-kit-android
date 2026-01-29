@@ -13,7 +13,7 @@ class MerkleTransactionSyncer(
     private val manager: MerkleTransactionHashManager,
     private val blockchain: MerkleRpcBlockchain,
     private val transactionManager: TransactionManager,
-    private val syncSourceStorage: TransactionSyncSourceStorage? = null
+    private val syncSourceStorage: TransactionSyncSourceStorage
 ) : ITransactionSyncer, IExtraDecorator {
 
     @OptIn(ExperimentalStdlibApi::class)
@@ -51,7 +51,7 @@ class MerkleTransactionSyncer(
             }
 
             manager.handle(completedTxHashes + failedTxHashes)
-            syncSourceStorage?.saveAll(completedTxHashes + failedTxHashes, SyncSource.MERKLE)
+            syncSourceStorage.saveAll(completedTxHashes + failedTxHashes, SyncSource.MERKLE)
 
             Pair(failedTxs, false)
         }

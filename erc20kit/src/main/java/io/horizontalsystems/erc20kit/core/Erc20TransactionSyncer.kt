@@ -18,7 +18,7 @@ class Erc20TransactionSyncer(
     private val fallbackHistoryBlockWindow: Long,
     private val storage: IEip20Storage,
     private val transactionSaver: TransactionSaver,
-    private val syncSourceStorage: TransactionSyncSourceStorage? = null
+    private val syncSourceStorage: TransactionSyncSourceStorage
 ) : ITransactionSyncer {
 
     @SuppressLint("CheckResult")
@@ -47,7 +47,7 @@ class Erc20TransactionSyncer(
         return receivedTransactions
             .doOnSuccess { result ->
                 transactionSaver.handle(result.transactions)
-                syncSourceStorage?.saveAll(
+                syncSourceStorage.saveAll(
                     result.transactions.map { it.hash },
                     SyncSource.ERC20_SYNCER
                 )
