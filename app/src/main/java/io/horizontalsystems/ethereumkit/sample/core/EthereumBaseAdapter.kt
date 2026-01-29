@@ -95,13 +95,14 @@ open class EthereumBaseAdapter(private val ethereumKit: EthereumKit) : IAdapter 
 
     private fun transactionRecord(fullTransaction: FullTransaction): TransactionRecord {
         val transaction = fullTransaction.transaction
-        val mineAddress = ethereumKit.receiveAddress
 
         var amount: BigDecimal = 0.toBigDecimal()
 
         transaction.value?.toBigDecimal()?.let {
             amount = it.movePointLeft(decimal)
         }
+
+        val syncSource = ethereumKit.transactionSyncSourceStorage.getSource(transaction.hash)?.name
 
         return TransactionRecord(
             transactionHash = transaction.hash.toHexString(),
@@ -112,7 +113,8 @@ open class EthereumBaseAdapter(private val ethereumKit: EthereumKit) : IAdapter 
             amount = amount,
             blockHeight = transaction.blockNumber,
             transactionIndex = transaction.transactionIndex ?: 0,
-            decoration = fullTransaction.decoration.describe()
+            decoration = fullTransaction.decoration.describe(),
+            syncSource = syncSource
         )
     }
 }
