@@ -108,7 +108,7 @@ open class Erc20BaseAdapter(
             amount = it.movePointLeft(decimals)
         }
 
-        val syncSource = ethereumKit.transactionSyncSourceStorage.getSource(transaction.hash)?.name
+        val syncSource = ethereumKit.transactionSyncSourceStorage.getSource(transaction.hash)?.displayName
 
         return TransactionRecord(
             transactionHash = transaction.hash.toHexString(),

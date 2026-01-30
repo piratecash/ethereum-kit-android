@@ -102,7 +102,7 @@ open class EthereumBaseAdapter(private val ethereumKit: EthereumKit) : IAdapter 
             amount = it.movePointLeft(decimal)
         }
 
-        val syncSource = ethereumKit.transactionSyncSourceStorage.getSource(transaction.hash)?.name
+        val syncSource = ethereumKit.transactionSyncSourceStorage.getSource(transaction.hash)?.displayName
 
         return TransactionRecord(
             transactionHash = transaction.hash.toHexString(),

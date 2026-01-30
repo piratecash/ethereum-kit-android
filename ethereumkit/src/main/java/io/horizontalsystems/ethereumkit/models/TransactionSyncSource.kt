@@ -3,11 +3,11 @@ package io.horizontalsystems.ethereumkit.models
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
-enum class SyncSource {
-    ETHERSCAN,
-    ERC20_SYNCER,
-    MERKLE,
-    RPC
+enum class SyncSource(val displayName: String) {
+    ETHERSCAN("Etherscan"),
+    ERC20_SYNCER("Token Events"),
+    MERKLE("MEV Protected"),
+    RPC("RPC Node")
 }
 
 @Entity(tableName = "TransactionSyncSource")
