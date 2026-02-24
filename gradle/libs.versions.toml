@@ -1,9 +1,11 @@
 [versions]
+hdWalletKitAndroid = "b7599f6"
 room = "2.7.1"
 kotlinxCoroutinesCore = "1.10.1"
 timber = "5.0.1"
 
 [libraries]
+hd-wallet-kit-android = { module = "com.github.piratecash:hd-wallet-kit-android", version.ref = "hdWalletKitAndroid" }
 room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
 room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
 room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
