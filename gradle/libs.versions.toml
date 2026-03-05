@@ -1,5 +1,5 @@
 [versions]
-hdWalletKitAndroid = "b7599f6"
+hdWalletKitAndroid = "8f873a1"
 room = "2.7.1"
 kotlinxCoroutinesCore = "1.10.1"
 timber = "5.0.1"
