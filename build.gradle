@@ -36,6 +36,97 @@ allprojects {
     }
 }
 
+def libraryModules = [
+    'ethereumkit', 'erc20kit', 'uniswapkit', 'oneinchkit', 'nftkit', 'merkleiokit'
+]
+
+def artifactNames = [
+    'ethereumkit': 'ethereum-kit-android',
+    'erc20kit': 'ethereum-kit-erc20',
+    'uniswapkit': 'ethereum-kit-uniswap',
+    'oneinchkit': 'ethereum-kit-oneinch',
+    'nftkit': 'ethereum-kit-nft',
+    'merkleiokit': 'ethereum-kit-merkleio'
+]
+
+subprojects { sub ->
+    if (libraryModules.contains(sub.name)) {
+        sub.afterEvaluate {
+            sub.publishing {
+                publications.withType(MavenPublication).configureEach {
+                    groupId = "com.github.piratecash"
+                    artifactId = artifactNames[sub.name]
+                    version = rootProject.ext.shortSha
+                }
+                repositories {
+                    maven {
+                        name = "local"
+                        url = uri(rootProject.layout.buildDirectory.dir("maven-repo"))
+                    }
+                }
+            }
+        }
+    }
+}
+
+tasks.register('patchModuleMetadata') {
+    doLast {
+        def dir = rootProject.layout.buildDirectory
+            .dir("maven-repo/com/github/piratecash/ethereum-kit-android/${rootProject.ext.shortSha}")
+            .get().asFile
+        def subModules = libraryModules.findAll { it != 'ethereumkit' }
+
+        // Patch .module file to add submodule dependencies
+        def moduleFile = dir.listFiles()?.find { it.name.endsWith('.module') }
+        if (moduleFile) {
+            def json = new groovy.json.JsonSlurper().parse(moduleFile)
+            def extraDeps = subModules.collect { mod -> [
+                group: 'com.github.piratecash',
+                module: artifactNames[mod],
+                version: [requires: rootProject.ext.shortSha]
+            ]}
+            json.variants.each { variant ->
+                if (variant.name.contains('Runtime') || variant.name.contains('Api')) {
+                    variant.dependencies = (variant.dependencies ?: []) + extraDeps
+                }
+            }
+            moduleFile.text = groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(json))
+        }
+
+        // Also patch POM to add submodule dependencies
+        def pomFile = dir.listFiles()?.find { it.name.endsWith('.pom') }
+        if (pomFile) {
+            def depsXml = subModules.collect { mod ->
+                """    <dependency>
+      <groupId>com.github.piratecash</groupId>
+      <artifactId>${artifactNames[mod]}</artifactId>
+      <version>${rootProject.ext.shortSha}</version>
+      <scope>runtime</scope>
+    </dependency>"""
+            }.join('\n')
+            def pomText = pomFile.text
+            if (pomText.contains('</dependencies>')) {
+                pomText = pomText.replace('</dependencies>', depsXml + '\n  </dependencies>')
+            } else {
+                pomText = pomText.replace('</project>', "  <dependencies>\n${depsXml}\n  </dependencies>\n</project>")
+            }
+            pomFile.text = pomText
+        }
+
+        // Regenerate checksums
+        dir.listFiles()?.findAll { !it.name.contains('.md5') && !it.name.contains('.sha') }?.each { file ->
+            def md5 = java.security.MessageDigest.getInstance('MD5').digest(file.bytes).encodeHex().toString()
+            def sha1 = java.security.MessageDigest.getInstance('SHA-1').digest(file.bytes).encodeHex().toString()
+            def sha256 = java.security.MessageDigest.getInstance('SHA-256').digest(file.bytes).encodeHex().toString()
+            def sha512 = java.security.MessageDigest.getInstance('SHA-512').digest(file.bytes).encodeHex().toString()
+            new File(dir, "${file.name}.md5").text = md5
+            new File(dir, "${file.name}.sha1").text = sha1
+            new File(dir, "${file.name}.sha256").text = sha256
+            new File(dir, "${file.name}.sha512").text = sha512
+        }
+    }
+}
+
 task clean(type: Delete) {
     delete rootProject.buildDir
 }

@@ -28,14 +28,7 @@ jobs:
         run: echo "SHORT_SHA=$(echo $GITHUB_SHA | cut -c1-7)" >> $GITHUB_ENV
 
       - name: Build and publish all modules to local repo
-        run: |
-          ./gradlew \
-            :ethereumkit:publishReleasePublicationToLocalRepository \
-            :erc20kit:publishReleasePublicationToLocalRepository \
-            :uniswapkit:publishReleasePublicationToLocalRepository \
-            :oneinchkit:publishReleasePublicationToLocalRepository \
-            :nftkit:publishReleasePublicationToLocalRepository \
-            :merkleiokit:publishReleasePublicationToLocalRepository
+        run: ./gradlew publishReleasePublicationToLocalRepository patchModuleMetadata
         env:
           SHORT_SHA: ${{ env.SHORT_SHA }}
 
@@ -49,12 +42,7 @@ jobs:
           }
 
       - name: Copy artifacts to gh-pages
-        run: |
-          for module in ethereumkit erc20kit uniswapkit oneinchkit nftkit merkleiokit; do
-            if [ -d "$module/build/maven-repo" ]; then
-              cp -r "$module/build/maven-repo/"* gh-pages/
-            fi
-          done
+        run: cp -r build/maven-repo/* gh-pages/
 
       - name: Keep only last 20 versions per artifact
         run: |

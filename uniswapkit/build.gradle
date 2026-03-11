@@ -10,15 +10,6 @@ afterEvaluate {
         publications {
             release(MavenPublication) {
                 from components.release
-                groupId = 'com.github.piratecash'
-                artifactId = 'ethereum-kit-uniswap'
-                version = rootProject.ext.shortSha
-            }
-        }
-        repositories {
-            maven {
-                name = 'local'
-                url = uri(layout.buildDirectory.dir("maven-repo"))
             }
         }
     }
