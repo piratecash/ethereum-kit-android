@@ -7,10 +7,20 @@ import android.net.NetworkCapabilities
 import android.net.NetworkRequest
 import java.util.concurrent.CopyOnWriteArraySet
 
-class ConnectionManager(context: Context) {
+class ConnectionManager private constructor(context: Context) {
 
     interface Listener {
         fun onConnectionChange()
+    }
+
+    companion object {
+        @Volatile
+        private var instance: ConnectionManager? = null
+
+        fun getInstance(context: Context): ConnectionManager =
+            instance ?: synchronized(this) {
+                instance ?: ConnectionManager(context.applicationContext).also { instance = it }
+            }
     }
 
     private val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
@@ -82,11 +92,4 @@ class ConnectionManager(context: Context) {
         }
     }
 
-    fun stop() {
-        try {
-            connectivityManager.unregisterNetworkCallback(callback)
-        } catch (e: Exception) {
-            //already unregistered
-        }
-    }
 }

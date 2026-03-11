@@ -68,6 +68,7 @@ class HistoricalErc20Syncer(
 
     override fun stop() {
         syncJob?.cancel()
+        connectionManager.removeListener(this)
         Timber.i("Stopped historical ERC20 sync")
     }
 

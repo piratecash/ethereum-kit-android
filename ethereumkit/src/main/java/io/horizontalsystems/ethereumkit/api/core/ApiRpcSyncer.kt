@@ -43,6 +43,7 @@ class ApiRpcSyncer(
     override fun stop() {
         isStarted = false
 
+        connectionManager.removeListener(this)
         state = SyncerState.NotReady(EthereumKit.SyncError.NotStarted())
         disposables.clear()
         stopTimer()

@@ -62,7 +62,7 @@ class MerkleTransactionAdapter(
             val url = URI("$baseUrl$blockchainPath/$merkleIoPubKey")
             val rpcProvider = NodeApiProvider(listOf(url), EthereumKit.gson)
 
-            val connectionManager = ConnectionManager(context)
+            val connectionManager = ConnectionManager.getInstance(context)
             val rpcSyncer = ApiRpcSyncer(rpcProvider, connectionManager, chain.syncInterval)
 
             val transactionBuilder = TransactionBuilder(address, chain.id)

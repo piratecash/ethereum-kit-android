@@ -191,7 +191,6 @@ class EthereumKit(
         historicalSyncer?.stop()
         blockchain.stop()
         state.clear()
-        connectionManager.stop()
     }
 
     fun refresh() {
@@ -571,7 +570,7 @@ class EthereumKit(
             scanHistoricalEip20: Boolean = true
         ): EthereumKit {
 
-            val connectionManager = ConnectionManager(application)
+            val connectionManager = ConnectionManager.getInstance(application)
 
             val syncer: IRpcSyncer = when (rpcSource) {
                 is RpcSource.WebSocket -> {
