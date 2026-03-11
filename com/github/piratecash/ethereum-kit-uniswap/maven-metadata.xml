@@ -3,11 +3,11 @@
   <groupId>com.github.piratecash</groupId>
   <artifactId>ethereum-kit-uniswap</artifactId>
   <versioning>
-    <latest>0b2b8fd</latest>
-    <release>0b2b8fd</release>
+    <latest>024788d</latest>
+    <release>024788d</release>
     <versions>
-      <version>0b2b8fd</version>
+      <version>024788d</version>
     </versions>
-    <lastUpdated>20260311101517</lastUpdated>
+    <lastUpdated>20260311125149</lastUpdated>
   </versioning>
 </metadata>

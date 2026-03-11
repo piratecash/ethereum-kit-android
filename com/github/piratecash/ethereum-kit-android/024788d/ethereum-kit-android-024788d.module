@@ -1,0 +1,322 @@
+{
+    "formatVersion": "1.1",
+    "component": {
+        "group": "com.github.piratecash",
+        "module": "ethereum-kit-android",
+        "version": "024788d",
+        "attributes": {
+            "org.gradle.status": "release"
+        }
+    },
+    "createdBy": {
+        "gradle": {
+            "version": "8.13"
+        }
+    },
+    "variants": [
+        {
+            "name": "releaseApiElements-published",
+            "attributes": {
+                "org.gradle.category": "library",
+                "org.gradle.jvm.environment": "android",
+                "org.gradle.usage": "java-api",
+                "org.jetbrains.kotlin.platform.type": "androidJvm"
+            },
+            "dependencies": [
+                {
+                    "group": "org.web3j",
+                    "module": "abi",
+                    "version": {
+                        "requires": "4.9.8"
+                    }
+                },
+                {
+                    "group": "org.jetbrains.kotlin",
+                    "module": "kotlin-stdlib",
+                    "version": {
+                        "requires": "2.0.20"
+                    }
+                },
+                {
+                    "group": "com.github.piratecash",
+                    "module": "ethereum-kit-erc20",
+                    "version": {
+                        "requires": "024788d"
+                    }
+                },
+                {
+                    "group": "com.github.piratecash",
+                    "module": "ethereum-kit-uniswap",
+                    "version": {
+                        "requires": "024788d"
+                    }
+                },
+                {
+                    "group": "com.github.piratecash",
+                    "module": "ethereum-kit-oneinch",
+                    "version": {
+                        "requires": "024788d"
+                    }
+                },
+                {
+                    "group": "com.github.piratecash",
+                    "module": "ethereum-kit-nft",
+                    "version": {
+                        "requires": "024788d"
+                    }
+                },
+                {
+                    "group": "com.github.piratecash",
+                    "module": "ethereum-kit-merkleio",
+                    "version": {
+                        "requires": "024788d"
+                    }
+                }
+            ],
+            "files": [
+                {
+                    "name": "ethereum-kit-android-024788d.aar",
+                    "url": "ethereum-kit-android-024788d.aar",
+                    "size": 742446,
+                    "sha512": "2fe85f63d1feb89e6c4db3514332b6147a50a43fd21483c1f8af31af309bfa254c95248d5b61892504f7053c0d447176442c1acbe7a31fbaca698bb9becf5e12",
+                    "sha256": "ba7cf655865a407b50a7c0b4d3af85672dcbbdf2bc8eaf40ad2b94bb8e668a60",
+                    "sha1": "68017ef73d6177996ae797ba6d8a43d4a29a7977",
+                    "md5": "4b27eaeb003c227de5683e570e0c84a6"
+                }
+            ]
+        },
+        {
+            "name": "releaseRuntimeElements-published",
+            "attributes": {
+                "org.gradle.category": "library",
+                "org.gradle.jvm.environment": "android",
+                "org.gradle.usage": "java-runtime",
+                "org.jetbrains.kotlin.platform.type": "androidJvm"
+            },
+            "dependencies": [
+                {
+                    "group": "org.bouncycastle",
+                    "module": "bcpkix-jdk15on",
+                    "version": {
+                        "requires": "1.65"
+                    }
+                },
+                {
+                    "group": "com.github.piratecash",
+                    "module": "hd-wallet-kit-android",
+                    "version": {
+                        "requires": "8f873a1"
+                    }
+                },
+                {
+                    "group": "io.reactivex.rxjava2",
+                    "module": "rxjava",
+                    "version": {
+                        "requires": "2.2.19"
+                    }
+                },
+                {
+                    "group": "io.reactivex.rxjava2",
+                    "module": "rxandroid",
+                    "version": {
+                        "requires": "2.1.1"
+                    }
+                },
+                {
+                    "group": "com.squareup.retrofit2",
+                    "module": "retrofit",
+                    "version": {
+                        "requires": "2.9.0"
+                    }
+                },
+                {
+                    "group": "com.squareup.retrofit2",
+                    "module": "adapter-rxjava2",
+                    "version": {
+                        "requires": "2.9.0"
+                    }
+                },
+                {
+                    "group": "com.squareup.retrofit2",
+                    "module": "converter-gson",
+                    "version": {
+                        "requires": "2.9.0"
+                    }
+                },
+                {
+                    "group": "com.squareup.okhttp3",
+                    "module": "logging-interceptor",
+                    "version": {
+                        "requires": "4.9.0"
+                    }
+                },
+                {
+                    "group": "com.squareup.retrofit2",
+                    "module": "converter-scalars",
+                    "version": {
+                        "requires": "2.9.0"
+                    }
+                },
+                {
+                    "group": "com.google.code.gson",
+                    "module": "gson",
+                    "version": {
+                        "requires": "2.9.0"
+                    }
+                },
+                {
+                    "group": "com.tinder.scarlet",
+                    "module": "scarlet",
+                    "version": {
+                        "requires": "0.1.12"
+                    }
+                },
+                {
+                    "group": "com.tinder.scarlet",
+                    "module": "websocket-okhttp",
+                    "version": {
+                        "requires": "0.1.12"
+                    }
+                },
+                {
+                    "group": "com.tinder.scarlet",
+                    "module": "stream-adapter-rxjava2",
+                    "version": {
+                        "requires": "0.1.12"
+                    }
+                },
+                {
+                    "group": "com.tinder.scarlet",
+                    "module": "message-adapter-gson",
+                    "version": {
+                        "requires": "0.1.12"
+                    }
+                },
+                {
+                    "group": "com.tinder.scarlet",
+                    "module": "lifecycle-android",
+                    "version": {
+                        "requires": "0.1.12"
+                    }
+                },
+                {
+                    "group": "com.jakewharton.timber",
+                    "module": "timber",
+                    "version": {
+                        "requires": "5.0.1"
+                    }
+                },
+                {
+                    "group": "androidx.room",
+                    "module": "room-runtime",
+                    "version": {
+                        "requires": "2.7.1"
+                    }
+                },
+                {
+                    "group": "androidx.room",
+                    "module": "room-rxjava2",
+                    "version": {
+                        "requires": "2.7.1"
+                    }
+                },
+                {
+                    "group": "org.web3j",
+                    "module": "crypto",
+                    "version": {
+                        "requires": "4.9.4"
+                    }
+                },
+                {
+                    "group": "androidx.annotation",
+                    "module": "annotation",
+                    "version": {
+                        "requires": "1.4.0"
+                    }
+                },
+                {
+                    "group": "org.web3j",
+                    "module": "abi",
+                    "version": {
+                        "requires": "4.9.8"
+                    }
+                },
+                {
+                    "group": "org.jetbrains.kotlin",
+                    "module": "kotlin-stdlib",
+                    "version": {
+                        "requires": "2.0.20"
+                    }
+                },
+                {
+                    "group": "com.github.piratecash",
+                    "module": "ethereum-kit-erc20",
+                    "version": {
+                        "requires": "024788d"
+                    }
+                },
+                {
+                    "group": "com.github.piratecash",
+                    "module": "ethereum-kit-uniswap",
+                    "version": {
+                        "requires": "024788d"
+                    }
+                },
+                {
+                    "group": "com.github.piratecash",
+                    "module": "ethereum-kit-oneinch",
+                    "version": {
+                        "requires": "024788d"
+                    }
+                },
+                {
+                    "group": "com.github.piratecash",
+                    "module": "ethereum-kit-nft",
+                    "version": {
+                        "requires": "024788d"
+                    }
+                },
+                {
+                    "group": "com.github.piratecash",
+                    "module": "ethereum-kit-merkleio",
+                    "version": {
+                        "requires": "024788d"
+                    }
+                }
+            ],
+            "files": [
+                {
+                    "name": "ethereum-kit-android-024788d.aar",
+                    "url": "ethereum-kit-android-024788d.aar",
+                    "size": 742446,
+                    "sha512": "2fe85f63d1feb89e6c4db3514332b6147a50a43fd21483c1f8af31af309bfa254c95248d5b61892504f7053c0d447176442c1acbe7a31fbaca698bb9becf5e12",
+                    "sha256": "ba7cf655865a407b50a7c0b4d3af85672dcbbdf2bc8eaf40ad2b94bb8e668a60",
+                    "sha1": "68017ef73d6177996ae797ba6d8a43d4a29a7977",
+                    "md5": "4b27eaeb003c227de5683e570e0c84a6"
+                }
+            ]
+        },
+        {
+            "name": "releaseSourcesElements-published",
+            "attributes": {
+                "org.gradle.category": "documentation",
+                "org.gradle.dependency.bundling": "external",
+                "org.gradle.docstype": "sources",
+                "org.gradle.jvm.environment": "android",
+                "org.gradle.usage": "java-runtime",
+                "org.jetbrains.kotlin.platform.type": "androidJvm"
+            },
+            "files": [
+                {
+                    "name": "ethereum-kit-android-024788d-sources.jar",
+                    "url": "ethereum-kit-android-024788d-sources.jar",
+                    "size": 550275,
+                    "sha512": "2eba2ba8e9e98850ffb92dd00ccdebc25e7af3b630d688e0875371622ffd50be7255337f34115cb668a7185035a10b15cf31bfae0712effc5ff5336a71d586ca",
+                    "sha256": "763c6e55a9e791a255b1a80fdab98f162b3e88da8894df1e3eda570d669c58b4",
+                    "sha1": "e990685e025da6087adc9025b2438bd50e402458",
+                    "md5": "154cb2f58f115e01b39b154da2554bf1"
+                }
+            ]
+        }
+    ]
+}

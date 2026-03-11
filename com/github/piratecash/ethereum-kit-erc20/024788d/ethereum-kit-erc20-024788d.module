@@ -1,0 +1,139 @@
+{
+  "formatVersion": "1.1",
+  "component": {
+    "group": "com.github.piratecash",
+    "module": "ethereum-kit-erc20",
+    "version": "024788d",
+    "attributes": {
+      "org.gradle.status": "release"
+    }
+  },
+  "createdBy": {
+    "gradle": {
+      "version": "8.13"
+    }
+  },
+  "variants": [
+    {
+      "name": "releaseApiElements-published",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.jvm.environment": "android",
+        "org.gradle.usage": "java-api",
+        "org.jetbrains.kotlin.platform.type": "androidJvm"
+      },
+      "files": [
+        {
+          "name": "ethereum-kit-erc20-024788d.aar",
+          "url": "ethereum-kit-erc20-024788d.aar",
+          "size": 95963,
+          "sha512": "d3cd0c28bca71b05e22325ff9508cf3ff8ad97f3bc618b2bb944f4bb0d4e1ed3e390166ad4bff761d4eaa5e02b937687387c43bf80b8d9b4bca92869474094b8",
+          "sha256": "c66caf9fb0f0c1acfb3581f00b56074b0af197a9d62fc2202b24e3f0e75c7a39",
+          "sha1": "cc5f7bb07aedb355fd379fa50919e86374dc460b",
+          "md5": "75daa76be63639d94e1141113442e354"
+        }
+      ]
+    },
+    {
+      "name": "releaseRuntimeElements-published",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.jvm.environment": "android",
+        "org.gradle.usage": "java-runtime",
+        "org.jetbrains.kotlin.platform.type": "androidJvm"
+      },
+      "dependencies": [
+        {
+          "group": "org.jetbrains.kotlin",
+          "module": "kotlin-stdlib-jdk7",
+          "version": {
+            "requires": "2.0.20"
+          }
+        },
+        {
+          "group": "io.reactivex.rxjava2",
+          "module": "rxjava",
+          "version": {
+            "requires": "2.2.19"
+          }
+        },
+        {
+          "group": "io.reactivex.rxjava2",
+          "module": "rxandroid",
+          "version": {
+            "requires": "2.1.1"
+          }
+        },
+        {
+          "group": "org.jetbrains.kotlinx",
+          "module": "kotlinx-coroutines-rx2",
+          "version": {
+            "requires": "1.10.1"
+          }
+        },
+        {
+          "group": "com.jakewharton.timber",
+          "module": "timber",
+          "version": {
+            "requires": "5.0.1"
+          }
+        },
+        {
+          "group": "androidx.room",
+          "module": "room-runtime",
+          "version": {
+            "requires": "2.7.1"
+          }
+        },
+        {
+          "group": "androidx.room",
+          "module": "room-rxjava2",
+          "version": {
+            "requires": "2.7.1"
+          }
+        },
+        {
+          "group": "com.github.piratecash",
+          "module": "ethereum-kit-android",
+          "version": {
+            "requires": "024788d"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "ethereum-kit-erc20-024788d.aar",
+          "url": "ethereum-kit-erc20-024788d.aar",
+          "size": 95963,
+          "sha512": "d3cd0c28bca71b05e22325ff9508cf3ff8ad97f3bc618b2bb944f4bb0d4e1ed3e390166ad4bff761d4eaa5e02b937687387c43bf80b8d9b4bca92869474094b8",
+          "sha256": "c66caf9fb0f0c1acfb3581f00b56074b0af197a9d62fc2202b24e3f0e75c7a39",
+          "sha1": "cc5f7bb07aedb355fd379fa50919e86374dc460b",
+          "md5": "75daa76be63639d94e1141113442e354"
+        }
+      ]
+    },
+    {
+      "name": "releaseSourcesElements-published",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.jvm.environment": "android",
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-runtime",
+        "org.jetbrains.kotlin.platform.type": "androidJvm"
+      },
+      "files": [
+        {
+          "name": "ethereum-kit-erc20-024788d-sources.jar",
+          "url": "ethereum-kit-erc20-024788d-sources.jar",
+          "size": 69186,
+          "sha512": "8899865167c3f6a4287ac8ecacfdd1d639b7a7b49fbb2591d7f387eb52392f5c044e9870aba59bfb3f820c26d805bd036117040b0a6f1feb1836bb985b29c55d",
+          "sha256": "04d6b16fc07982e6f0e9225f459341fa5eac6ec27af2e897efa359db0e803379",
+          "sha1": "8e1091e3cc6d2dd2c5ca43cfd831d0ab977e8852",
+          "md5": "64d54eccb3a037f12e05b4c45e7e23bf"
+        }
+      ]
+    }
+  ]
+}
