@@ -28,7 +28,12 @@ jobs:
         run: echo "SHORT_SHA=$(echo $GITHUB_SHA | cut -c1-7)" >> $GITHUB_ENV
 
       - name: Build and publish all modules to local repo
-        run: ./gradlew publishReleasePublicationToLocalRepository patchModuleMetadata
+        run: ./gradlew publishReleasePublicationToLocalRepository
+        env:
+          SHORT_SHA: ${{ env.SHORT_SHA }}
+
+      - name: Patch module metadata with submodule dependencies
+        run: ./gradlew patchModuleMetadata
         env:
           SHORT_SHA: ${{ env.SHORT_SHA }}
 

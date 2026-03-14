@@ -69,6 +69,17 @@ subprojects { sub ->
     }
 }
 
+gradle.projectsEvaluated {
+    def patchTask = tasks.named('patchModuleMetadata')
+    subprojects.each { sub ->
+        if (libraryModules.contains(sub.name)) {
+            sub.tasks.matching { it.name == 'publishReleasePublicationToLocalRepository' }.configureEach {
+                patchTask.get().mustRunAfter(it)
+            }
+        }
+    }
+}
+
 tasks.register('patchModuleMetadata') {
     doLast {
         def dir = rootProject.layout.buildDirectory
