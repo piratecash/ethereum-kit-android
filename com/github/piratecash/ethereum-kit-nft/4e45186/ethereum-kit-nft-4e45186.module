@@ -1,0 +1,155 @@
+{
+  "formatVersion": "1.1",
+  "component": {
+    "group": "com.github.piratecash",
+    "module": "ethereum-kit-nft",
+    "version": "4e45186",
+    "attributes": {
+      "org.gradle.status": "release"
+    }
+  },
+  "createdBy": {
+    "gradle": {
+      "version": "8.13"
+    }
+  },
+  "variants": [
+    {
+      "name": "releaseApiElements-published",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.jvm.environment": "android",
+        "org.gradle.usage": "java-api",
+        "org.jetbrains.kotlin.platform.type": "androidJvm"
+      },
+      "dependencies": [
+        {
+          "group": "org.jetbrains.kotlin",
+          "module": "kotlin-stdlib",
+          "version": {
+            "requires": "2.0.20"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "ethereum-kit-nft-4e45186.aar",
+          "url": "ethereum-kit-nft-4e45186.aar",
+          "size": 136506,
+          "sha512": "f8492bee162cf6b4e848d93d1d400c63e20843264a1bef8cbb2521b4dfccb80720ed6d071bca2d92ddb079826edfb98878fd4f5c72beb9fb7ac7fd7952ec190c",
+          "sha256": "973878af8e963bbe6b4af2a4cc55a9eb3bc8a0275f45327879eaa15ec04c4472",
+          "sha1": "f6ab50793b19a40123c67a81accbc972e77fdf7d",
+          "md5": "b7109703c2472a90fd7fb3cddabc24c9"
+        }
+      ]
+    },
+    {
+      "name": "releaseRuntimeElements-published",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.jvm.environment": "android",
+        "org.gradle.usage": "java-runtime",
+        "org.jetbrains.kotlin.platform.type": "androidJvm"
+      },
+      "dependencies": [
+        {
+          "group": "androidx.core",
+          "module": "core-ktx",
+          "version": {
+            "requires": "1.7.0"
+          }
+        },
+        {
+          "group": "androidx.appcompat",
+          "module": "appcompat",
+          "version": {
+            "requires": "1.5.0"
+          }
+        },
+        {
+          "group": "com.google.android.material",
+          "module": "material",
+          "version": {
+            "requires": "1.6.1"
+          }
+        },
+        {
+          "group": "androidx.room",
+          "module": "room-runtime",
+          "version": {
+            "requires": "2.7.1"
+          }
+        },
+        {
+          "group": "androidx.room",
+          "module": "room-rxjava2",
+          "version": {
+            "requires": "2.7.1"
+          }
+        },
+        {
+          "group": "org.jetbrains.kotlinx",
+          "module": "kotlinx-coroutines-android",
+          "version": {
+            "requires": "1.10.1"
+          }
+        },
+        {
+          "group": "org.jetbrains.kotlinx",
+          "module": "kotlinx-coroutines-rx2",
+          "version": {
+            "requires": "1.10.1"
+          }
+        },
+        {
+          "group": "com.github.piratecash",
+          "module": "ethereum-kit-android",
+          "version": {
+            "requires": "4e45186"
+          }
+        },
+        {
+          "group": "org.jetbrains.kotlin",
+          "module": "kotlin-stdlib",
+          "version": {
+            "requires": "2.0.20"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "ethereum-kit-nft-4e45186.aar",
+          "url": "ethereum-kit-nft-4e45186.aar",
+          "size": 136506,
+          "sha512": "f8492bee162cf6b4e848d93d1d400c63e20843264a1bef8cbb2521b4dfccb80720ed6d071bca2d92ddb079826edfb98878fd4f5c72beb9fb7ac7fd7952ec190c",
+          "sha256": "973878af8e963bbe6b4af2a4cc55a9eb3bc8a0275f45327879eaa15ec04c4472",
+          "sha1": "f6ab50793b19a40123c67a81accbc972e77fdf7d",
+          "md5": "b7109703c2472a90fd7fb3cddabc24c9"
+        }
+      ]
+    },
+    {
+      "name": "releaseSourcesElements-published",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.jvm.environment": "android",
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-runtime",
+        "org.jetbrains.kotlin.platform.type": "androidJvm"
+      },
+      "files": [
+        {
+          "name": "ethereum-kit-nft-4e45186-sources.jar",
+          "url": "ethereum-kit-nft-4e45186-sources.jar",
+          "size": 83099,
+          "sha512": "a4649c3762b0db7926490d18d17020797329af08d8af3e16679960c8dd17d011eca34f44779f2140b2c57e60cd5ab31a137f1f1c69a77059fd72e16d01fe8937",
+          "sha256": "4229148717301e46fb82aa242a457f035121948110d7796e980ee4486733f30a",
+          "sha1": "f350efe6ec9ad32b0e35c02b3dda0cd858c0829b",
+          "md5": "d9b1ad171619ad62912ba75005aa4f14"
+        }
+      ]
+    }
+  ]
+}
