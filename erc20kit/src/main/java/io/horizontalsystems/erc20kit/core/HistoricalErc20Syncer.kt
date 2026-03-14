@@ -14,6 +14,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -29,6 +32,10 @@ class HistoricalErc20Syncer(
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var syncJob: Job? = null
+    private var startBlock: Long = 0
+
+    private val _syncState = MutableStateFlow<EthereumKit.HistoricalSyncState>(EthereumKit.HistoricalSyncState.Idle)
+    override val syncState: StateFlow<EthereumKit.HistoricalSyncState> = _syncState.asStateFlow()
 
     // Only start if explicitly enabled by EthereumKit (when Etherscan returns no data)
     override var isEnabled: Boolean = false
@@ -62,12 +69,14 @@ class HistoricalErc20Syncer(
                 Timber.i("Historical sync cancelled")
             } catch (e: Throwable) {
                 Timber.e(e, "Historical sync failed")
+                _syncState.value = EthereumKit.HistoricalSyncState.Idle
             }
         }
     }
 
     override fun stop() {
         syncJob?.cancel()
+        _syncState.value = EthereumKit.HistoricalSyncState.Idle
         connectionManager.removeListener(this)
         Timber.i("Stopped historical ERC20 sync")
     }
@@ -75,10 +84,17 @@ class HistoricalErc20Syncer(
     private suspend fun syncHistoricalBatches() {
         var repeat = true
         var retryAttemptsRemaining = 3
+        var isFirstBatch = true
         while (repeat) {
             val latest = storage.getHistoricalMinScannedBlock()
                 ?: storage.getEarliestEip20Event()?.blockNumber
                 ?: tokenTransactionProvider.fetchBlockNumber()
+
+            if (isFirstBatch) {
+                startBlock = latest
+                _syncState.value = EthereumKit.HistoricalSyncState.Syncing(startBlock, latest)
+                isFirstBatch = false
+            }
 
             repeat = performBatchSync(latest)
             if (repeat) {
@@ -92,6 +108,10 @@ class HistoricalErc20Syncer(
                 repeat = true
             }
         }
+        // Ensure terminal state when loop exits (retries exhausted or scope cancelled)
+        if (_syncState.value is EthereumKit.HistoricalSyncState.Syncing) {
+            _syncState.value = EthereumKit.HistoricalSyncState.Idle
+        }
     }
 
     private suspend fun performBatchSync(latest: Long): Boolean {
@@ -102,6 +122,7 @@ class HistoricalErc20Syncer(
 
         if (latest <= 0) {
             Timber.i("Reached genesis block, historical sync complete")
+            _syncState.value = EthereumKit.HistoricalSyncState.Completed
             return false
         }
 
@@ -113,6 +134,7 @@ class HistoricalErc20Syncer(
         return try {
             val result = tokenTransactionProvider.getTokenTransactions(fromBlock, toBlock)
             handleBatchResult(result.transactions, fromBlock)
+            _syncState.value = EthereumKit.HistoricalSyncState.Syncing(startBlock, fromBlock)
             true
         } catch (e: Throwable) {
             Timber.e(e, "Historical sync batch failed for blocks $fromBlock-$toBlock")

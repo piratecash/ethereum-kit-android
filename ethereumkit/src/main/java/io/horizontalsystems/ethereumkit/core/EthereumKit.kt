@@ -57,6 +57,8 @@ import io.reactivex.Single
 import io.reactivex.disposables.CompositeDisposable
 import io.reactivex.schedulers.Schedulers
 import io.reactivex.subjects.PublishSubject
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import timber.log.Timber
 import java.math.BigInteger
@@ -96,13 +98,28 @@ class EthereumKit(
 
     private var started = false
 
+    sealed class HistoricalSyncState {
+        object Idle : HistoricalSyncState()
+        object Completed : HistoricalSyncState()
+        data class Syncing(val startBlock: Long, val currentBlock: Long) : HistoricalSyncState() {
+            val blocksRemaining: Long get() = currentBlock
+            val progress: Double get() = if (startBlock > 0) (startBlock - currentBlock).toDouble() / startBlock else 0.0
+        }
+    }
+
     interface HistoricalSyncer {
         var isEnabled: Boolean
+        val syncState: StateFlow<HistoricalSyncState>
         fun start()
         fun stop()
     }
 
     private var historicalSyncer: HistoricalSyncer? = null
+
+    private val _idleHistoricalState = MutableStateFlow<HistoricalSyncState>(HistoricalSyncState.Idle)
+
+    val historicalSyncState: StateFlow<HistoricalSyncState>
+        get() = historicalSyncer?.syncState ?: _idleHistoricalState
 
     init {
         state.lastBlockHeight = blockchain.lastBlockHeight
