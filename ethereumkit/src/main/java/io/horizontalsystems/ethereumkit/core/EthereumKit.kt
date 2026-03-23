@@ -107,6 +107,16 @@ class EthereumKit(
         }
     }
 
+    sealed class ForwardSyncState {
+        object Idle : ForwardSyncState()
+        data class Syncing(
+            val lastSyncedTip: Long,
+            val chainTipBlock: Long
+        ) : ForwardSyncState() {
+            val blocksRemaining: Long get() = chainTipBlock - lastSyncedTip
+        }
+    }
+
     interface HistoricalSyncer {
         var isEnabled: Boolean
         val syncState: StateFlow<HistoricalSyncState>
@@ -121,9 +131,15 @@ class EthereumKit(
     val historicalSyncState: StateFlow<HistoricalSyncState>
         get() = historicalSyncer?.syncState ?: _idleHistoricalState
 
+    private val _forwardSyncState = MutableStateFlow<ForwardSyncState>(ForwardSyncState.Idle)
+    val forwardSyncState: StateFlow<ForwardSyncState> get() = _forwardSyncState
+
+    private var lastForwardSyncTip: Long = 0L
+
     init {
         state.lastBlockHeight = blockchain.lastBlockHeight
         state.accountState = blockchain.accountState
+        lastForwardSyncTip = eip20Storage.getLastScannedBlock() ?: 0L
 
         transactionManager.fullTransactionsAsync
             .subscribeOn(Schedulers.io())
@@ -161,6 +177,25 @@ class EthereumKit(
                     disposables.add(it)
                 }
         }
+
+        // Clear forward sync gap indicator when tx sync completes
+        transactionSyncManager.syncStateAsync
+            .filter { it is SyncState.Synced || it is SyncState.NotSynced }
+            .subscribeOn(Schedulers.io())
+            .subscribe { syncState ->
+                if (syncState is SyncState.Synced) {
+                    // Advance tip to chain height — gap resolves to 0 on next recompute
+                    state.lastBlockHeight?.let { lastForwardSyncTip = it }
+                    state.lastBlockHeight?.let { updateForwardSyncState(it) }
+                } else {
+                    // On error: clear indicator directly without advancing tip.
+                    // Tip stays old so the gap will reappear on next onUpdateLastBlockHeight
+                    // (which triggers a retry). This is correct: the gap IS still there.
+                    _forwardSyncState.value = ForwardSyncState.Idle
+                }
+            }.let {
+                disposables.add(it)
+            }
     }
 
     val lastBlockHeight: Long?
@@ -375,12 +410,17 @@ class EthereumKit(
     //IBlockchainListener
     //
 
+    private fun updateForwardSyncState(chainTip: Long) {
+        _forwardSyncState.value = computeForwardSyncState(chain, lastForwardSyncTip, chainTip)
+    }
+
     override fun onUpdateLastBlockHeight(lastBlockHeight: Long) {
         if (state.lastBlockHeight == lastBlockHeight)
             return
 
         state.lastBlockHeight = lastBlockHeight
         lastBlockHeightSubject.onNext(lastBlockHeight)
+        updateForwardSyncState(lastBlockHeight)
         transactionSyncManager.sync()
     }
 
@@ -469,6 +509,22 @@ class EthereumKit(
 
         const val BLOCKS_PER_HOUR = 1200L
         const val DEFAULT_FALLBACK_HISTORY_BLOCK_WINDOW = 6 * 24 * BLOCKS_PER_HOUR
+        const val FORWARD_GAP_THRESHOLD = 100L // ~5 min on BSC at ~3s/block
+
+        fun computeForwardSyncState(
+            chain: Chain,
+            lastForwardSyncTip: Long,
+            chainTip: Long
+        ): ForwardSyncState {
+            if (chain != Chain.BinanceSmartChain) return ForwardSyncState.Idle
+            if (lastForwardSyncTip == 0L) return ForwardSyncState.Idle
+            val gap = chainTip - lastForwardSyncTip
+            return if (gap > FORWARD_GAP_THRESHOLD) {
+                ForwardSyncState.Syncing(lastForwardSyncTip, chainTip)
+            } else {
+                ForwardSyncState.Idle
+            }
+        }
 
         val gson = GsonBuilder()
             .setLenient()
