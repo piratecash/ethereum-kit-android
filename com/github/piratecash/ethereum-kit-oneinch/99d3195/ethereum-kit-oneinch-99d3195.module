@@ -1,0 +1,183 @@
+{
+  "formatVersion": "1.1",
+  "component": {
+    "group": "com.github.piratecash",
+    "module": "ethereum-kit-oneinch",
+    "version": "99d3195",
+    "attributes": {
+      "org.gradle.status": "release"
+    }
+  },
+  "createdBy": {
+    "gradle": {
+      "version": "8.13"
+    }
+  },
+  "variants": [
+    {
+      "name": "releaseApiElements-published",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.jvm.environment": "android",
+        "org.gradle.usage": "java-api",
+        "org.jetbrains.kotlin.platform.type": "androidJvm"
+      },
+      "dependencies": [
+        {
+          "group": "androidx.databinding",
+          "module": "viewbinding",
+          "version": {
+            "requires": "8.13.1"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "ethereum-kit-oneinch-99d3195.aar",
+          "url": "ethereum-kit-oneinch-99d3195.aar",
+          "size": 70172,
+          "sha512": "6825c3001785ae0dd0a12d92dcea865d50860b06db316ba91c6dca2144c2a536b2c8659874c62bb903d313da4d46e4942ccd7a9d1f7208944043f1f067648f78",
+          "sha256": "95584c1987282397934d0c2f77c134c49f76c1234b1cdd12ea1c4f2192cb4e32",
+          "sha1": "1bb356839248237f68d6095cadc1a909e51df7e8",
+          "md5": "e1c998289a9f66294a98595205eac579"
+        }
+      ]
+    },
+    {
+      "name": "releaseRuntimeElements-published",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.jvm.environment": "android",
+        "org.gradle.usage": "java-runtime",
+        "org.jetbrains.kotlin.platform.type": "androidJvm"
+      },
+      "dependencies": [
+        {
+          "group": "org.jetbrains.kotlin",
+          "module": "kotlin-stdlib",
+          "version": {
+            "requires": "2.0.20"
+          }
+        },
+        {
+          "group": "org.jetbrains.kotlinx",
+          "module": "kotlinx-coroutines-android",
+          "version": {
+            "requires": "1.10.1"
+          }
+        },
+        {
+          "group": "io.reactivex.rxjava2",
+          "module": "rxjava",
+          "version": {
+            "requires": "2.2.19"
+          }
+        },
+        {
+          "group": "io.reactivex.rxjava2",
+          "module": "rxandroid",
+          "version": {
+            "requires": "2.1.1"
+          }
+        },
+        {
+          "group": "com.squareup.retrofit2",
+          "module": "retrofit",
+          "version": {
+            "requires": "2.9.0"
+          }
+        },
+        {
+          "group": "com.squareup.retrofit2",
+          "module": "adapter-rxjava2",
+          "version": {
+            "requires": "2.9.0"
+          }
+        },
+        {
+          "group": "com.squareup.retrofit2",
+          "module": "converter-gson",
+          "version": {
+            "requires": "2.9.0"
+          }
+        },
+        {
+          "group": "com.squareup.okhttp3",
+          "module": "logging-interceptor",
+          "version": {
+            "requires": "4.9.0"
+          }
+        },
+        {
+          "group": "com.squareup.retrofit2",
+          "module": "converter-scalars",
+          "version": {
+            "requires": "2.9.0"
+          }
+        },
+        {
+          "group": "com.google.code.gson",
+          "module": "gson",
+          "version": {
+            "requires": "2.9.0"
+          }
+        },
+        {
+          "group": "com.github.piratecash",
+          "module": "ethereum-kit-android",
+          "version": {
+            "requires": "99d3195"
+          }
+        },
+        {
+          "group": "com.github.piratecash",
+          "module": "ethereum-kit-erc20",
+          "version": {
+            "requires": "99d3195"
+          }
+        },
+        {
+          "group": "androidx.databinding",
+          "module": "viewbinding",
+          "version": {
+            "requires": "8.13.1"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "ethereum-kit-oneinch-99d3195.aar",
+          "url": "ethereum-kit-oneinch-99d3195.aar",
+          "size": 70172,
+          "sha512": "6825c3001785ae0dd0a12d92dcea865d50860b06db316ba91c6dca2144c2a536b2c8659874c62bb903d313da4d46e4942ccd7a9d1f7208944043f1f067648f78",
+          "sha256": "95584c1987282397934d0c2f77c134c49f76c1234b1cdd12ea1c4f2192cb4e32",
+          "sha1": "1bb356839248237f68d6095cadc1a909e51df7e8",
+          "md5": "e1c998289a9f66294a98595205eac579"
+        }
+      ]
+    },
+    {
+      "name": "releaseSourcesElements-published",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.jvm.environment": "android",
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-runtime",
+        "org.jetbrains.kotlin.platform.type": "androidJvm"
+      },
+      "files": [
+        {
+          "name": "ethereum-kit-oneinch-99d3195-sources.jar",
+          "url": "ethereum-kit-oneinch-99d3195-sources.jar",
+          "size": 48094,
+          "sha512": "414022497e8d4f6009821a0d406ce7b84d2cd46b7456631b6d1ef373b219ed345222ce883caed5931bf842c21a3bb9fe6e462531e55af7db0826a51c70aae21f",
+          "sha256": "554e1a9a26ef54bca4b0cb617b820587fe7df147663ae8c58608e255bcf5f59e",
+          "sha1": "b3231575a9b23445b59545000e4f1e87dedaa82b",
+          "md5": "9b65864fb66e87e6b5795811c17a3e51"
+        }
+      ]
+    }
+  ]
+}

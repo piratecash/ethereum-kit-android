@@ -3,11 +3,11 @@
   <groupId>com.github.piratecash</groupId>
   <artifactId>ethereum-kit-oneinch</artifactId>
   <versioning>
-    <latest>db4c45c</latest>
-    <release>db4c45c</release>
+    <latest>99d3195</latest>
+    <release>99d3195</release>
     <versions>
-      <version>db4c45c</version>
+      <version>99d3195</version>
     </versions>
-    <lastUpdated>20260314102116</lastUpdated>
+    <lastUpdated>20260323061356</lastUpdated>
   </versioning>
 </metadata>
