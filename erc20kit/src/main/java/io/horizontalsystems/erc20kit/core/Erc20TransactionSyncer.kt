@@ -45,7 +45,7 @@ class Erc20TransactionSyncer(
             }
 
         return receivedTransactions
-            .doOnSuccess { result ->
+            .flatMap { result ->
                 transactionSaver.handle(result.transactions)
                 syncSourceStorage.saveAll(
                     result.transactions.map { it.hash },
