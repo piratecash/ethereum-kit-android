@@ -3,11 +3,11 @@
   <groupId>com.github.piratecash</groupId>
   <artifactId>ethereum-kit-erc20</artifactId>
   <versioning>
-    <latest>99d3195</latest>
-    <release>99d3195</release>
+    <latest>633b922</latest>
+    <release>633b922</release>
     <versions>
-      <version>99d3195</version>
+      <version>633b922</version>
     </versions>
-    <lastUpdated>20260323061351</lastUpdated>
+    <lastUpdated>20260401111147</lastUpdated>
   </versioning>
 </metadata>
