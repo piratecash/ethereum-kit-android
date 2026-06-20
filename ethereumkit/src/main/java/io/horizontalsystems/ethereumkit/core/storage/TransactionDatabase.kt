@@ -8,6 +8,7 @@ import androidx.room.TypeConverter
 import androidx.room.TypeConverters
 import io.horizontalsystems.ethereumkit.api.storage.RoomTypeConverters
 import io.horizontalsystems.ethereumkit.models.InternalTransaction
+import io.horizontalsystems.ethereumkit.models.RawTransactionBroadcastRecord
 import io.horizontalsystems.ethereumkit.models.Transaction
 import io.horizontalsystems.ethereumkit.models.TransactionSyncerState
 import io.horizontalsystems.ethereumkit.models.TransactionSyncSource
@@ -19,15 +20,17 @@ import io.horizontalsystems.ethereumkit.models.TransactionTag
             InternalTransaction::class,
             TransactionTag::class,
             TransactionSyncerState::class,
-            TransactionSyncSource::class
+            TransactionSyncSource::class,
+            RawTransactionBroadcastRecord::class
         ],
-        version = 15,
+        version = 16,
         exportSchema = false
 )
 @TypeConverters(RoomTypeConverters::class, TransactionDatabase.TypeConverters::class)
 abstract class TransactionDatabase : RoomDatabase() {
 
     abstract fun transactionDao(): TransactionDao
+    abstract fun rawTransactionBroadcastDao(): RawTransactionBroadcastDao
     abstract fun transactionTagDao(): TransactionTagDao
     abstract fun transactionSyncerStateDao(): TransactionSyncerStateDao
     abstract fun transactionSyncSourceDao(): TransactionSyncSourceDao
@@ -36,7 +39,7 @@ abstract class TransactionDatabase : RoomDatabase() {
 
         fun getInstance(context: Context, databaseName: String): TransactionDatabase {
             return Room.databaseBuilder(context, TransactionDatabase::class.java, databaseName)
-                    .addMigrations(migration13_14, migration14_15)
+                    .addMigrations(migration13_14, migration14_15, migration15_16)
                     .fallbackToDestructiveMigration()
                     .allowMainThreadQueries()
                     .build()

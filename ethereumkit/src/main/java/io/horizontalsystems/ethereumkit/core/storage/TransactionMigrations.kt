@@ -48,3 +48,19 @@ val migration14_15 = object : Migration(14, 15) {
         """.trimIndent())
     }
 }
+
+val migration15_16 = object : Migration(15, 16) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL("""
+            CREATE TABLE IF NOT EXISTS `RawTransactionBroadcastRecord` (
+                `hash` BLOB NOT NULL,
+                `rawTransaction` BLOB NOT NULL,
+                `firstSendTime` INTEGER NOT NULL,
+                `lastSendTime` INTEGER NOT NULL,
+                `retriesCount` INTEGER NOT NULL,
+                `expiresAt` INTEGER NOT NULL,
+                PRIMARY KEY(`hash`)
+            )
+        """.trimIndent())
+    }
+}

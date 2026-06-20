@@ -3,15 +3,20 @@
 buildscript {
     ext.kotlin_version = '2.0.20'
     ext.room_version = '2.6.1'
-    ext.shortSha = System.getenv("SHORT_SHA") ?: {
-        try {
-            def process = ["git", "rev-parse", "--short=7", "HEAD"].execute(null, rootDir)
-            process.waitFor()
-            return process.text.trim() ?: "unknown"
-        } catch (ignored) {
-            return "unknown"
-        }
-    }()
+    ext.shortSha = providers.environmentVariable("SHORT_SHA")
+        .orElse(provider {
+            def process = new ProcessBuilder("git", "rev-parse", "--short=7", "HEAD")
+                .directory(rootDir)
+                .redirectErrorStream(true)
+                .start()
+            process.inputStream.text.trim() ?: "unknown"
+        })
+        .get()
+    ext.libraryVersion = providers.environmentVariable("JITPACK_VERSION")
+        .orElse(providers.environmentVariable("VERSION"))
+        .orElse(providers.environmentVariable("VERSION_NAME"))
+        .orElse(provider { ext.shortSha })
+        .get()
     repositories {
         google()
         mavenCentral()
@@ -25,6 +30,7 @@ buildscript {
 }
 
 plugins {
+    id 'maven-publish'
     id 'com.google.devtools.ksp' version '2.0.21-1.0.27' apply false
 }
 
@@ -49,91 +55,40 @@ def artifactNames = [
     'merkleiokit': 'ethereum-kit-merkleio'
 ]
 
+def addLibraryModuleDependencies = { pom ->
+    pom.withXml {
+        def dependenciesNode = asNode().appendNode('dependencies')
+        libraryModules.each { mod ->
+            def dependencyNode = dependenciesNode.appendNode('dependency')
+            dependencyNode.appendNode('groupId', 'com.github.piratecash.ethereum-kit-android')
+            dependencyNode.appendNode('artifactId', artifactNames[mod])
+            dependencyNode.appendNode('version', rootProject.ext.libraryVersion)
+            dependencyNode.appendNode('type', 'aar')
+        }
+    }
+}
+
+publishing {
+    publications {
+        release(MavenPublication) {
+            groupId = "com.github.piratecash"
+            artifactId = "ethereum-kit-android"
+            version = rootProject.ext.libraryVersion
+            addLibraryModuleDependencies(pom)
+        }
+    }
+}
+
 subprojects { sub ->
     if (libraryModules.contains(sub.name)) {
         sub.afterEvaluate {
             sub.publishing {
                 publications.withType(MavenPublication).configureEach {
-                    groupId = "com.github.piratecash"
+                    groupId = "com.github.piratecash.ethereum-kit-android"
                     artifactId = artifactNames[sub.name]
-                    version = rootProject.ext.shortSha
-                }
-                repositories {
-                    maven {
-                        name = "local"
-                        url = uri(rootProject.layout.buildDirectory.dir("maven-repo"))
-                    }
+                    version = rootProject.ext.libraryVersion
                 }
             }
-        }
-    }
-}
-
-gradle.projectsEvaluated {
-    def patchTask = tasks.named('patchModuleMetadata')
-    subprojects.each { sub ->
-        if (libraryModules.contains(sub.name)) {
-            sub.tasks.matching { it.name == 'publishReleasePublicationToLocalRepository' }.configureEach {
-                patchTask.get().mustRunAfter(it)
-            }
-        }
-    }
-}
-
-tasks.register('patchModuleMetadata') {
-    doLast {
-        def dir = rootProject.layout.buildDirectory
-            .dir("maven-repo/com/github/piratecash/ethereum-kit-android/${rootProject.ext.shortSha}")
-            .get().asFile
-        def subModules = libraryModules.findAll { it != 'ethereumkit' }
-
-        // Patch .module file to add submodule dependencies
-        def moduleFile = dir.listFiles()?.find { it.name.endsWith('.module') }
-        if (moduleFile) {
-            def json = new groovy.json.JsonSlurper().parse(moduleFile)
-            def extraDeps = subModules.collect { mod -> [
-                group: 'com.github.piratecash',
-                module: artifactNames[mod],
-                version: [requires: rootProject.ext.shortSha]
-            ]}
-            json.variants.each { variant ->
-                if (variant.name.contains('Runtime') || variant.name.contains('Api')) {
-                    variant.dependencies = (variant.dependencies ?: []) + extraDeps
-                }
-            }
-            moduleFile.text = groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(json))
-        }
-
-        // Also patch POM to add submodule dependencies
-        def pomFile = dir.listFiles()?.find { it.name.endsWith('.pom') }
-        if (pomFile) {
-            def depsXml = subModules.collect { mod ->
-                """    <dependency>
-      <groupId>com.github.piratecash</groupId>
-      <artifactId>${artifactNames[mod]}</artifactId>
-      <version>${rootProject.ext.shortSha}</version>
-      <scope>runtime</scope>
-    </dependency>"""
-            }.join('\n')
-            def pomText = pomFile.text
-            if (pomText.contains('</dependencies>')) {
-                pomText = pomText.replace('</dependencies>', depsXml + '\n  </dependencies>')
-            } else {
-                pomText = pomText.replace('</project>', "  <dependencies>\n${depsXml}\n  </dependencies>\n</project>")
-            }
-            pomFile.text = pomText
-        }
-
-        // Regenerate checksums
-        dir.listFiles()?.findAll { !it.name.contains('.md5') && !it.name.contains('.sha') }?.each { file ->
-            def md5 = java.security.MessageDigest.getInstance('MD5').digest(file.bytes).encodeHex().toString()
-            def sha1 = java.security.MessageDigest.getInstance('SHA-1').digest(file.bytes).encodeHex().toString()
-            def sha256 = java.security.MessageDigest.getInstance('SHA-256').digest(file.bytes).encodeHex().toString()
-            def sha512 = java.security.MessageDigest.getInstance('SHA-512').digest(file.bytes).encodeHex().toString()
-            new File(dir, "${file.name}.md5").text = md5
-            new File(dir, "${file.name}.sha1").text = sha1
-            new File(dir, "${file.name}.sha256").text = sha256
-            new File(dir, "${file.name}.sha512").text = sha512
         }
     }
 }

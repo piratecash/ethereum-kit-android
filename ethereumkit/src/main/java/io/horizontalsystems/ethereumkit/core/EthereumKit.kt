@@ -32,8 +32,10 @@ import io.horizontalsystems.ethereumkit.models.DefaultBlockParameter
 import io.horizontalsystems.ethereumkit.models.FullTransaction
 import io.horizontalsystems.ethereumkit.models.GasPrice
 import io.horizontalsystems.ethereumkit.models.RawTransaction
+import io.horizontalsystems.ethereumkit.models.RawTransactionBroadcastResult
 import io.horizontalsystems.ethereumkit.models.RpcSource
 import io.horizontalsystems.ethereumkit.models.Signature
+import io.horizontalsystems.ethereumkit.models.SignedRawTransaction
 import io.horizontalsystems.ethereumkit.models.TransactionData
 import io.horizontalsystems.ethereumkit.models.TransactionLog
 import io.horizontalsystems.ethereumkit.models.TransactionSource
@@ -55,6 +57,7 @@ import io.reactivex.BackpressureStrategy
 import io.reactivex.Flowable
 import io.reactivex.Single
 import io.reactivex.disposables.CompositeDisposable
+import io.reactivex.disposables.Disposable
 import io.reactivex.schedulers.Schedulers
 import io.reactivex.subjects.PublishSubject
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -66,6 +69,18 @@ import java.security.Security
 import java.util.Objects
 import java.util.Optional
 import java.util.logging.Logger
+
+internal fun signedRawTransaction(
+    rawTransaction: RawTransaction,
+    signature: Signature,
+    chainId: Int,
+): SignedRawTransaction {
+    val encoded = TransactionBuilder.encode(rawTransaction, signature, chainId)
+    return SignedRawTransaction(
+        raw = encoded,
+        hash = CryptoUtils.sha3(encoded),
+    )
+}
 
 class EthereumKit(
     private val blockchain: IBlockchain,
@@ -83,11 +98,14 @@ class EthereumKit(
     private val decorationManager: DecorationManager,
     val scanHistoricalEip20: Boolean,
     val transactionSyncSourceStorage: TransactionSyncSourceStorage,
+    private val rawTransactionBroadcaster: RawTransactionBroadcaster,
     private val state: EthereumKitState = EthereumKitState()
 ) : IBlockchainListener {
 
     private val logger = Logger.getLogger("EthereumKit")
     private val disposables = CompositeDisposable()
+    @Volatile
+    private var rawTransactionRetryDisposable: Disposable? = null
 
     private val lastBlockHeightSubject = PublishSubject.create<Long>()
     private val syncStateSubject = PublishSubject.create<SyncState>()
@@ -235,11 +253,14 @@ class EthereumKit(
 
         blockchain.start()
         transactionSyncManager.sync()
+        retryRawTransactionBroadcasts()
         // Historical syncer is started conditionally after sync completes (see init block)
     }
 
     fun stop() {
         started = false
+        rawTransactionRetryDisposable?.dispose()
+        rawTransactionRetryDisposable = null
         historicalSyncer?.stop()
         blockchain.stop()
         state.clear()
@@ -248,6 +269,7 @@ class EthereumKit(
     fun refresh() {
         blockchain.refresh()
         transactionSyncManager.sync()
+        retryRawTransactionBroadcasts()
     }
 
     fun getNonce(defaultBlockParameter: DefaultBlockParameter): Single<Long> {
@@ -351,6 +373,21 @@ class EthereumKit(
             .map { transactionManager.handle(listOf(it)).first() }
     }
 
+    fun signedRawTransaction(
+        rawTransaction: RawTransaction,
+        signature: Signature
+    ): SignedRawTransaction {
+        return signedRawTransaction(rawTransaction, signature, chain.id)
+    }
+
+    fun broadcastRawTransaction(rawTransactionHex: String): Single<RawTransactionBroadcastResult> {
+        return Single.defer { broadcastRawTransaction(rawTransactionHex.strictHexToByteArray()) }
+    }
+
+    fun broadcastRawTransaction(rawTransaction: ByteArray): Single<RawTransactionBroadcastResult> {
+        return rawTransactionBroadcaster.broadcast(rawTransaction)
+    }
+
     fun decorate(transactionData: TransactionData): TransactionDecoration? {
         return decorationManager.decorateTransaction(address, transactionData)
     }
@@ -414,6 +451,16 @@ class EthereumKit(
         _forwardSyncState.value = computeForwardSyncState(chain, lastForwardSyncTip, chainTip)
     }
 
+    private fun retryRawTransactionBroadcasts() {
+        if (rawTransactionRetryDisposable?.isDisposed == false) return
+
+        rawTransactionRetryDisposable = rawTransactionBroadcaster.retryQueued()
+            .subscribeOn(Schedulers.io())
+            .subscribe({}, { error ->
+                Timber.w(error, "Raw transaction broadcast retry failed.")
+            })
+    }
+
     override fun onUpdateLastBlockHeight(lastBlockHeight: Long) {
         if (state.lastBlockHeight == lastBlockHeight)
             return
@@ -422,10 +469,14 @@ class EthereumKit(
         lastBlockHeightSubject.onNext(lastBlockHeight)
         updateForwardSyncState(lastBlockHeight)
         transactionSyncManager.sync()
+        retryRawTransactionBroadcasts()
     }
 
     override fun onUpdateSyncState(syncState: SyncState) {
         syncStateSubject.onNext(syncState)
+        if (syncState is SyncState.Synced) {
+            retryRawTransactionBroadcasts()
+        }
     }
 
     override fun onUpdateAccountState(accountState: AccountState) {
@@ -706,6 +757,7 @@ class EthereumKit(
 
             val pendingTransactionSyncer = PendingTransactionSyncer(transactionStorage, blockchain, transactionManager)
             transactionSyncManager.add(pendingTransactionSyncer)
+            val rawTransactionBroadcaster = RawTransactionBroadcaster(blockchain, transactionStorage)
 
             val nonceProvider = NonceProvider()
             nonceProvider.addProvider(blockchain)
@@ -725,7 +777,8 @@ class EthereumKit(
                 erc20Storage,
                 decorationManager,
                 scanHistoricalEip20,
-                transactionSyncSourceStorage
+                transactionSyncSourceStorage,
+                rawTransactionBroadcaster
             )
 
             blockchain.listener = ethereumKit
