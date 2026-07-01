@@ -232,14 +232,14 @@ class RawTransactionBroadcasterTest {
     }
 
     @Test
-    fun broadcast_knownTransactionError_returnsSubmittedAndDeletesQueue() {
+    fun broadcast_knownTransactionError_returnsAlreadyKnownAndDeletesQueue() {
         storage.records[hash.toRawHexString()] = queuedRecord(lastSendTime = 0L)
         blockchain.sendRawTransactionResult =
             Single.error(JsonRpc.ResponseError.RpcError(RpcResponse.Error(-32000, "already known")))
 
         val result = broadcaster.broadcast(rawTransaction).blockingGet()
 
-        assertEquals(RawTransactionBroadcastStatus.Submitted, result.status)
+        assertEquals(RawTransactionBroadcastStatus.AlreadyKnown, result.status)
         assertTrue(storage.records.isEmpty())
     }
 

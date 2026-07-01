@@ -118,14 +118,14 @@ class RawTransactionBroadcaster(
 
         if (isKnownTransactionError(error)) {
             storage.getRawTransactionBroadcast(hash)?.let(storage::deleteRawTransactionBroadcast)
-            return Single.just(RawTransactionBroadcastResult(hash, RawTransactionBroadcastStatus.Submitted))
+            return Single.just(RawTransactionBroadcastResult(hash, RawTransactionBroadcastStatus.AlreadyKnown))
         }
 
         if (isPermanentError(error)) {
             return transactionExists(hash).flatMap { exists ->
                 if (exists) {
                     storage.getRawTransactionBroadcast(hash)?.let(storage::deleteRawTransactionBroadcast)
-                    Single.just(RawTransactionBroadcastResult(hash, RawTransactionBroadcastStatus.Submitted))
+                    Single.just(RawTransactionBroadcastResult(hash, RawTransactionBroadcastStatus.AlreadyKnown))
                 } else {
                     storage.getRawTransactionBroadcast(hash)?.let(storage::deleteRawTransactionBroadcast)
                     Single.error(error)

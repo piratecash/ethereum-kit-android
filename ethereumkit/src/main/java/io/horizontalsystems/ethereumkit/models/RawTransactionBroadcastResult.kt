@@ -22,4 +22,5 @@ data class RawTransactionBroadcastResult(
 enum class RawTransactionBroadcastStatus {
     Submitted,
     Queued,
+    AlreadyKnown,
 }
