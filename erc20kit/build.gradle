@@ -67,6 +67,9 @@ dependencies {
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.4.0'
 
     implementation project(':ethereumkit')
+    // Needed only to reference okhttp3.EventListener.Factory in threaded signatures; not published
+    // to the runtime graph (the consuming app already provides okhttp).
+    compileOnly 'com.squareup.okhttp3:okhttp:4.9.0'
 }
 repositories {
     mavenCentral()

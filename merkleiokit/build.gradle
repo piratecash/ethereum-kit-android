@@ -64,4 +64,7 @@ dependencies {
     kapt "androidx.room:room-compiler:$room_version"
 
     implementation project(':ethereumkit')
+    // Needed only to reference okhttp3.EventListener.Factory in threaded signatures; not published
+    // to the runtime graph (the consuming app already provides okhttp).
+    compileOnly 'com.squareup.okhttp3:okhttp:4.9.0'
 }
