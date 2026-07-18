@@ -26,6 +26,7 @@ import io.horizontalsystems.ethereumkit.network.IntTypeAdapter
 import io.horizontalsystems.ethereumkit.network.JsonRpcService
 import io.horizontalsystems.ethereumkit.network.LongTypeAdapter
 import io.horizontalsystems.ethereumkit.network.SharedHttpClient
+import okhttp3.EventListener
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.adapter.rxjava2.RxJava2CallAdapterFactory
@@ -39,7 +40,8 @@ import java.util.concurrent.atomic.AtomicInteger
 class BinanceTokenTransactionProvider(
     private val uris: List<URI>,
     private val address: Address,
-    private val chainId: Int
+    private val chainId: Int,
+    eventListenerFactory: EventListener.Factory? = null
 ) : TokenTransactionProvider {
 
     private val service: JsonRpcService
@@ -58,6 +60,7 @@ class BinanceTokenTransactionProvider(
             .setLevel(HttpLoggingInterceptor.Level.BASIC)
 
         val httpClient = SharedHttpClient.newClient {
+            eventListenerFactory?.let { eventListenerFactory(it) }
             addInterceptor(loggingInterceptor)
         }
 

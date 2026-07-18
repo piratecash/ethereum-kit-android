@@ -6,6 +6,7 @@ import io.horizontalsystems.ethereumkit.network.JsonRpcService
 import io.horizontalsystems.ethereumkit.network.SharedHttpClient
 import io.reactivex.Single
 import okhttp3.Credentials
+import okhttp3.EventListener
 import okhttp3.Interceptor
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
@@ -19,7 +20,8 @@ import java.util.logging.Logger
 class NodeApiProvider(
     private val uris: List<URI>,
     private val gson: Gson,
-    auth: String? = null
+    auth: String? = null,
+    eventListenerFactory: EventListener.Factory? = null
 ) : IRpcApiProvider {
 
     private val logger = Logger.getLogger(this.javaClass.simpleName)
@@ -39,6 +41,7 @@ class NodeApiProvider(
         }
 
         val httpClient = SharedHttpClient.newClient {
+            eventListenerFactory?.let { eventListenerFactory(it) }
             addInterceptor(loggingInterceptor)
             addInterceptor(headersInterceptor)
         }

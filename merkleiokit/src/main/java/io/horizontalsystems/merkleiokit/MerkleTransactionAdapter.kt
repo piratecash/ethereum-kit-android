@@ -14,6 +14,7 @@ import io.horizontalsystems.ethereumkit.models.RawTransaction
 import io.horizontalsystems.ethereumkit.models.Signature
 import io.horizontalsystems.ethereumkit.network.ConnectionManager
 import io.reactivex.Single
+import okhttp3.EventListener
 import java.net.URI
 
 class MerkleTransactionAdapter(
@@ -55,12 +56,13 @@ class MerkleTransactionAdapter(
             transactionManager: TransactionManager,
             sourceTag: String,
             transactionSyncSourceStorage: TransactionSyncSourceStorage,
+            eventListenerFactory: EventListener.Factory? = null,
         ): MerkleTransactionAdapter? {
             val baseUrl = "https://mempool.merkle.io/rpc/"
             val blockchainPath = blockchainPathMap[chain] ?: return null
 
             val url = URI("$baseUrl$blockchainPath/$merkleIoPubKey")
-            val rpcProvider = NodeApiProvider(listOf(url), EthereumKit.gson)
+            val rpcProvider = NodeApiProvider(listOf(url), EthereumKit.gson, eventListenerFactory = eventListenerFactory)
 
             val connectionManager = ConnectionManager.getInstance(context)
             val rpcSyncer = ApiRpcSyncer(rpcProvider, connectionManager, chain.syncInterval)

@@ -9,6 +9,7 @@ import io.horizontalsystems.ethereumkit.core.retryWhenErrors
 import io.horizontalsystems.ethereumkit.core.toHexString
 import io.horizontalsystems.ethereumkit.models.Address
 import io.reactivex.Single
+import okhttp3.EventListener
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.adapter.rxjava2.RxJava2CallAdapterFactory
@@ -24,6 +25,7 @@ class EtherscanService(
     baseUrl: String,
     private val apiKeys: List<String>,
     private val chainId: Int,
+    eventListenerFactory: EventListener.Factory? = null,
 ) {
     private val apiKeysSize = apiKeys.size
     private val apiKeyIndex = AtomicInteger(Random.nextInt(apiKeysSize))
@@ -43,6 +45,7 @@ class EtherscanService(
         }.setLevel(HttpLoggingInterceptor.Level.BASIC)
 
         val httpClient = SharedHttpClient.newClient {
+            eventListenerFactory?.let { eventListenerFactory(it) }
             addInterceptor { chain ->
                 val originalRequest = chain.request()
                 val originalUrl = originalRequest.url

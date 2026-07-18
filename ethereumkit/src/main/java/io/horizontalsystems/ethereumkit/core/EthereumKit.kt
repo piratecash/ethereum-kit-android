@@ -62,6 +62,7 @@ import io.reactivex.schedulers.Schedulers
 import io.reactivex.subjects.PublishSubject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import okhttp3.EventListener
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import timber.log.Timber
 import java.math.BigInteger
@@ -99,7 +100,8 @@ class EthereumKit(
     val scanHistoricalEip20: Boolean,
     val transactionSyncSourceStorage: TransactionSyncSourceStorage,
     private val rawTransactionBroadcaster: RawTransactionBroadcaster,
-    private val state: EthereumKitState = EthereumKitState()
+    private val state: EthereumKitState = EthereumKitState(),
+    val eventListenerFactory: EventListener.Factory? = null
 ) : IBlockchainListener {
 
     private val logger = Logger.getLogger("EthereumKit")
@@ -666,7 +668,8 @@ class EthereumKit(
             transactionSource: TransactionSource,
             walletId: String,
             fallbackHistoryBlockWindow: Long = DEFAULT_FALLBACK_HISTORY_BLOCK_WINDOW,
-            scanHistoricalEip20: Boolean = true
+            scanHistoricalEip20: Boolean = true,
+            eventListenerFactory: EventListener.Factory? = null
         ): EthereumKit {
             val seed = Mnemonic().toSeed(words, passphrase)
             val privateKey = Signer.privateKey(seed, chain)
@@ -679,7 +682,8 @@ class EthereumKit(
                 transactionSource,
                 walletId,
                 fallbackHistoryBlockWindow,
-                scanHistoricalEip20
+                scanHistoricalEip20,
+                eventListenerFactory
             )
         }
 
@@ -691,14 +695,15 @@ class EthereumKit(
             transactionSource: TransactionSource,
             walletId: String,
             fallbackHistoryBlockWindow: Long = DEFAULT_FALLBACK_HISTORY_BLOCK_WINDOW,
-            scanHistoricalEip20: Boolean = true
+            scanHistoricalEip20: Boolean = true,
+            eventListenerFactory: EventListener.Factory? = null
         ): EthereumKit {
 
             val connectionManager = ConnectionManager.getInstance(application)
 
             val syncer: IRpcSyncer = when (rpcSource) {
                 is RpcSource.WebSocket -> {
-                    val rpcWebSocket = NodeWebSocket(rpcSource.uri, gson, rpcSource.auth)
+                    val rpcWebSocket = NodeWebSocket(rpcSource.uri, gson, rpcSource.auth, eventListenerFactory)
                     val webSocketRpcSyncer = WebSocketRpcSyncer(rpcWebSocket, gson)
 
                     rpcWebSocket.listener = webSocketRpcSyncer
@@ -707,18 +712,19 @@ class EthereumKit(
                 }
 
                 is RpcSource.Http -> {
-                    val apiProvider = RpcApiProviderFactory.nodeApiProvider(rpcSource)
+                    val apiProvider = RpcApiProviderFactory.nodeApiProvider(rpcSource, eventListenerFactory)
                     ApiRpcSyncer(apiProvider, connectionManager, chain.syncInterval)
                 }
             }
 
             val transactionBuilder = TransactionBuilder(address, chain.id)
-            val transactionProvider = transactionProvider(transactionSource, address, chain.id)
+            val transactionProvider = transactionProvider(transactionSource, address, chain.id, eventListenerFactory)
 
             val tokenTransactionProvider = BinanceTokenTransactionProvider(
                 uris = RpcSource.binanceSmartChainHttp().uris,
                 address = address,
-                chainId = chain.id
+                chainId = chain.id,
+                eventListenerFactory = eventListenerFactory
             )
 
             val apiDatabase =
@@ -778,7 +784,8 @@ class EthereumKit(
                 decorationManager,
                 scanHistoricalEip20,
                 transactionSyncSourceStorage,
-                rawTransactionBroadcaster
+                rawTransactionBroadcaster,
+                eventListenerFactory = eventListenerFactory
             )
 
             blockchain.listener = ethereumKit
@@ -795,14 +802,16 @@ class EthereumKit(
         private fun transactionProvider(
             transactionSource: TransactionSource,
             address: Address,
-            chainId: Int
+            chainId: Int,
+            eventListenerFactory: EventListener.Factory? = null
         ): ITransactionProvider {
             when (transactionSource.type) {
                 is TransactionSource.SourceType.Etherscan -> {
                     val service = EtherscanService(
                         transactionSource.type.apiBaseUrl,
                         transactionSource.type.apiKeys,
-                        chainId
+                        chainId,
+                        eventListenerFactory
                     )
                     return EtherscanTransactionProvider(service, address)
                 }

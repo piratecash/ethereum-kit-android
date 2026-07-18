@@ -15,6 +15,7 @@ import io.reactivex.Flowable
 import io.reactivex.disposables.CompositeDisposable
 import io.reactivex.schedulers.Schedulers
 import okhttp3.Credentials
+import okhttp3.EventListener
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
@@ -24,7 +25,8 @@ import java.util.logging.Logger
 class NodeWebSocket(
     uri: URI,
     private val gson: Gson,
-    auth: String? = null
+    auth: String? = null,
+    eventListenerFactory: EventListener.Factory? = null
 ) : IRpcWebSocket {
     private val logger = Logger.getLogger(this.javaClass.simpleName)
     private var disposables = CompositeDisposable()
@@ -67,6 +69,7 @@ class NodeWebSocket(
         val okHttpClient = OkHttpClient.Builder()
                 .addInterceptor(headersInterceptor)
                 .addInterceptor(loggingInterceptor)
+                .apply { eventListenerFactory?.let { eventListenerFactory(it) } }
                 .build()
 
         scarlet = Scarlet.Builder()

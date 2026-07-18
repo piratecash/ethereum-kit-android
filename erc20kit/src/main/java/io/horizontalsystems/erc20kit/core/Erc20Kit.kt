@@ -178,7 +178,8 @@ class Erc20Kit(
                 val historicalTokenProvider = BinanceTokenTransactionProvider(
                     uris = RpcSource.binanceSmartChainHttp().uris,
                     address = ethereumKit.receiveAddress,
-                    chainId = ethereumKit.chain.id
+                    chainId = ethereumKit.chain.id,
+                    eventListenerFactory = ethereumKit.eventListenerFactory
                 )
 
                 val historicalSyncer = HistoricalErc20Syncer(
