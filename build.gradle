@@ -47,7 +47,7 @@ def libraryModules = [
 ]
 
 def artifactNames = [
-    'ethereumkit': 'ethereum-kit-android',
+    'ethereumkit': 'ethereum-kit-core',
     'erc20kit': 'ethereum-kit-erc20',
     'uniswapkit': 'ethereum-kit-uniswap',
     'oneinchkit': 'ethereum-kit-oneinch',
