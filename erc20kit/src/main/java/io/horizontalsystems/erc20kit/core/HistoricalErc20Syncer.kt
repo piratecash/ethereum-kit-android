@@ -5,7 +5,6 @@ import io.horizontalsystems.ethereumkit.core.IEip20Storage
 import io.horizontalsystems.ethereumkit.core.TokenTransactionProvider
 import io.horizontalsystems.ethereumkit.core.TransactionManager
 import io.horizontalsystems.ethereumkit.models.ProviderTokenTransaction
-import io.horizontalsystems.ethereumkit.models.Transaction
 import io.horizontalsystems.ethereumkit.network.ConnectionManager
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineExceptionHandler
@@ -152,23 +151,8 @@ class HistoricalErc20Syncer(
         }) {
             transactionSaver.handle(transactions)
 
-            // Create Transaction objects and process them through TransactionManager
-            val transactionObjects = transactions.map { tx ->
-                Transaction(
-                    hash = tx.hash,
-                    timestamp = tx.timestamp,
-                    isFailed = false,
-                    blockNumber = tx.blockNumber,
-                    transactionIndex = tx.transactionIndex,
-                    from = tx.from,
-                    to = tx.contractAddress,
-                    value = tx.value,
-                    input = tx.input,
-                    nonce = tx.nonce,
-                    gasPrice = tx.gasPrice,
-                    gasLimit = tx.gasLimit,
-                    gasUsed = tx.gasUsed
-                )
+            val transactionObjects = transactions.map {
+                it.ethereumTransaction()
             }
 
             if (transactionObjects.isNotEmpty()) {

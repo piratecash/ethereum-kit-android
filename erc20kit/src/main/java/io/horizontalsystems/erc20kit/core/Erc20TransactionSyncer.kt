@@ -6,6 +6,7 @@ import io.horizontalsystems.ethereumkit.core.ITransactionProvider
 import io.horizontalsystems.ethereumkit.core.ITransactionSyncer
 import io.horizontalsystems.ethereumkit.core.TokenTransactionProvider
 import io.horizontalsystems.ethereumkit.core.storage.TransactionSyncSourceStorage
+import io.horizontalsystems.ethereumkit.models.ProviderTokenTransaction
 import io.horizontalsystems.ethereumkit.models.SyncSource
 import io.horizontalsystems.ethereumkit.models.Transaction
 import io.reactivex.Single
@@ -59,23 +60,8 @@ class Erc20TransactionSyncer(
                 }.map { result } // we need map to wait for saveSyncBlockInfo finish
             }
             .map { providerTokenTransactions ->
-                val array = providerTokenTransactions.transactions.map { transaction ->
-                    Transaction(
-                        hash = transaction.hash,
-                        timestamp = transaction.timestamp,
-                        isFailed = false,
-                        blockNumber = transaction.blockNumber,
-                        transactionIndex = transaction.transactionIndex,
-                        from = transaction.from,
-                        to = null,
-                        value = transaction.value,
-                        input = transaction.input,
-                        nonce = transaction.nonce,
-                        gasPrice = transaction.gasPrice,
-                        gasLimit = transaction.gasLimit,
-                        gasUsed = transaction.gasUsed
-                    )
-
+                val array = providerTokenTransactions.transactions.map {
+                    it.ethereumTransaction()
                 }
                 Pair(array, initial)
             }
@@ -91,3 +77,19 @@ class Erc20TransactionSyncer(
     }
 
 }
+
+internal fun ProviderTokenTransaction.ethereumTransaction() = Transaction(
+    hash = hash,
+    timestamp = timestamp,
+    isFailed = false,
+    blockNumber = blockNumber,
+    transactionIndex = transactionIndex,
+    from = from,
+    to = null,
+    value = null,
+    input = input,
+    nonce = nonce,
+    gasPrice = gasPrice,
+    gasLimit = gasLimit,
+    gasUsed = gasUsed
+)

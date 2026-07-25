@@ -64,3 +64,10 @@ val migration15_16 = object : Migration(15, 16) {
         """.trimIndent())
     }
 }
+
+val migration16_17 = object : Migration(16, 17) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        // Re-fetch authoritative native values that token syncers could previously overwrite.
+        database.execSQL("DELETE FROM `TransactionSyncerState`")
+    }
+}

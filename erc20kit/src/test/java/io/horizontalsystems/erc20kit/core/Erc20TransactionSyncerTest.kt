@@ -20,32 +20,31 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 import java.math.BigInteger
 
+internal val testAddress = Address("0x0000000000000000000000000000000000000001")
+internal val testHash = ByteArray(32) { it.toByte() }
+
+internal fun createTokenTransaction(blockNumber: Long) = ProviderTokenTransaction(
+    blockNumber = blockNumber,
+    timestamp = 1000L,
+    hash = testHash,
+    nonce = 1L,
+    blockHash = ByteArray(32),
+    from = testAddress,
+    contractAddress = testAddress,
+    to = testAddress,
+    value = BigInteger.ONE,
+    tokenName = "Test",
+    tokenSymbol = "TST",
+    tokenDecimal = 18,
+    transactionIndex = 0,
+    gasLimit = 21000L,
+    gasPrice = 1000L,
+    gasUsed = 21000L,
+    cumulativeGasUsed = 21000L,
+    input = null
+)
+
 class Erc20TransactionSyncerTest {
-
-    private val dummyAddress = Address("0x0000000000000000000000000000000000000001")
-    private val dummyHash = ByteArray(32) { it.toByte() }
-
-    private fun createTokenTransaction(blockNumber: Long) = ProviderTokenTransaction(
-        blockNumber = blockNumber,
-        timestamp = 1000L,
-        hash = dummyHash,
-        nonce = 1L,
-        blockHash = ByteArray(32),
-        from = dummyAddress,
-        contractAddress = dummyAddress,
-        to = dummyAddress,
-        value = BigInteger.ONE,
-        tokenName = "Test",
-        tokenSymbol = "TST",
-        tokenDecimal = 18,
-        transactionIndex = 0,
-        gasLimit = 21000L,
-        gasPrice = 1000L,
-        gasUsed = 21000L,
-        cumulativeGasUsed = 21000L,
-        input = null
-    )
-
     private fun createSyncer(
         storage: IEip20Storage,
         etherscanResult: Single<List<ProviderTokenTransaction>> =
@@ -113,6 +112,18 @@ class Erc20TransactionSyncerTest {
     }
 
     @Test
+    fun getTransactionsSingle_tokenTransaction_omitsTokenFieldsFromNativeTransaction() = runTest {
+        val storage = FakeEip20Storage(lastScannedBlock = 1000L)
+        val syncer = createSyncer(storage)
+
+        val transaction = syncer.getTransactionsSingle().blockingGet().first.single()
+
+        assertNull(transaction.to)
+        assertNull(transaction.value)
+        assertEquals(BigInteger.ONE, storage.savedEvents.single().value)
+    }
+
+    @Test
     fun getTransactionsSingle_etherscanFails_rpcFallback_savesSyncBlockInfo() = runTest {
         val storage = FakeEip20Storage(lastScannedBlock = 1000L)
         val rpcResult = TokenTransactionProvider.TokenTransactionsResult(
@@ -153,35 +164,44 @@ class Erc20TransactionSyncerTest {
         )
     }
 
-    private class FakeEip20Storage(
-        private var lastScannedBlock: Long? = null
-    ) : IEip20Storage {
-        var savedLastScannedBlock: Long? = null
-            private set
-        var saveSyncBlockInfoCallCount = 0
-            private set
+}
 
-        override fun getLastEvent(): Eip20Event? = null
-        override fun getEarliestEip20Event(): Eip20Event? = null
-        override fun save(events: List<Eip20Event>) {}
-        override fun getEvents(): List<Eip20Event> = emptyList()
-        override fun getEventsByHashes(hashes: List<ByteArray>): List<Eip20Event> = emptyList()
-        override fun deleteZeroValueDuplicate(
-            hash: ByteArray, contractAddress: Address, from: Address, to: Address
-        ) {}
+internal class FakeEip20Storage(
+    private var lastScannedBlock: Long? = null,
+    private var historicalMinScannedBlock: Long? = null
+) : IEip20Storage {
+    var savedEvents: List<Eip20Event> = emptyList()
+        private set
+    var savedLastScannedBlock: Long? = null
+        private set
+    var saveSyncBlockInfoCallCount = 0
+        private set
 
-        override fun getLastScannedBlock(): Long? = lastScannedBlock
-        override fun getHistoricalMinScannedBlock(): Long? = null
+    override fun getLastEvent(): Eip20Event? = null
+    override fun getEarliestEip20Event(): Eip20Event? = null
+    override fun save(events: List<Eip20Event>) {
+        savedEvents = events
+    }
+    override fun getEvents(): List<Eip20Event> = savedEvents
+    override fun getEventsByHashes(hashes: List<ByteArray>): List<Eip20Event> = emptyList()
+    override fun deleteZeroValueDuplicate(
+        hash: ByteArray, contractAddress: Address, from: Address, to: Address
+    ) {}
 
-        override suspend fun saveSyncBlockInfo(
-            lastScannedBlock: Long?,
-            historicalMinScannedBlock: Long?
-        ) {
-            saveSyncBlockInfoCallCount++
-            savedLastScannedBlock = lastScannedBlock
-            if (lastScannedBlock != null) {
-                this.lastScannedBlock = lastScannedBlock
-            }
+    override fun getLastScannedBlock(): Long? = lastScannedBlock
+    override fun getHistoricalMinScannedBlock(): Long? = historicalMinScannedBlock
+
+    override suspend fun saveSyncBlockInfo(
+        lastScannedBlock: Long?,
+        historicalMinScannedBlock: Long?
+    ) {
+        saveSyncBlockInfoCallCount++
+        savedLastScannedBlock = lastScannedBlock
+        lastScannedBlock?.let {
+            this.lastScannedBlock = it
+        }
+        historicalMinScannedBlock?.let {
+            this.historicalMinScannedBlock = it
         }
     }
 }
