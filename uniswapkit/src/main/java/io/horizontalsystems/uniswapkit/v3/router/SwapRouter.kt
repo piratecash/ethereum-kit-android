@@ -50,8 +50,9 @@ class SwapRouter(private val dexType: DexType) {
         }
 
         val ethValue = when {
-            tradeData.tokenIn.isEther -> tradeData.trade.amountIn
-            else -> BigInteger.ZERO
+            !tradeData.tokenIn.isEther -> BigInteger.ZERO
+            tradeData.tradeType == TradeType.ExactOut -> tradeData.amountInMaximum
+            else -> tradeData.trade.amountIn
         }
 
         val swapMethod = buildSwapMethod(tradeData, swapRecipient)
@@ -65,7 +66,11 @@ class SwapRouter(private val dexType: DexType) {
                 }
 
                 tradeData.tokenOut.isEther -> {
-                    add(UnwrapWETH9Method(tradeData.amountOutMinimum, recipient))
+                    val amountMinimum = when (tradeData.tradeType) {
+                        TradeType.ExactIn -> tradeData.amountOutMinimum
+                        TradeType.ExactOut -> tradeData.amountOut
+                    }
+                    add(UnwrapWETH9Method(amountMinimum, recipient))
                 }
             }
         }
