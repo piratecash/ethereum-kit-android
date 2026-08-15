@@ -52,4 +52,22 @@ class HistoricalErc20SyncerTest {
         assertNull(transactions.captured.single().value)
         assertEquals(BigInteger.ONE, storage.savedEvents.single().value)
     }
+
+    @Test
+    fun start_afterStop_reRegistersConnectionListener() {
+        val connectionManager = mockk<ConnectionManager>(relaxed = true)
+        val syncer = HistoricalErc20Syncer(
+            transactionManager = mockk(relaxed = true),
+            tokenTransactionProvider = mockk(relaxed = true),
+            storage = FakeEip20Storage(),
+            transactionSaver = mockk(relaxed = true),
+            connectionManager = connectionManager
+        )
+
+        syncer.stop()
+        syncer.start()
+
+        verify(exactly = 1) { connectionManager.removeListener(syncer) }
+        verify(exactly = 2) { connectionManager.addListener(syncer) }
+    }
 }

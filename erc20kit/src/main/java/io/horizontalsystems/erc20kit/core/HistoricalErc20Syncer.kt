@@ -20,6 +20,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import timber.log.Timber
+import java.util.concurrent.atomic.AtomicReference
 
 class HistoricalErc20Syncer(
     private val transactionManager: TransactionManager,
@@ -33,10 +34,16 @@ class HistoricalErc20Syncer(
     private var syncJob: Job? = null
     private var startBlock: Long = 0
 
+    // Parent job of the current run — isEnabled survives stop() and cannot tell a paused syncer
+    // from a runnable one. stop() cancels this, which also cancels any coroutine launched into it.
+    private val runJob = AtomicReference<Job?>(null)
+
     private val _syncState = MutableStateFlow<EthereumKit.HistoricalSyncState>(EthereumKit.HistoricalSyncState.Idle)
     override val syncState: StateFlow<EthereumKit.HistoricalSyncState> = _syncState.asStateFlow()
 
-    // Only start if explicitly enabled by EthereumKit (when Etherscan returns no data)
+    // Only start if explicitly enabled by EthereumKit (when Etherscan returns no data).
+    // Written on the transaction-sync thread, read by the kit's resume on the lifecycle thread.
+    @Volatile
     override var isEnabled: Boolean = false
 
     companion object {
@@ -48,7 +55,38 @@ class HistoricalErc20Syncer(
         connectionManager.addListener(this)
     }
 
+    /**
+     * Returns the run every coroutine of this start must be launched into. Replacing a live run
+     * would orphan its sync job — stop() would then cancel only the replacement while the real sync
+     * kept issuing network requests — so a live run is reused and a new one is published by CAS.
+     */
+    private fun claimRun(): Job {
+        while (true) {
+            val current = runJob.get()
+            if (current?.isActive == true) return current
+            val fresh = SupervisorJob(scope.coroutineContext[Job])
+            if (runJob.compareAndSet(current, fresh)) return fresh
+            fresh.cancel()
+        }
+    }
+
     override fun start() {
+        val run = claimRun()
+
+        // stop() unregisters the listener, so a restarted syncer has to register again.
+        connectionManager.addListener(this)
+
+        launchSync(run)
+    }
+
+    override fun stop() {
+        runJob.get()?.cancel()
+        _syncState.value = EthereumKit.HistoricalSyncState.Idle
+        connectionManager.removeListener(this)
+        Timber.i("Stopped historical ERC20 sync")
+    }
+
+    private fun launchSync(run: Job) {
         if (!isEnabled) {
             Timber.i("Historical sync not enabled, skipping")
             return
@@ -61,7 +99,9 @@ class HistoricalErc20Syncer(
 
         Timber.i("Starting historical ERC20 sync")
 
-        syncJob = scope.launch {
+        // Launching into [run] is the fence: if stop() cancelled it — even after the checks above —
+        // the coroutine is born cancelled and its body never executes.
+        syncJob = scope.launch(run) {
             try {
                 syncHistoricalBatches()
             } catch (e: CancellationException) {
@@ -71,13 +111,6 @@ class HistoricalErc20Syncer(
                 _syncState.value = EthereumKit.HistoricalSyncState.Idle
             }
         }
-    }
-
-    override fun stop() {
-        syncJob?.cancel()
-        _syncState.value = EthereumKit.HistoricalSyncState.Idle
-        connectionManager.removeListener(this)
-        Timber.i("Stopped historical ERC20 sync")
     }
 
     private suspend fun syncHistoricalBatches() {
@@ -170,7 +203,8 @@ class HistoricalErc20Syncer(
 
     override fun onConnectionChange() {
         if (connectionManager.isConnected) {
-            start()
+            // Continues the run this syncer is already on; a stopped syncer stays stopped.
+            runJob.get()?.let(::launchSync)
         } else {
             stop()
         }

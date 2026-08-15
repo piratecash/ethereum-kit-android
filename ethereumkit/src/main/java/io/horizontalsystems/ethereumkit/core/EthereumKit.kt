@@ -58,6 +58,7 @@ import io.reactivex.Flowable
 import io.reactivex.Single
 import io.reactivex.disposables.CompositeDisposable
 import io.reactivex.disposables.Disposable
+import io.reactivex.disposables.SerialDisposable
 import io.reactivex.schedulers.Schedulers
 import io.reactivex.subjects.PublishSubject
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -69,6 +70,7 @@ import java.math.BigInteger
 import java.security.Security
 import java.util.Objects
 import java.util.Optional
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.logging.Logger
 
 internal fun signedRawTransaction(
@@ -106,8 +108,15 @@ class EthereumKit(
 
     private val logger = Logger.getLogger("EthereumKit")
     private val disposables = CompositeDisposable()
+
+    // Authority to do network work for the current run. stopInternal() disposes it, so a callback
+    // that read `started` before the pause registers into a disposed container instead of running.
     @Volatile
-    private var rawTransactionRetryDisposable: Disposable? = null
+    private var runDisposables = CompositeDisposable()
+
+    // A completed subscription still reports itself undisposed, so in-flight has to be tracked apart
+    // from the lifecycle-owned disposable, or the first retry would suppress every later one.
+    private val rawRetryInFlight = AtomicBoolean(false)
 
     private val lastBlockHeightSubject = PublishSubject.create<Long>()
     private val syncStateSubject = PublishSubject.create<SyncState>()
@@ -116,7 +125,10 @@ class EthereumKit(
     val defaultGasLimit: Long = 21_000
     private val defaultMinAmount: BigInteger = BigInteger.ONE
 
-    private var started = false
+    private val started = AtomicBoolean(false)
+
+    val isStarted: Boolean
+        get() = started.get()
 
     sealed class HistoricalSyncState {
         object Idle : HistoricalSyncState()
@@ -164,7 +176,10 @@ class EthereumKit(
         transactionManager.fullTransactionsAsync
             .subscribeOn(Schedulers.io())
             .subscribe {
-                blockchain.syncAccountState()
+                // A response arriving after pauseNetwork() must not put the kit back on the network.
+                if (started.get()) {
+                    blockchain.syncAccountState()
+                }
             }.let {
                 disposables.add(it)
             }
@@ -172,7 +187,9 @@ class EthereumKit(
         // Start historical syncer only if initial sync returned no ERC20 transactions
         if (scanHistoricalEip20) {
             transactionSyncManager.syncStateAsync
-                .filter { it is SyncState.Synced }
+                // This subscription outlives pauseNetwork(), so a Synced published while paused must
+                // not consume the single take — the next sync after resume gets to start historical.
+                .filter { it is SyncState.Synced && started.get() }
                 .take(1)
                 .subscribeOn(Schedulers.io())
                 .subscribe {
@@ -187,8 +204,12 @@ class EthereumKit(
                     }
 
                     if (shouldStartHistorical) {
-                        Timber.i("Starting historical sync (historicalMin=$historicalMin)")
+                        // take(1) has already been consumed, so eligibility must be committed even
+                        // when paused — otherwise resume() would find isEnabled false and this kit
+                        // would never run historical sync again. Only the start is lifecycle-bound.
                         historicalSyncer?.isEnabled = true
+                        if (!started.get()) return@subscribe
+                        Timber.i("Starting historical sync (historicalMin=$historicalMin)")
                         historicalSyncer?.start()
                     } else {
                         Timber.i("Historical sync not needed (historicalMin=$historicalMin)")
@@ -249,26 +270,57 @@ class EthereumKit(
         get() = transactionManager.fullTransactionsAsync
 
     fun start() {
-        if (started)
+        if (!started.compareAndSet(false, true))
             return
-        started = true
 
+        if (runDisposables.isDisposed) {
+            runDisposables = CompositeDisposable()
+        }
         blockchain.start()
+        transactionSyncManager.resume()
         transactionSyncManager.sync()
         retryRawTransactionBroadcasts()
-        // Historical syncer is started conditionally after sync completes (see init block)
+        // Initially the historical syncer is started conditionally after sync completes (see init
+        // block); on a restart that one-shot subscription is gone, so resume it here.
+        if (historicalSyncer?.isEnabled == true) {
+            historicalSyncer?.start()
+        }
     }
 
     fun stop() {
-        started = false
-        rawTransactionRetryDisposable?.dispose()
-        rawTransactionRetryDisposable = null
+        stopInternal(clearState = true)
+    }
+
+    /**
+     * Stops all network activity but keeps the cached balance and block height readable.
+     * Resume with [start].
+     */
+    fun pauseNetwork() {
+        stopInternal(clearState = false)
+    }
+
+    private fun stopInternal(clearState: Boolean) {
+        started.set(false)
+        runDisposables.dispose()
+        rawRetryInFlight.set(false)
         historicalSyncer?.stop()
+        transactionSyncManager.pause()
         blockchain.stop()
-        state.clear()
+        if (clearState) {
+            state.clear()
+        }
+    }
+
+    /** Re-reads the locally stored balance and block height after a [stop] that cleared them. */
+    fun attachLocalState() {
+        blockchain.lastBlockHeight?.let { onUpdateLastBlockHeight(it) }
+        blockchain.accountState?.let { onUpdateAccountState(it) }
     }
 
     fun refresh() {
+        // Only start() resumes networking: refresh() must not revive a syncer stop() left NotReady.
+        if (!started.get()) return
+
         blockchain.refresh()
         transactionSyncManager.sync()
         retryRawTransactionBroadcasts()
@@ -454,10 +506,27 @@ class EthereumKit(
     }
 
     private fun retryRawTransactionBroadcasts() {
-        if (rawTransactionRetryDisposable?.isDisposed == false) return
+        if (!rawRetryInFlight.compareAndSet(false, true)) return
 
-        rawTransactionRetryDisposable = rawTransactionBroadcaster.retryQueued()
+        // Claim ownership before subscribing: add() fails on an already-disposed container, so the
+        // broadcast can no longer start from a subscription pauseNetwork() was unable to reach.
+        val run = SerialDisposable()
+        if (!runDisposables.add(run)) {
+            rawRetryInFlight.set(false)
+            return
+        }
+
+        Single
+            .defer {
+                // Re-checked on the worker thread, where the broadcast actually starts, so a pause
+                // that raced the guard above still stops a signed transaction from leaving the device.
+                if (run.isDisposed) Single.never() else rawTransactionBroadcaster.retryQueued()
+            }
             .subscribeOn(Schedulers.io())
+            .doFinally { rawRetryInFlight.set(false) }
+            // subscribe() schedules the work before it returns the disposable; onSubscribe hands it
+            // over while the caller still owns the chain, so a pause can never miss it.
+            .doOnSubscribe { run.set(it) }
             .subscribe({}, { error ->
                 Timber.w(error, "Raw transaction broadcast retry failed.")
             })
@@ -470,6 +539,9 @@ class EthereumKit(
         state.lastBlockHeight = lastBlockHeight
         lastBlockHeightSubject.onNext(lastBlockHeight)
         updateForwardSyncState(lastBlockHeight)
+
+        if (!started.get()) return
+
         transactionSyncManager.sync()
         retryRawTransactionBroadcasts()
     }

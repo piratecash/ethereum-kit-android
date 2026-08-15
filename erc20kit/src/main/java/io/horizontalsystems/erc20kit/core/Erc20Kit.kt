@@ -42,7 +42,10 @@ class Erc20Kit(
         transactionManager.transactionsAsync
             .subscribeOn(Schedulers.io())
             .subscribe {
-                balanceManager.sync()
+                // A response arriving after pauseNetwork() must not put the kit back on the network.
+                if (ethereumKit.isStarted) {
+                    balanceManager.sync()
+                }
             }.let {
                 disposables.add(it)
             }
@@ -120,6 +123,9 @@ class Erc20Kit(
             is SyncState.NotSynced -> state.syncState = SyncState.NotSynced(syncState.error)
             is SyncState.Syncing -> state.syncState = SyncState.Syncing()
             is SyncState.Synced -> {
+                // A Synced emitted just before the parent kit paused must not request the balance.
+                if (!ethereumKit.isStarted) return
+
                 state.syncState = SyncState.Syncing()
                 balanceManager.sync()
             }
