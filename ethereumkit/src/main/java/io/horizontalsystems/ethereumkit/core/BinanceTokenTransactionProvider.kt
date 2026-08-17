@@ -36,6 +36,8 @@ import timber.log.Timber
 import java.math.BigInteger
 import java.net.URI
 import java.util.concurrent.atomic.AtomicInteger
+import kotlin.coroutines.coroutineContext
+import kotlinx.coroutines.ensureActive
 
 class BinanceTokenTransactionProvider(
     private val uris: List<URI>,
@@ -125,7 +127,7 @@ class BinanceTokenTransactionProvider(
      * Adaptive chunking: start with large chunk (10M), halve on error until MIN_CHUNK_SIZE.
      * If MIN_CHUNK_SIZE fails, switch to next URI and continue from current position.
      */
-    private fun fetchAllLogsWithAdaptiveChunking(
+    private suspend fun fetchAllLogsWithAdaptiveChunking(
         startBlock: Long,
         endBlock: Long
     ): List<TransactionLog> {
@@ -136,6 +138,7 @@ class BinanceTokenTransactionProvider(
         var lastError: Throwable = Error("No URIs available")
 
         while (currentFrom <= endBlock && uriIndex < uris.size) {
+            coroutineContext.ensureActive()
             val uri = uris[uriIndex]
             val to = minOf(currentFrom + currentChunkSize - 1, endBlock)
             try {
@@ -159,6 +162,8 @@ class BinanceTokenTransactionProvider(
                 }
             }
         }
+
+        coroutineContext.ensureActive()
 
         if (currentFrom <= endBlock) {
             // All URIs exhausted before completing

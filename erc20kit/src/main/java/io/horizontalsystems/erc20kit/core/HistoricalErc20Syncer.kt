@@ -21,6 +21,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.util.concurrent.atomic.AtomicReference
+import kotlin.coroutines.coroutineContext
 
 class HistoricalErc20Syncer(
     private val transactionManager: TransactionManager,
@@ -147,7 +148,7 @@ class HistoricalErc20Syncer(
     }
 
     private suspend fun performBatchSync(latest: Long): Boolean {
-        if (!scope.isActive) {
+        if (!coroutineContext.isActive) {
             Timber.i("Historical sync stopped by user")
             return false
         }
@@ -168,6 +169,8 @@ class HistoricalErc20Syncer(
             handleBatchResult(result.transactions, fromBlock)
             _syncState.value = EthereumKit.HistoricalSyncState.Syncing(startBlock, fromBlock)
             true
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Throwable) {
             Timber.e(e, "Historical sync batch failed for blocks $fromBlock-$toBlock")
             false
