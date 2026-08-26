@@ -93,6 +93,7 @@ dependencies {
     testImplementation 'org.powermock:powermock-module-junit4:2.0.7'
     // Mockito 3.3.3 cannot read Java 17 bytecode; new tests use mockk, as :erc20kit already does.
     testImplementation 'io.mockk:mockk:1.13.12'
+    testImplementation 'com.squareup.okhttp3:mockwebserver:4.9.0'
 
     // Spek
     testImplementation 'org.spekframework.spek2:spek-dsl-jvm:2.0.9'

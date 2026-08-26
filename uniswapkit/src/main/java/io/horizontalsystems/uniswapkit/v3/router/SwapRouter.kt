@@ -25,6 +25,7 @@ class SwapRouter(private val dexType: DexType) {
         Chain.BinanceSmartChain -> Address("0xB971eF87ede563556b2ED4b1C0b0019111Dd85d2")
         Chain.Base -> Address("0x2626664c2603336E57B271c5C0b26F421741e481")
         Chain.ZkSync -> Address("0x99c56385daBCE3E81d8499d0b8d0257aBC07E8A3")
+        Chain.RobinhoodChain -> Address("0xcaf681a66d020601342297493863e78c959e5cb2")
         else -> throw IllegalStateException("Not supported Uniswap chain ${chain}")
     }
 

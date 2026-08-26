@@ -2,14 +2,20 @@ package io.horizontalsystems.ethereumkit.models
 
 class TransactionSource(val name: String, val type: SourceType) {
 
-    fun transactionUrl(hash: String) =
-        when (type) {
-            is SourceType.Etherscan -> "${type.txBaseUrl}/tx/$hash"
-        }
+    fun transactionUrl(hash: String) = "${type.txBaseUrl.trimEnd('/')}/tx/$hash"
 
-    sealed class SourceType {
-        class Etherscan(val apiBaseUrl: String, val txBaseUrl: String, val apiKeys: List<String>) :
-            SourceType()
+    sealed class SourceType(open val txBaseUrl: String) {
+        class Etherscan(
+            val apiBaseUrl: String,
+            override val txBaseUrl: String,
+            val apiKeys: List<String>
+        ) : SourceType(txBaseUrl)
+
+        class Blockscout(
+            val apiBaseUrl: String,
+            override val txBaseUrl: String,
+            val apiKeys: List<String>
+        ) : SourceType(txBaseUrl)
     }
 
     companion object {
@@ -62,6 +68,18 @@ class TransactionSource(val name: String, val type: SourceType) {
 
         fun zkSync(apiKeys: List<String>): TransactionSource {
             return etherscan("era.zksync.network", "https://era.zksync.network", apiKeys)
+        }
+
+        fun robinhood(apiKeys: List<String>): TransactionSource {
+            val explorerUrl = "https://robinhoodchain.blockscout.com"
+            return TransactionSource(
+                name = "robinhoodchain.blockscout.com",
+                type = SourceType.Blockscout(
+                    apiBaseUrl = "$explorerUrl/",
+                    txBaseUrl = explorerUrl,
+                    apiKeys = apiKeys
+                )
+            )
         }
     }
 
