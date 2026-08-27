@@ -39,7 +39,25 @@ class EthereumDecorator(private val address: Address) : ITransactionDecorator {
             }
         }
 
+        if (isUnrecognizedIncomingTransfer(from, to, value, contractMethod, internalTransactions, eventInstances)) {
+            return IncomingDecoration(from, value)
+        }
+
         return null
     }
+
+    private fun isUnrecognizedIncomingTransfer(
+        from: Address,
+        to: Address,
+        value: BigInteger,
+        contractMethod: ContractMethod?,
+        internalTransactions: List<InternalTransaction>,
+        eventInstances: List<ContractEventInstance>
+    ) = contractMethod == null &&
+            from != address &&
+            to == address &&
+            value > BigInteger.ZERO &&
+            internalTransactions.isEmpty() &&
+            eventInstances.isEmpty()
 
 }
