@@ -108,7 +108,7 @@ open class Signer(
 
         fun privateKey(seed: ByteArray, chain: Chain): BigInteger {
             val hdWallet = HDWallet(seed, chain.coinType, HDWallet.Purpose.BIP44)
-            return hdWallet.privateKey(0, 0, true).privKey
+            return hdWallet.privateKey(0, 0, true).privKeyBytes.toBigInteger()
         }
 
         fun address(privateKey: BigInteger): Address {

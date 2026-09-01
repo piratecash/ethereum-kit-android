@@ -1,6 +1,7 @@
 jdk:
-  - openjdk17
+  - openjdk21
 
 install:
   - echo 'words=""' > local.properties
+  - ./gradlew test
   - ./gradlew publishToMavenLocal

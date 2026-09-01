@@ -1,6 +1,7 @@
 package io.horizontalsystems.ethereumkit.spv.net
 
 import com.nhaarman.mockito_kotlin.whenever
+import io.horizontalsystems.ethereumkit.core.EthereumKit
 import io.horizontalsystems.ethereumkit.spv.models.BlockHeader
 import org.mockito.Mockito.mock
 import org.spekframework.spek2.Spek
@@ -8,6 +9,7 @@ import org.spekframework.spek2.style.specification.describe
 import kotlin.test.assertFailsWith
 
 class BlockValidatorTest : Spek({
+    EthereumKit.init()
 
     val blockValidator = BlockValidator()
 

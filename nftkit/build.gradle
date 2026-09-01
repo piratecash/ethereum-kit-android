@@ -62,4 +62,8 @@ dependencies {
     implementation libs.kotlinx.coroutines.rx2
 
     implementation project(':ethereumkit')
+
+    testImplementation 'junit:junit:4.13.2'
+    androidTestImplementation 'androidx.test.ext:junit:1.1.3'
+    androidTestImplementation 'androidx.test:runner:1.4.0'
 }
