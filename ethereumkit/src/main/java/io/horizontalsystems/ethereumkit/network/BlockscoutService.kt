@@ -26,8 +26,11 @@ class BlockscoutService(
         val httpClient = SharedHttpClient.newClient {
             eventListenerFactory?.let { eventListenerFactory(it) }
             addInterceptor { chain ->
+                // Cloudflare in front of Blockscout instances (e.g. robinhoodchain.blockscout.com)
+                // returns 403 for user agents that don't look like a real browser, which breaks
+                // transaction sync entirely. A full browser UA string is required to pass.
                 val request = chain.request().newBuilder()
-                    .header("User-Agent", "Mobile App Agent")
+                    .header("User-Agent", "Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36")
                     .build()
                 chain.proceed(request)
             }

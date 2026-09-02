@@ -54,7 +54,10 @@ class BlockscoutServiceTest {
 
         val firstRequest = server.takeRequest()
         assertEquals("test-key", firstRequest.requestUrl?.queryParameter("apikey"))
-        assertEquals("Mobile App Agent", firstRequest.getHeader("User-Agent"))
+        assertEquals(
+            "Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36",
+            firstRequest.getHeader("User-Agent")
+        )
 
         val secondRequest = server.takeRequest()
         assertEquals("101", secondRequest.requestUrl?.queryParameter("block_number"))
