@@ -10,12 +10,6 @@ class TransactionSource(val name: String, val type: SourceType) {
             override val txBaseUrl: String,
             val apiKeys: List<String>
         ) : SourceType(txBaseUrl)
-
-        class Blockscout(
-            val apiBaseUrl: String,
-            override val txBaseUrl: String,
-            val apiKeys: List<String>
-        ) : SourceType(txBaseUrl)
     }
 
     companion object {
@@ -66,20 +60,23 @@ class TransactionSource(val name: String, val type: SourceType) {
             return etherscan("ftmscan.com", "https://ftmscan.com", apiKeys)
         }
 
+        // Blockscout PRO API: Etherscan V2-compatible multichain endpoint for chains Etherscan does not index.
+        // Public per-instance APIs are deprecated and challenge non-browser clients, so they are not usable for syncing.
+        private fun blockscoutPro(explorerHost: String, apiKeys: List<String>) = TransactionSource(
+            name = explorerHost,
+            type = SourceType.Etherscan(
+                apiBaseUrl = "https://api.blockscout.com/v2/",
+                txBaseUrl = "https://$explorerHost",
+                apiKeys = apiKeys
+            )
+        )
+
         fun zkSync(apiKeys: List<String>): TransactionSource {
-            return etherscan("era.zksync.network", "https://era.zksync.network", apiKeys)
+            return blockscoutPro("zksync.blockscout.com", apiKeys)
         }
 
         fun robinhood(apiKeys: List<String>): TransactionSource {
-            val explorerUrl = "https://robinhoodchain.blockscout.com"
-            return TransactionSource(
-                name = "robinhoodchain.blockscout.com",
-                type = SourceType.Blockscout(
-                    apiBaseUrl = "$explorerUrl/",
-                    txBaseUrl = explorerUrl,
-                    apiKeys = apiKeys
-                )
-            )
+            return blockscoutPro("robinhoodchain.blockscout.com", apiKeys)
         }
     }
 

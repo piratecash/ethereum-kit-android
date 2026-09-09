@@ -12,6 +12,7 @@ import io.horizontalsystems.ethereumkit.models.InternalTransaction
 import io.horizontalsystems.ethereumkit.models.Transaction
 import io.horizontalsystems.ethereumkit.models.TransactionTag
 import io.reactivex.Single
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -42,6 +43,31 @@ class TransactionSyncManagerTest {
         try {
             assertTrue(synced.await(3, TimeUnit.SECONDS))
             assertEquals(nativeValue, storage.getTransaction(hash)?.value)
+        } finally {
+            disposable.dispose()
+        }
+    }
+
+    @Test
+    fun sync_nativeAndTokenSyncersWithSameHash_keepsNativeInput() {
+        val hash = ByteArray(32) { it.toByte() }
+        val nativeInput = byteArrayOf(1, 2, 3, 4)
+        val storage = FakeTransactionStorage()
+        val syncManager = TransactionSyncManager(transactionManager(storage))
+        syncManager.add(transactionSyncer(Transaction(hash, 1L, false, input = nativeInput)))
+        syncManager.add(transactionSyncer(Transaction(hash, 1L, false, input = null)))
+        val synced = CountDownLatch(1)
+        val disposable = syncManager.syncStateAsync.subscribe {
+            if (it is EthereumKit.SyncState.Synced) {
+                synced.countDown()
+            }
+        }
+
+        syncManager.sync()
+
+        try {
+            assertTrue(synced.await(3, TimeUnit.SECONDS))
+            assertArrayEquals(nativeInput, storage.getTransaction(hash)?.input)
         } finally {
             disposable.dispose()
         }
