@@ -20,18 +20,25 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 import java.math.BigInteger
 
-internal val testAddress = Address("0x0000000000000000000000000000000000000001")
+// Four distinct addresses: reusing one would hide any mix-up between these roles.
+internal val transferSenderAddress = Address("0x0000000000000000000000000000000000000001")
+internal val transferRecipientAddress = Address("0x0000000000000000000000000000000000000002")
+internal val tokenContractAddress = Address("0x0000000000000000000000000000000000000003")
+internal val transactionSenderAddress = Address("0x0000000000000000000000000000000000000004")
 internal val testHash = ByteArray(32) { it.toByte() }
 
-internal fun createTokenTransaction(blockNumber: Long) = ProviderTokenTransaction(
+internal fun createTokenTransaction(
+    blockNumber: Long,
+    transactionSender: Address? = null
+) = ProviderTokenTransaction(
     blockNumber = blockNumber,
     timestamp = 1000L,
     hash = testHash,
     nonce = 1L,
     blockHash = ByteArray(32),
-    from = testAddress,
-    contractAddress = testAddress,
-    to = testAddress,
+    from = transferSenderAddress,
+    contractAddress = tokenContractAddress,
+    to = transferRecipientAddress,
     value = BigInteger.ONE,
     tokenName = "Test",
     tokenSymbol = "TST",
@@ -41,7 +48,8 @@ internal fun createTokenTransaction(blockNumber: Long) = ProviderTokenTransactio
     gasPrice = 1000L,
     gasUsed = 21000L,
     cumulativeGasUsed = 21000L,
-    input = null
+    input = null,
+    transactionSender = transactionSender
 )
 
 class Erc20TransactionSyncerTest {
@@ -121,6 +129,33 @@ class Erc20TransactionSyncerTest {
         assertNull(transaction.to)
         assertNull(transaction.value)
         assertEquals(BigInteger.ONE, storage.savedEvents.single().value)
+    }
+
+    @Test
+    fun getTransactionsSingle_noTransactionSender_claimsNoSender() = runTest {
+        val storage = FakeEip20Storage(lastScannedBlock = 1000L)
+        val syncer = createSyncer(storage)
+
+        val transaction = syncer.getTransactionsSingle().blockingGet().first.single()
+
+        assertNull("Transfer sender must never be passed off as the transaction sender", transaction.from)
+        assertEquals(transferSenderAddress, storage.savedEvents.single().from)
+    }
+
+    @Test
+    fun getTransactionsSingle_withTransactionSender_usesItInsteadOfTransferSender() = runTest {
+        val storage = FakeEip20Storage(lastScannedBlock = 1000L)
+        val syncer = createSyncer(
+            storage = storage,
+            etherscanResult = Single.just(
+                listOf(createTokenTransaction(2000L, transactionSender = transactionSenderAddress))
+            )
+        )
+
+        val transaction = syncer.getTransactionsSingle().blockingGet().first.single()
+
+        assertEquals(transactionSenderAddress, transaction.from)
+        assertEquals(transferSenderAddress, storage.savedEvents.single().from)
     }
 
     @Test

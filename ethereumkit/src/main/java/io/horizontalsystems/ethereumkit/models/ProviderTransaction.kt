@@ -41,7 +41,9 @@ data class ProviderTokenTransaction(
     val gasPrice: Long,
     var gasUsed: Long,
     var cumulativeGasUsed: Long,
-    val input: ByteArray?
+    val input: ByteArray?,
+    /** Sender of the transaction. `from` above is the token transfer's sender — for a swap, the pool. */
+    val transactionSender: Address? = null
 )
 
 data class ProviderInternalTransaction(

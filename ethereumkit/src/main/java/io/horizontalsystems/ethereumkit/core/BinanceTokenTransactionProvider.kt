@@ -256,7 +256,8 @@ class BinanceTokenTransactionProvider(
                 gasPrice = tx?.gasPrice ?: 0,
                 gasUsed = receipt?.gasUsed ?: 0,
                 cumulativeGasUsed = receipt?.cumulativeGasUsed ?: 0,
-                input = tx?.input
+                input = tx?.input,
+                transactionSender = tx?.from
             )
         } catch (e: Throwable) {
             Timber.w(e, "Failed to convert log to transaction")

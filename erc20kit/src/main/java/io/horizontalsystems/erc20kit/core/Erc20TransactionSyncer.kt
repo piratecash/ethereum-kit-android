@@ -84,7 +84,9 @@ internal fun ProviderTokenTransaction.ethereumTransaction() = Transaction(
     isFailed = false,
     blockNumber = blockNumber,
     transactionIndex = transactionIndex,
-    from = from,
+    // Never `from`: that is the token transfer's sender, and passing it off as the
+    // transaction's sender makes swap decorators treat the output as sent to a third party.
+    from = transactionSender,
     to = null,
     value = null,
     input = input,
