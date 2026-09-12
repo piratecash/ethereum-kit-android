@@ -18,5 +18,9 @@ class RpcTransaction(
         val maxPriorityFeePerGas: Long?,
         @SerializedName("gas")
         val gasLimit: Long,
-        val input: ByteArray
+        val input: ByteArray,
+        val v: String? = null,
+        val r: ByteArray? = null,
+        val s: ByteArray? = null,
+        val chainId: Long? = null
 )

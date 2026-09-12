@@ -12,5 +12,6 @@ class TransactionRecord(
     val amount: BigDecimal?,
     val blockHeight: Long?,
     val transactionIndex: Int?,
-    val decoration: String
+    val decoration: String,
+    val syncSource: String? = null
 )

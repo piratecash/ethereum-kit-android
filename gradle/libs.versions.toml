@@ -1,9 +1,15 @@
 [versions]
-room = "2.7.1"
+hdWalletKit = "1.0.1"
+bouncyCastle = "1.80"
+secp256k1 = "0.24.0"
+room = "2.8.4"
 kotlinxCoroutinesCore = "1.10.1"
 timber = "5.0.1"
 
 [libraries]
+hd-wallet-kit-android = { module = "com.github.piratecash.hd-wallet-kit-android:hd-wallet-kit-kmp-android", version.ref = "hdWalletKit" }
+bcpkix-jdk15to18 = { module = "org.bouncycastle:bcpkix-jdk15to18", version.ref = "bouncyCastle" }
+secp256k1-jni-jvm = { module = "fr.acinq.secp256k1:secp256k1-kmp-jni-jvm", version.ref = "secp256k1" }
 room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
 room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
 room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }

@@ -7,7 +7,6 @@ import io.horizontalsystems.ethereumkit.models.GasPrice
 import io.horizontalsystems.ethereumkit.network.*
 import io.reactivex.Single
 import okhttp3.Interceptor
-import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.adapter.rxjava2.RxJava2CallAdapterFactory
@@ -37,9 +36,10 @@ class OneInchService(
             interceptorChain.proceed(requestBuilder.build())
         }
 
-        val httpClient = OkHttpClient.Builder()
-            .addInterceptor(headersInterceptor)
-            .addInterceptor(loggingInterceptor)
+        val httpClient = SharedHttpClient.newClient {
+            addInterceptor(headersInterceptor)
+            addInterceptor(loggingInterceptor)
+        }
 
         val gson = GsonBuilder()
             .setLenient()
@@ -54,7 +54,7 @@ class OneInchService(
             .baseUrl(url)
             .addCallAdapterFactory(RxJava2CallAdapterFactory.create())
             .addConverterFactory(GsonConverterFactory.create(gson))
-            .client(httpClient.build())
+            .client(httpClient)
             .build()
 
         service = retrofit.create(OneInchServiceApi::class.java)

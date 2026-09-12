@@ -18,6 +18,7 @@ import io.horizontalsystems.ethereumkit.models.ProviderEip721Transaction
 import io.horizontalsystems.ethereumkit.models.ProviderInternalTransaction
 import io.horizontalsystems.ethereumkit.models.ProviderTokenTransaction
 import io.horizontalsystems.ethereumkit.models.ProviderTransaction
+import io.horizontalsystems.ethereumkit.models.RawTransactionBroadcastRecord
 import io.horizontalsystems.ethereumkit.models.RawTransaction
 import io.horizontalsystems.ethereumkit.models.Signature
 import io.horizontalsystems.ethereumkit.models.Transaction
@@ -60,6 +61,7 @@ interface IBlockchain {
     val accountState: AccountState?
 
     fun send(rawTransaction: RawTransaction, signature: Signature): Single<Transaction>
+    fun sendRawTransaction(rawTransaction: ByteArray): Single<ByteArray>
     fun getNonce(defaultBlockParameter: DefaultBlockParameter): Single<Long>
     fun estimateGas(to: Address?, amount: BigInteger?, gasLimit: Long?, gasPrice: GasPrice?, data: ByteArray?): Single<Long>
     fun getTransactionReceipt(transactionHash: ByteArray): Single<RpcTransactionReceipt>
@@ -100,11 +102,24 @@ interface ITransactionStorage {
     fun getTransactionsAfterSingle(hash: ByteArray?): Single<List<Transaction>>
 }
 
+interface IRawTransactionBroadcastStorage {
+    fun getRawTransactionBroadcast(hash: ByteArray): RawTransactionBroadcastRecord?
+    fun getRawTransactionBroadcasts(): List<RawTransactionBroadcastRecord>
+    fun addRawTransactionBroadcast(record: RawTransactionBroadcastRecord)
+    fun updateRawTransactionBroadcast(record: RawTransactionBroadcastRecord)
+    fun deleteRawTransactionBroadcast(record: RawTransactionBroadcastRecord)
+}
+
 interface IEip20Storage {
     fun getLastEvent(): Eip20Event?
+    fun getEarliestEip20Event(): Eip20Event?
     fun save(events: List<Eip20Event>)
     fun getEvents(): List<Eip20Event>
     fun getEventsByHashes(hashes: List<ByteArray>): List<Eip20Event>
+    fun deleteZeroValueDuplicate(hash: ByteArray, contractAddress: Address, from: Address, to: Address)
+    fun getLastScannedBlock(): Long?
+    fun getHistoricalMinScannedBlock(): Long?
+    suspend fun saveSyncBlockInfo(lastScannedBlock: Long?, historicalMinScannedBlock: Long?)
 }
 
 interface ITransactionSyncer {
@@ -142,6 +157,24 @@ interface ITransactionProvider {
     fun getTokenTransactions(startBlock: Long): Single<List<ProviderTokenTransaction>>
     fun getEip721Transactions(startBlock: Long): Single<List<ProviderEip721Transaction>>
     fun getEip1155Transactions(startBlock: Long): Single<List<ProviderEip1155Transaction>>
+}
+
+interface TokenTransactionProvider {
+    /***
+     * Gets token transactions starting from the specified block.
+     * @param startBlock The block number from which to start fetching token transactions.
+     * Negative value means fetch from the latest block.
+     */
+    suspend fun getTokenTransactions(startBlock: Long): TokenTransactionsResult
+
+    suspend fun getTokenTransactions(fromBlock: Long, toBlock: Long): TokenTransactionsResult
+
+    suspend fun fetchBlockNumber(): Long
+
+    data class TokenTransactionsResult(
+        val transactions: List<ProviderTokenTransaction>,
+        val lastScannedBlock: Long
+    )
 }
 
 interface INonceProvider {

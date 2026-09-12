@@ -19,6 +19,7 @@ import io.horizontalsystems.ethereumkit.api.storage.ApiStorage
 import io.horizontalsystems.ethereumkit.core.signer.Signer
 import io.horizontalsystems.ethereumkit.core.storage.Eip20Storage
 import io.horizontalsystems.ethereumkit.core.storage.TransactionStorage
+import io.horizontalsystems.ethereumkit.core.storage.TransactionSyncSourceStorage
 import io.horizontalsystems.ethereumkit.core.storage.TransactionSyncerStateStorage
 import io.horizontalsystems.ethereumkit.crypto.CryptoUtils
 import io.horizontalsystems.ethereumkit.crypto.InternalBouncyCastleProvider
@@ -31,8 +32,10 @@ import io.horizontalsystems.ethereumkit.models.DefaultBlockParameter
 import io.horizontalsystems.ethereumkit.models.FullTransaction
 import io.horizontalsystems.ethereumkit.models.GasPrice
 import io.horizontalsystems.ethereumkit.models.RawTransaction
+import io.horizontalsystems.ethereumkit.models.RawTransactionBroadcastResult
 import io.horizontalsystems.ethereumkit.models.RpcSource
 import io.horizontalsystems.ethereumkit.models.Signature
+import io.horizontalsystems.ethereumkit.models.SignedRawTransaction
 import io.horizontalsystems.ethereumkit.models.TransactionData
 import io.horizontalsystems.ethereumkit.models.TransactionLog
 import io.horizontalsystems.ethereumkit.models.TransactionSource
@@ -47,38 +50,73 @@ import io.horizontalsystems.ethereumkit.network.LongTypeAdapter
 import io.horizontalsystems.ethereumkit.network.OptionalTypeAdapter
 import io.horizontalsystems.ethereumkit.transactionsyncers.EthereumTransactionSyncer
 import io.horizontalsystems.ethereumkit.transactionsyncers.InternalTransactionSyncer
+import io.horizontalsystems.ethereumkit.transactionsyncers.PendingTransactionSyncer
 import io.horizontalsystems.ethereumkit.transactionsyncers.TransactionSyncManager
 import io.horizontalsystems.hdwalletkit.Mnemonic
 import io.reactivex.BackpressureStrategy
 import io.reactivex.Flowable
 import io.reactivex.Single
 import io.reactivex.disposables.CompositeDisposable
+import io.reactivex.disposables.Disposable
+import io.reactivex.disposables.SerialDisposable
 import io.reactivex.schedulers.Schedulers
 import io.reactivex.subjects.PublishSubject
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import okhttp3.EventListener
 import org.bouncycastle.jce.provider.BouncyCastleProvider
+import timber.log.Timber
 import java.math.BigInteger
 import java.security.Security
 import java.util.Objects
 import java.util.Optional
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.logging.Logger
+
+internal fun signedRawTransaction(
+    rawTransaction: RawTransaction,
+    signature: Signature,
+    chainId: Int,
+): SignedRawTransaction {
+    val encoded = TransactionBuilder.encode(rawTransaction, signature, chainId)
+    return SignedRawTransaction(
+        raw = encoded,
+        hash = CryptoUtils.sha3(encoded),
+    )
+}
 
 class EthereumKit(
     private val blockchain: IBlockchain,
     private val nonceProvider: NonceProvider,
     val transactionManager: TransactionManager,
     private val transactionSyncManager: TransactionSyncManager,
-    private val connectionManager: ConnectionManager,
+    val connectionManager: ConnectionManager,
     private val address: Address,
     val chain: Chain,
     val walletId: String,
     val transactionProvider: ITransactionProvider,
+    val tokenTransactionProvider: TokenTransactionProvider,
+    val fallbackHistoryBlockWindow: Long,
     val eip20Storage: IEip20Storage,
     private val decorationManager: DecorationManager,
-    private val state: EthereumKitState = EthereumKitState()
+    val scanHistoricalEip20: Boolean,
+    val transactionSyncSourceStorage: TransactionSyncSourceStorage,
+    private val rawTransactionBroadcaster: RawTransactionBroadcaster,
+    private val state: EthereumKitState = EthereumKitState(),
+    val eventListenerFactory: EventListener.Factory? = null
 ) : IBlockchainListener {
 
     private val logger = Logger.getLogger("EthereumKit")
     private val disposables = CompositeDisposable()
+
+    // Authority to do network work for the current run. stopInternal() disposes it, so a callback
+    // that read `started` before the pause registers into a disposed container instead of running.
+    @Volatile
+    private var runDisposables = CompositeDisposable()
+
+    // A completed subscription still reports itself undisposed, so in-flight has to be tracked apart
+    // from the lifecycle-owned disposable, or the first retry would suppress every later one.
+    private val rawRetryInFlight = AtomicBoolean(false)
 
     private val lastBlockHeightSubject = PublishSubject.create<Long>()
     private val syncStateSubject = PublishSubject.create<SyncState>()
@@ -87,16 +125,115 @@ class EthereumKit(
     val defaultGasLimit: Long = 21_000
     private val defaultMinAmount: BigInteger = BigInteger.ONE
 
-    private var started = false
+    private val started = AtomicBoolean(false)
+
+    val isStarted: Boolean
+        get() = started.get()
+
+    sealed class HistoricalSyncState {
+        object Idle : HistoricalSyncState()
+        object Completed : HistoricalSyncState()
+        data class Syncing(val startBlock: Long, val currentBlock: Long) : HistoricalSyncState() {
+            val blocksRemaining: Long get() = currentBlock
+            val progress: Double get() = if (startBlock > 0) (startBlock - currentBlock).toDouble() / startBlock else 0.0
+        }
+    }
+
+    sealed class ForwardSyncState {
+        object Idle : ForwardSyncState()
+        data class Syncing(
+            val lastSyncedTip: Long,
+            val chainTipBlock: Long
+        ) : ForwardSyncState() {
+            val blocksRemaining: Long get() = chainTipBlock - lastSyncedTip
+        }
+    }
+
+    interface HistoricalSyncer {
+        var isEnabled: Boolean
+        val syncState: StateFlow<HistoricalSyncState>
+        fun start()
+        fun stop()
+    }
+
+    private var historicalSyncer: HistoricalSyncer? = null
+
+    private val _idleHistoricalState = MutableStateFlow<HistoricalSyncState>(HistoricalSyncState.Idle)
+
+    val historicalSyncState: StateFlow<HistoricalSyncState>
+        get() = historicalSyncer?.syncState ?: _idleHistoricalState
+
+    private val _forwardSyncState = MutableStateFlow<ForwardSyncState>(ForwardSyncState.Idle)
+    val forwardSyncState: StateFlow<ForwardSyncState> get() = _forwardSyncState
+
+    private var lastForwardSyncTip: Long = 0L
 
     init {
         state.lastBlockHeight = blockchain.lastBlockHeight
         state.accountState = blockchain.accountState
+        lastForwardSyncTip = eip20Storage.getLastScannedBlock() ?: 0L
 
         transactionManager.fullTransactionsAsync
             .subscribeOn(Schedulers.io())
             .subscribe {
-                blockchain.syncAccountState()
+                // A response arriving after pauseNetwork() must not put the kit back on the network.
+                if (started.get()) {
+                    blockchain.syncAccountState()
+                }
+            }.let {
+                disposables.add(it)
+            }
+
+        // Start historical syncer only if initial sync returned no ERC20 transactions
+        if (scanHistoricalEip20) {
+            transactionSyncManager.syncStateAsync
+                // This subscription outlives pauseNetwork(), so a Synced published while paused must
+                // not consume the single take — the next sync after resume gets to start historical.
+                .filter { it is SyncState.Synced && started.get() }
+                .take(1)
+                .subscribeOn(Schedulers.io())
+                .subscribe {
+                    val historicalMin = eip20Storage.getHistoricalMinScannedBlock()
+                    val shouldStartHistorical = when {
+                        // Historical sync in progress (partial) - resume it
+                        historicalMin != null && historicalMin > 0 -> true
+                        // No events at all - start historical
+                        eip20Storage.getLastEvent() == null -> true
+                        // Complete historical sync (reached 0) or Etherscan provided data
+                        else -> false
+                    }
+
+                    if (shouldStartHistorical) {
+                        // take(1) has already been consumed, so eligibility must be committed even
+                        // when paused — otherwise resume() would find isEnabled false and this kit
+                        // would never run historical sync again. Only the start is lifecycle-bound.
+                        historicalSyncer?.isEnabled = true
+                        if (!started.get()) return@subscribe
+                        Timber.i("Starting historical sync (historicalMin=$historicalMin)")
+                        historicalSyncer?.start()
+                    } else {
+                        Timber.i("Historical sync not needed (historicalMin=$historicalMin)")
+                    }
+                }.let {
+                    disposables.add(it)
+                }
+        }
+
+        // Clear forward sync gap indicator when tx sync completes
+        transactionSyncManager.syncStateAsync
+            .filter { it is SyncState.Synced || it is SyncState.NotSynced }
+            .subscribeOn(Schedulers.io())
+            .subscribe { syncState ->
+                if (syncState is SyncState.Synced) {
+                    // Advance tip to chain height — gap resolves to 0 on next recompute
+                    state.lastBlockHeight?.let { lastForwardSyncTip = it }
+                    state.lastBlockHeight?.let { updateForwardSyncState(it) }
+                } else {
+                    // On error: clear indicator directly without advancing tip.
+                    // Tip stays old so the gap will reappear on next onUpdateLastBlockHeight
+                    // (which triggers a retry). This is correct: the gap IS still there.
+                    _forwardSyncState.value = ForwardSyncState.Idle
+                }
             }.let {
                 disposables.add(it)
             }
@@ -133,24 +270,60 @@ class EthereumKit(
         get() = transactionManager.fullTransactionsAsync
 
     fun start() {
-        if (started)
+        if (!started.compareAndSet(false, true))
             return
-        started = true
 
+        if (runDisposables.isDisposed) {
+            runDisposables = CompositeDisposable()
+        }
         blockchain.start()
+        transactionSyncManager.resume()
         transactionSyncManager.sync()
+        retryRawTransactionBroadcasts()
+        // Initially the historical syncer is started conditionally after sync completes (see init
+        // block); on a restart that one-shot subscription is gone, so resume it here.
+        if (historicalSyncer?.isEnabled == true) {
+            historicalSyncer?.start()
+        }
     }
 
     fun stop() {
-        started = false
+        stopInternal(clearState = true)
+    }
+
+    /**
+     * Stops all network activity but keeps the cached balance and block height readable.
+     * Resume with [start].
+     */
+    fun pauseNetwork() {
+        stopInternal(clearState = false)
+    }
+
+    private fun stopInternal(clearState: Boolean) {
+        started.set(false)
+        runDisposables.dispose()
+        rawRetryInFlight.set(false)
+        historicalSyncer?.stop()
+        transactionSyncManager.pause()
         blockchain.stop()
-        state.clear()
-        connectionManager.stop()
+        if (clearState) {
+            state.clear()
+        }
+    }
+
+    /** Re-reads the locally stored balance and block height after a [stop] that cleared them. */
+    fun attachLocalState() {
+        blockchain.lastBlockHeight?.let { onUpdateLastBlockHeight(it) }
+        blockchain.accountState?.let { onUpdateAccountState(it) }
     }
 
     fun refresh() {
+        // Only start() resumes networking: refresh() must not revive a syncer stop() left NotReady.
+        if (!started.get()) return
+
         blockchain.refresh()
         transactionSyncManager.sync()
+        retryRawTransactionBroadcasts()
     }
 
     fun getNonce(defaultBlockParameter: DefaultBlockParameter): Single<Long> {
@@ -161,7 +334,11 @@ class EthereumKit(
         return transactionManager.getFullTransactionsFlowable(tags)
     }
 
-    fun getFullTransactionsAsync(tags: List<List<String>>, fromHash: ByteArray? = null, limit: Int? = null): Single<List<FullTransaction>> {
+    fun getFullTransactionsAsync(
+        tags: List<List<String>>,
+        fromHash: ByteArray? = null,
+        limit: Int? = null
+    ): Single<List<FullTransaction>> {
         return transactionManager.getFullTransactionsAsync(tags, fromHash, limit)
     }
 
@@ -193,12 +370,22 @@ class EthereumKit(
         return blockchain.estimateGas(to, resolvedAmount, chain.gasLimit, gasPrice, null)
     }
 
-    fun estimateGas(to: Address?, value: BigInteger?, gasPrice: GasPrice?, data: ByteArray?): Single<Long> {
+    fun estimateGas(
+        to: Address?,
+        value: BigInteger?,
+        gasPrice: GasPrice?,
+        data: ByteArray?
+    ): Single<Long> {
         return blockchain.estimateGas(to, value, chain.gasLimit, gasPrice, data)
     }
 
     fun estimateGas(transactionData: TransactionData, gasPrice: GasPrice? = null): Single<Long> {
-        return estimateGas(transactionData.to, transactionData.value, gasPrice, transactionData.input)
+        return estimateGas(
+            transactionData.to,
+            transactionData.value,
+            gasPrice,
+            transactionData.input
+        )
     }
 
     fun rawTransaction(
@@ -225,7 +412,8 @@ class EthereumKit(
         gasLimit: Long,
         nonce: Long? = null
     ): Single<RawTransaction> {
-        val nonceSingle = nonce?.let { Single.just(it) } ?: nonceProvider.getNonce(DefaultBlockParameter.Pending)
+        val nonceSingle =
+            nonce?.let { Single.just(it) } ?: nonceProvider.getNonce(DefaultBlockParameter.Pending)
 
         return nonceSingle.flatMap { nonce ->
             Single.just(RawTransaction(gasPrice, gasLimit, address, value, nonce, transactionInput))
@@ -239,6 +427,21 @@ class EthereumKit(
             .map { transactionManager.handle(listOf(it)).first() }
     }
 
+    fun signedRawTransaction(
+        rawTransaction: RawTransaction,
+        signature: Signature
+    ): SignedRawTransaction {
+        return signedRawTransaction(rawTransaction, signature, chain.id)
+    }
+
+    fun broadcastRawTransaction(rawTransactionHex: String): Single<RawTransactionBroadcastResult> {
+        return Single.defer { broadcastRawTransaction(rawTransactionHex.strictHexToByteArray()) }
+    }
+
+    fun broadcastRawTransaction(rawTransaction: ByteArray): Single<RawTransactionBroadcastResult> {
+        return rawTransactionBroadcaster.broadcast(rawTransaction)
+    }
+
     fun decorate(transactionData: TransactionData): TransactionDecoration? {
         return decorationManager.decorateTransaction(address, transactionData)
     }
@@ -247,11 +450,21 @@ class EthereumKit(
         return transactionManager.etherTransferTransactionData(address = address, value = value)
     }
 
-    fun getLogs(address: Address?, topics: List<ByteArray?>, fromBlock: Long, toBlock: Long, pullTimestamps: Boolean): Single<List<TransactionLog>> {
+    fun getLogs(
+        address: Address?,
+        topics: List<ByteArray?>,
+        fromBlock: Long,
+        toBlock: Long,
+        pullTimestamps: Boolean
+    ): Single<List<TransactionLog>> {
         return blockchain.getLogs(address, topics, fromBlock, toBlock, pullTimestamps)
     }
 
-    fun getStorageAt(contractAddress: Address, position: ByteArray, defaultBlockParameter: DefaultBlockParameter): Single<ByteArray> {
+    fun getStorageAt(
+        contractAddress: Address,
+        position: ByteArray,
+        defaultBlockParameter: DefaultBlockParameter
+    ): Single<ByteArray> {
         return blockchain.getStorageAt(contractAddress, position, defaultBlockParameter)
     }
 
@@ -288,17 +501,56 @@ class EthereumKit(
     //IBlockchainListener
     //
 
+    private fun updateForwardSyncState(chainTip: Long) {
+        _forwardSyncState.value = computeForwardSyncState(chain, lastForwardSyncTip, chainTip)
+    }
+
+    private fun retryRawTransactionBroadcasts() {
+        if (!rawRetryInFlight.compareAndSet(false, true)) return
+
+        // Claim ownership before subscribing: add() fails on an already-disposed container, so the
+        // broadcast can no longer start from a subscription pauseNetwork() was unable to reach.
+        val run = SerialDisposable()
+        if (!runDisposables.add(run)) {
+            rawRetryInFlight.set(false)
+            return
+        }
+
+        Single
+            .defer {
+                // Re-checked on the worker thread, where the broadcast actually starts, so a pause
+                // that raced the guard above still stops a signed transaction from leaving the device.
+                if (run.isDisposed) Single.never() else rawTransactionBroadcaster.retryQueued()
+            }
+            .subscribeOn(Schedulers.io())
+            .doFinally { rawRetryInFlight.set(false) }
+            // subscribe() schedules the work before it returns the disposable; onSubscribe hands it
+            // over while the caller still owns the chain, so a pause can never miss it.
+            .doOnSubscribe { run.set(it) }
+            .subscribe({}, { error ->
+                Timber.w(error, "Raw transaction broadcast retry failed.")
+            })
+    }
+
     override fun onUpdateLastBlockHeight(lastBlockHeight: Long) {
         if (state.lastBlockHeight == lastBlockHeight)
             return
 
         state.lastBlockHeight = lastBlockHeight
         lastBlockHeightSubject.onNext(lastBlockHeight)
+        updateForwardSyncState(lastBlockHeight)
+
+        if (!started.get()) return
+
         transactionSyncManager.sync()
+        retryRawTransactionBroadcasts()
     }
 
     override fun onUpdateSyncState(syncState: SyncState) {
         syncStateSubject.onNext(syncState)
+        if (syncState is SyncState.Synced) {
+            retryRawTransactionBroadcasts()
+        }
     }
 
     override fun onUpdateAccountState(accountState: AccountState) {
@@ -310,6 +562,10 @@ class EthereumKit(
 
     fun addTransactionSyncer(transactionSyncer: ITransactionSyncer) {
         transactionSyncManager.add(transactionSyncer)
+    }
+
+    fun setHistoricalSyncer(syncer: HistoricalSyncer) {
+        historicalSyncer = syncer
     }
 
     fun addNonceProvider(provider: INonceProvider) {
@@ -332,7 +588,7 @@ class EthereumKit(
         decorationManager.addTransactionDecorator(decorator)
     }
 
-    internal fun <T: Any> rpcSingle(rpc: JsonRpc<T>): Single<T> {
+    internal fun <T : Any> rpcSingle(rpc: JsonRpc<T>): Single<T> {
         return blockchain.rpcSingle(rpc)
     }
 
@@ -376,6 +632,25 @@ class EthereumKit(
 
     companion object {
 
+        const val BLOCKS_PER_HOUR = 1200L
+        const val DEFAULT_FALLBACK_HISTORY_BLOCK_WINDOW = 6 * 24 * BLOCKS_PER_HOUR
+        const val FORWARD_GAP_THRESHOLD = 100L // ~5 min on BSC at ~3s/block
+
+        fun computeForwardSyncState(
+            chain: Chain,
+            lastForwardSyncTip: Long,
+            chainTip: Long
+        ): ForwardSyncState {
+            if (chain != Chain.BinanceSmartChain) return ForwardSyncState.Idle
+            if (lastForwardSyncTip == 0L) return ForwardSyncState.Idle
+            val gap = chainTip - lastForwardSyncTip
+            return if (gap > FORWARD_GAP_THRESHOLD) {
+                ForwardSyncState.Syncing(lastForwardSyncTip, chainTip)
+            } else {
+                ForwardSyncState.Idle
+            }
+        }
+
         val gson = GsonBuilder()
             .setLenient()
             .registerTypeAdapter(BigInteger::class.java, BigIntegerTypeAdapter())
@@ -384,7 +659,10 @@ class EthereumKit(
             .registerTypeAdapter(Int::class.java, IntTypeAdapter())
             .registerTypeAdapter(ByteArray::class.java, ByteArrayTypeAdapter())
             .registerTypeAdapter(Address::class.java, AddressTypeAdapter())
-            .registerTypeHierarchyAdapter(DefaultBlockParameter::class.java, DefaultBlockParameterTypeAdapter())
+            .registerTypeHierarchyAdapter(
+                DefaultBlockParameter::class.java,
+                DefaultBlockParameterTypeAdapter()
+            )
             .registerTypeAdapter(
                 object : TypeToken<Optional<RpcTransaction>>() {}.type,
                 OptionalTypeAdapter<RpcTransaction>(RpcTransaction::class.java)
@@ -393,7 +671,10 @@ class EthereumKit(
                 object : TypeToken<Optional<RpcTransactionReceipt>>() {}.type,
                 OptionalTypeAdapter<RpcTransactionReceipt>(RpcTransactionReceipt::class.java)
             )
-            .registerTypeAdapter(object : TypeToken<Optional<RpcBlock>>() {}.type, OptionalTypeAdapter<RpcBlock>(RpcBlock::class.java))
+            .registerTypeAdapter(
+                object : TypeToken<Optional<RpcBlock>>() {}.type,
+                OptionalTypeAdapter<RpcBlock>(RpcBlock::class.java)
+            )
             .create()
 
         fun call(
@@ -416,7 +697,15 @@ class EthereumKit(
             gasPrice: GasPrice,
             data: ByteArray?
         ): Single<Long> {
-            return RpcBlockchain.estimateGas(rpcSource, from, to, value, chain.gasLimit, gasPrice, data)
+            return RpcBlockchain.estimateGas(
+                rpcSource,
+                from,
+                to,
+                value,
+                chain.gasLimit,
+                gasPrice,
+                data
+            )
         }
 
         fun estimateGas(
@@ -426,7 +715,15 @@ class EthereumKit(
             transactionData: TransactionData,
             gasPrice: GasPrice
         ): Single<Long> {
-            return estimateGas(rpcSource, chain, from, transactionData.to, transactionData.value, gasPrice, transactionData.input)
+            return estimateGas(
+                rpcSource,
+                chain,
+                from,
+                transactionData.to,
+                transactionData.value,
+                gasPrice,
+                transactionData.input
+            )
         }
 
         fun init() {
@@ -441,12 +738,25 @@ class EthereumKit(
             chain: Chain,
             rpcSource: RpcSource,
             transactionSource: TransactionSource,
-            walletId: String
+            walletId: String,
+            fallbackHistoryBlockWindow: Long = DEFAULT_FALLBACK_HISTORY_BLOCK_WINDOW,
+            scanHistoricalEip20: Boolean = true,
+            eventListenerFactory: EventListener.Factory? = null
         ): EthereumKit {
             val seed = Mnemonic().toSeed(words, passphrase)
             val privateKey = Signer.privateKey(seed, chain)
             val address = ethereumAddress(privateKey)
-            return getInstance(application, address, chain, rpcSource, transactionSource, walletId)
+            return getInstance(
+                application,
+                address,
+                chain,
+                rpcSource,
+                transactionSource,
+                walletId,
+                fallbackHistoryBlockWindow,
+                scanHistoricalEip20,
+                eventListenerFactory
+            )
         }
 
         fun getInstance(
@@ -455,14 +765,17 @@ class EthereumKit(
             chain: Chain,
             rpcSource: RpcSource,
             transactionSource: TransactionSource,
-            walletId: String
+            walletId: String,
+            fallbackHistoryBlockWindow: Long = DEFAULT_FALLBACK_HISTORY_BLOCK_WINDOW,
+            scanHistoricalEip20: Boolean = true,
+            eventListenerFactory: EventListener.Factory? = null
         ): EthereumKit {
 
-            val connectionManager = ConnectionManager(application)
+            val connectionManager = ConnectionManager.getInstance(application)
 
             val syncer: IRpcSyncer = when (rpcSource) {
                 is RpcSource.WebSocket -> {
-                    val rpcWebSocket = NodeWebSocket(rpcSource.uri, gson, rpcSource.auth)
+                    val rpcWebSocket = NodeWebSocket(rpcSource.uri, gson, rpcSource.auth, eventListenerFactory)
                     val webSocketRpcSyncer = WebSocketRpcSyncer(rpcWebSocket, gson)
 
                     rpcWebSocket.listener = webSocketRpcSyncer
@@ -471,35 +784,58 @@ class EthereumKit(
                 }
 
                 is RpcSource.Http -> {
-                    val apiProvider = RpcApiProviderFactory.nodeApiProvider(rpcSource)
+                    val apiProvider = RpcApiProviderFactory.nodeApiProvider(rpcSource, eventListenerFactory)
                     ApiRpcSyncer(apiProvider, connectionManager, chain.syncInterval)
                 }
             }
 
             val transactionBuilder = TransactionBuilder(address, chain.id)
-            val transactionProvider = transactionProvider(transactionSource, address, chain.id)
+            val transactionProvider = transactionProvider(transactionSource, address, chain.id, eventListenerFactory)
 
-            val apiDatabase = EthereumDatabaseManager.getEthereumApiDatabase(application, walletId, chain)
+            val tokenTransactionProvider = BinanceTokenTransactionProvider(
+                uris = RpcSource.binanceSmartChainHttp().uris,
+                address = address,
+                chainId = chain.id,
+                eventListenerFactory = eventListenerFactory
+            )
+
+            val apiDatabase =
+                EthereumDatabaseManager.getEthereumApiDatabase(application, walletId, chain)
             val storage = ApiStorage(apiDatabase)
 
             val blockchain = RpcBlockchain.instance(address, storage, syncer, transactionBuilder)
 
-            val transactionDatabase = EthereumDatabaseManager.getTransactionDatabase(application, walletId, chain)
+            val transactionDatabase =
+                EthereumDatabaseManager.getTransactionDatabase(application, walletId, chain)
             val transactionStorage = TransactionStorage(transactionDatabase)
             val transactionSyncerStateStorage = TransactionSyncerStateStorage(transactionDatabase)
+            val transactionSyncSourceStorage = TransactionSyncSourceStorage(transactionDatabase.transactionSyncSourceDao())
 
-            val erc20Database = EthereumDatabaseManager.getErc20Database(application, walletId, chain)
+            val erc20Database =
+                EthereumDatabaseManager.getErc20Database(application, walletId, chain)
             val erc20Storage = Eip20Storage(erc20Database)
 
-            val ethereumTransactionSyncer = EthereumTransactionSyncer(transactionProvider, transactionSyncerStateStorage)
-            val internalTransactionsSyncer = InternalTransactionSyncer(transactionProvider, transactionStorage)
+            val ethereumTransactionSyncer =
+                EthereumTransactionSyncer(transactionProvider, transactionSyncerStateStorage, transactionSyncSourceStorage)
+            val internalTransactionsSyncer =
+                InternalTransactionSyncer(transactionProvider, transactionStorage)
 
             val decorationManager = DecorationManager(address, transactionStorage)
-            val transactionManager = TransactionManager(address, transactionStorage, decorationManager, blockchain, transactionProvider)
+            val transactionManager = TransactionManager(
+                address,
+                transactionStorage,
+                decorationManager,
+                blockchain,
+                transactionProvider
+            )
             val transactionSyncManager = TransactionSyncManager(transactionManager)
 
             transactionSyncManager.add(internalTransactionsSyncer)
             transactionSyncManager.add(ethereumTransactionSyncer)
+
+            val pendingTransactionSyncer = PendingTransactionSyncer(transactionStorage, blockchain, transactionManager)
+            transactionSyncManager.add(pendingTransactionSyncer)
+            val rawTransactionBroadcaster = RawTransactionBroadcaster(blockchain, transactionStorage)
 
             val nonceProvider = NonceProvider()
             nonceProvider.addProvider(blockchain)
@@ -514,8 +850,14 @@ class EthereumKit(
                 chain,
                 walletId,
                 transactionProvider,
+                tokenTransactionProvider,
+                fallbackHistoryBlockWindow,
                 erc20Storage,
-                decorationManager
+                decorationManager,
+                scanHistoricalEip20,
+                transactionSyncSourceStorage,
+                rawTransactionBroadcaster,
+                eventListenerFactory = eventListenerFactory
             )
 
             blockchain.listener = ethereumKit
@@ -529,17 +871,29 @@ class EthereumKit(
             EthereumDatabaseManager.clear(context, chain, walletId)
         }
 
-        private fun transactionProvider(transactionSource: TransactionSource, address: Address, chainId: Int): ITransactionProvider {
+        private fun transactionProvider(
+            transactionSource: TransactionSource,
+            address: Address,
+            chainId: Int,
+            eventListenerFactory: EventListener.Factory? = null
+        ): ITransactionProvider {
             when (transactionSource.type) {
                 is TransactionSource.SourceType.Etherscan -> {
-                    val service = EtherscanService(transactionSource.type.apiBaseUrl, transactionSource.type.apiKeys, chainId)
+                    val service = EtherscanService(
+                        transactionSource.type.apiBaseUrl,
+                        transactionSource.type.apiKeys,
+                        chainId,
+                        eventListenerFactory
+                    )
                     return EtherscanTransactionProvider(service, address)
                 }
             }
         }
 
         private fun ethereumAddress(privateKey: BigInteger): Address {
-            val publicKey = CryptoUtils.ecKeyFromPrivate(privateKey).publicKeyPoint.getEncoded(false).drop(1).toByteArray()
+            val publicKey =
+                CryptoUtils.ecKeyFromPrivate(privateKey).publicKeyPoint.getEncoded(false).drop(1)
+                    .toByteArray()
             return Address(CryptoUtils.sha3(publicKey).takeLast(20).toByteArray())
         }
 

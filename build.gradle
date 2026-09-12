@@ -1,22 +1,41 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmDefaultMode
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
+
 // Top-level build file where you can add configuration options common to all sub-projects/modules.
 
 buildscript {
-    ext.kotlin_version = '2.0.20'
-    ext.room_version = '2.6.1'
+    ext.kotlin_version = '2.3.20'
+    ext.room_version = '2.8.4'
+    ext.shortSha = providers.environmentVariable("SHORT_SHA")
+        .orElse(provider {
+            def process = new ProcessBuilder("git", "rev-parse", "--short=7", "HEAD")
+                .directory(rootDir)
+                .redirectErrorStream(true)
+                .start()
+            process.inputStream.text.trim() ?: "unknown"
+        })
+        .get()
+    ext.libraryVersion = providers.environmentVariable("JITPACK_VERSION")
+        .orElse(providers.environmentVariable("VERSION"))
+        .orElse(providers.environmentVariable("VERSION_NAME"))
+        .orElse(provider { ext.shortSha })
+        .get()
     repositories {
         google()
         mavenCentral()
     }
     dependencies {
-        classpath 'com.android.tools.build:gradle:8.10.0'
+        classpath 'com.android.tools.build:gradle:8.13.1'
         classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+        classpath "androidx.room:room-gradle-plugin:$room_version"
         // NOTE: Do not place your application dependencies here; they belong
         // in the individual module build.gradle files
     }
 }
 
 plugins {
-    id 'com.google.devtools.ksp' version '2.0.21-1.0.27' apply false
+    id 'maven-publish'
+    id 'com.google.devtools.ksp' version '2.3.2' apply false
 }
 
 allprojects {
@@ -24,6 +43,63 @@ allprojects {
         google()
         mavenCentral()
         maven { url "https://jitpack.io" }
+    }
+}
+
+def libraryModules = [
+    'ethereumkit', 'erc20kit', 'uniswapkit', 'oneinchkit', 'nftkit', 'merkleiokit'
+]
+
+def artifactNames = [
+    'ethereumkit': 'ethereum-kit-core',
+    'erc20kit': 'ethereum-kit-erc20',
+    'uniswapkit': 'ethereum-kit-uniswap',
+    'oneinchkit': 'ethereum-kit-oneinch',
+    'nftkit': 'ethereum-kit-nft',
+    'merkleiokit': 'ethereum-kit-merkleio'
+]
+
+def addLibraryModuleDependencies = { pom ->
+    pom.withXml {
+        def dependenciesNode = asNode().appendNode('dependencies')
+        libraryModules.each { mod ->
+            def dependencyNode = dependenciesNode.appendNode('dependency')
+            dependencyNode.appendNode('groupId', 'com.github.piratecash.ethereum-kit-android')
+            dependencyNode.appendNode('artifactId', artifactNames[mod])
+            dependencyNode.appendNode('version', rootProject.ext.libraryVersion)
+            dependencyNode.appendNode('type', 'aar')
+        }
+    }
+}
+
+publishing {
+    publications {
+        release(MavenPublication) {
+            groupId = "com.github.piratecash"
+            artifactId = "ethereum-kit-android"
+            version = rootProject.ext.libraryVersion
+            addLibraryModuleDependencies(pom)
+        }
+    }
+}
+
+subprojects { sub ->
+    sub.tasks.withType(KotlinCompile).configureEach {
+        compilerOptions {
+            jvmDefault.set(JvmDefaultMode.DISABLE)
+        }
+    }
+
+    if (libraryModules.contains(sub.name)) {
+        sub.afterEvaluate {
+            sub.publishing {
+                publications.withType(MavenPublication).configureEach {
+                    groupId = "com.github.piratecash.ethereum-kit-android"
+                    artifactId = artifactNames[sub.name]
+                    version = rootProject.ext.libraryVersion
+                }
+            }
+        }
     }
 }
 

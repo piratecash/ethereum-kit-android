@@ -6,6 +6,7 @@ import io.horizontalsystems.ethereumkit.api.core.NodeApiProvider
 import io.horizontalsystems.ethereumkit.core.EthereumKit
 import io.horizontalsystems.ethereumkit.core.TransactionBuilder
 import io.horizontalsystems.ethereumkit.core.TransactionManager
+import io.horizontalsystems.ethereumkit.core.storage.TransactionSyncSourceStorage
 import io.horizontalsystems.ethereumkit.models.Address
 import io.horizontalsystems.ethereumkit.models.Chain
 import io.horizontalsystems.ethereumkit.models.FullTransaction
@@ -13,6 +14,7 @@ import io.horizontalsystems.ethereumkit.models.RawTransaction
 import io.horizontalsystems.ethereumkit.models.Signature
 import io.horizontalsystems.ethereumkit.network.ConnectionManager
 import io.reactivex.Single
+import okhttp3.EventListener
 import java.net.URI
 
 class MerkleTransactionAdapter(
@@ -53,14 +55,16 @@ class MerkleTransactionAdapter(
             walletId: String,
             transactionManager: TransactionManager,
             sourceTag: String,
+            transactionSyncSourceStorage: TransactionSyncSourceStorage,
+            eventListenerFactory: EventListener.Factory? = null,
         ): MerkleTransactionAdapter? {
             val baseUrl = "https://mempool.merkle.io/rpc/"
             val blockchainPath = blockchainPathMap[chain] ?: return null
 
             val url = URI("$baseUrl$blockchainPath/$merkleIoPubKey")
-            val rpcProvider = NodeApiProvider(listOf(url), EthereumKit.gson)
+            val rpcProvider = NodeApiProvider(listOf(url), EthereumKit.gson, eventListenerFactory = eventListenerFactory)
 
-            val connectionManager = ConnectionManager(context)
+            val connectionManager = ConnectionManager.getInstance(context)
             val rpcSyncer = ApiRpcSyncer(rpcProvider, connectionManager, chain.syncInterval)
 
             val transactionBuilder = TransactionBuilder(address, chain.id)
@@ -81,7 +85,8 @@ class MerkleTransactionAdapter(
             val syncer = MerkleTransactionSyncer(
                 manager = merkleTransactionHashManager,
                 blockchain = blockchain,
-                transactionManager = transactionManager
+                transactionManager = transactionManager,
+                syncSourceStorage = transactionSyncSourceStorage
             )
 
             return MerkleTransactionAdapter(blockchain, syncer, transactionManager, sourceTag)

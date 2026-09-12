@@ -1,52 +1,97 @@
 package io.horizontalsystems.erc20kit.core
 
+import android.annotation.SuppressLint
 import io.horizontalsystems.ethereumkit.core.IEip20Storage
 import io.horizontalsystems.ethereumkit.core.ITransactionProvider
 import io.horizontalsystems.ethereumkit.core.ITransactionSyncer
-import io.horizontalsystems.ethereumkit.models.Eip20Event
+import io.horizontalsystems.ethereumkit.core.TokenTransactionProvider
+import io.horizontalsystems.ethereumkit.core.storage.TransactionSyncSourceStorage
 import io.horizontalsystems.ethereumkit.models.ProviderTokenTransaction
+import io.horizontalsystems.ethereumkit.models.SyncSource
 import io.horizontalsystems.ethereumkit.models.Transaction
 import io.reactivex.Single
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.rx2.rxSingle
 
 class Erc20TransactionSyncer(
-        private val transactionProvider: ITransactionProvider,
-        private val storage: IEip20Storage
+    private val transactionProvider: ITransactionProvider,
+    private val tokenTransactionProvider: TokenTransactionProvider,
+    private val fallbackHistoryBlockWindow: Long,
+    private val storage: IEip20Storage,
+    private val transactionSaver: TransactionSaver,
+    private val syncSourceStorage: TransactionSyncSourceStorage
 ) : ITransactionSyncer {
 
-    private fun handle(transactions: List<ProviderTokenTransaction>) {
-        if (transactions.isEmpty()) return
+    @SuppressLint("CheckResult")
+    override fun getTransactionsSingle(): Single<Pair<List<Transaction>, Boolean>> {
+        val lastScannedBlock = storage.getLastScannedBlock() ?: 0
+        val initial: Boolean = lastScannedBlock == 0L
 
-        val events = transactions.map { tx ->
-            Eip20Event(tx.hash, tx.blockNumber, tx.contractAddress, tx.from, tx.to, tx.value, tx.tokenName, tx.tokenSymbol, tx.tokenDecimal)
+        // Overlap to survive small reorgs/late indexing
+        val SAFETY_OVERLAP = 6
+        val startBlock = if (lastScannedBlock > SAFETY_OVERLAP) {
+            lastScannedBlock - SAFETY_OVERLAP
+        } else {
+            0L
         }
 
-        storage.save(events)
+        // Always try Etherscan first (faster, indexed), fallback to RPC on error
+        val receivedTransactions = requestTokenTransactionsEtherscan(startBlock)
+            .onErrorResumeNext {
+                rxSingle(Dispatchers.IO) {
+                    val fromBlock =
+                        if (startBlock == 0L) -fallbackHistoryBlockWindow else startBlock
+                    tokenTransactionProvider.getTokenTransactions(fromBlock)
+                }
+            }
+
+        return receivedTransactions
+            .flatMap { result ->
+                transactionSaver.handle(result.transactions)
+                syncSourceStorage.saveAll(
+                    result.transactions.map { it.hash },
+                    SyncSource.ERC20_SYNCER
+                )
+                rxSingle(Dispatchers.IO) {
+                    storage.saveSyncBlockInfo(
+                        lastScannedBlock = result.lastScannedBlock,
+                        historicalMinScannedBlock = null
+                    )
+                }.map { result } // we need map to wait for saveSyncBlockInfo finish
+            }
+            .map { providerTokenTransactions ->
+                val array = providerTokenTransactions.transactions.map {
+                    it.ethereumTransaction()
+                }
+                Pair(array, initial)
+            }
+            .onErrorReturnItem(Pair(listOf(), initial))
     }
 
-    override fun getTransactionsSingle(): Single<Pair<List<Transaction>, Boolean>> {
-        val lastTransactionBlockNumber = storage.getLastEvent()?.blockNumber ?: 0
-        val initial: Boolean = lastTransactionBlockNumber == 0L
-
-        return transactionProvider.getTokenTransactions(lastTransactionBlockNumber + 1)
-                .doOnSuccess { providerTokenTransactions -> handle(providerTokenTransactions) }
-                .map { providerTokenTransactions ->
-                    val array = providerTokenTransactions.map { transaction ->
-                        Transaction(
-                                hash = transaction.hash,
-                                timestamp = transaction.timestamp,
-                                isFailed = false,
-                                blockNumber = transaction.blockNumber,
-                                transactionIndex = transaction.transactionIndex,
-                                nonce = transaction.nonce,
-                                gasPrice = transaction.gasPrice,
-                                gasLimit = transaction.gasLimit,
-                                gasUsed = transaction.gasUsed
-                        )
-
-                    }
-                    Pair(array, initial)
-                }
-                .onErrorReturnItem(Pair(listOf(), initial))
+    private fun requestTokenTransactionsEtherscan(startBlock: Long): Single<TokenTransactionProvider.TokenTransactionsResult> {
+        return transactionProvider.getTokenTransactions(startBlock)
+            .map { list ->
+                val maxBlock = list.maxOfOrNull { it.blockNumber } ?: startBlock
+                TokenTransactionProvider.TokenTransactionsResult(list, maxBlock)
+            }
     }
 
 }
+
+internal fun ProviderTokenTransaction.ethereumTransaction() = Transaction(
+    hash = hash,
+    timestamp = timestamp,
+    isFailed = false,
+    blockNumber = blockNumber,
+    transactionIndex = transactionIndex,
+    // Never `from`: that is the token transfer's sender, and passing it off as the
+    // transaction's sender makes swap decorators treat the output as sent to a third party.
+    from = transactionSender,
+    to = null,
+    value = null,
+    input = input,
+    nonce = nonce,
+    gasPrice = gasPrice,
+    gasLimit = gasLimit,
+    gasUsed = gasUsed
+)
