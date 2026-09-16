@@ -970,7 +970,13 @@ class EthereumKit(
             val sources = (listOf(transactionSource.type) + transactionSource.fallbacks).map { type ->
                 when (type) {
                     is TransactionSource.SourceType.Etherscan -> {
-                        val service = EtherscanService(type.apiBaseUrl, type.apiKeys, chainId, eventListenerFactory)
+                        val service = EtherscanService(
+                            type.apiBaseUrl,
+                            type.apiKeys,
+                            chainId,
+                            eventListenerFactory,
+                            type.listPageSize
+                        )
                         FallbackTransactionProvider.Source(service.host, EtherscanTransactionProvider(service, address))
                     }
                 }

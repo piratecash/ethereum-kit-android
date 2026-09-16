@@ -9,6 +9,7 @@ import io.horizontalsystems.ethereumkit.core.kitLogger
 import io.horizontalsystems.ethereumkit.core.retryWhenErrors
 import io.horizontalsystems.ethereumkit.core.toHexString
 import io.horizontalsystems.ethereumkit.models.Address
+import io.horizontalsystems.ethereumkit.models.TransactionSource
 import io.reactivex.Single
 import okhttp3.EventListener
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -29,6 +30,7 @@ class EtherscanService(
     apiKeys: List<String>,
     private val chainId: Int,
     eventListenerFactory: EventListener.Factory? = null,
+    private val listPageSize: Int = TransactionSource.DEFAULT_LIST_PAGE_SIZE,
 ) {
     private val apiKeys = apiKeys.filter { it.isNotBlank() }
     private val apiKeyIndex =
@@ -108,7 +110,7 @@ class EtherscanService(
             address = address.hex,
             startBlock = startBlock,
             page = LIST_PAGE,
-            offset = LIST_PAGE_SIZE,
+            offset = listPageSize,
         ).map {
             parseResponse(it)
         }.retryInCaseErrorWithLogging("getTransactionList")
@@ -121,7 +123,7 @@ class EtherscanService(
             startBlock = startBlock,
             sort = "asc",
             page = LIST_PAGE,
-            offset = LIST_PAGE_SIZE,
+            offset = listPageSize,
         ).map {
             parseResponse(it)
         }.retryInCaseErrorWithLogging("getInternalTransactionList")
@@ -133,7 +135,7 @@ class EtherscanService(
             address = address.hex,
             startBlock = startBlock,
             page = LIST_PAGE,
-            offset = LIST_PAGE_SIZE,
+            offset = listPageSize,
         ).map {
             parseResponse(it)
         }.retryInCaseErrorWithLogging("getTokenTransactions")
@@ -154,7 +156,7 @@ class EtherscanService(
             address = address.hex,
             startBlock = startBlock,
             page = LIST_PAGE,
-            offset = LIST_PAGE_SIZE,
+            offset = listPageSize,
         ).map {
             parseResponse(it)
         }.retryInCaseErrorWithLogging("getEip721Transactions")
@@ -166,7 +168,7 @@ class EtherscanService(
             address = address.hex,
             startBlock = startBlock,
             page = LIST_PAGE,
-            offset = LIST_PAGE_SIZE,
+            offset = listPageSize,
         ).map {
             parseResponse(it)
         }.retryInCaseErrorWithLogging("getEip1155Transactions")
@@ -242,10 +244,9 @@ class EtherscanService(
         private val apiKeyRegex = Regex("apikey=[^&\\s]+")
         private const val CREDITS_HEADER = "x-credits-remaining"
 
-        // Etherscan V2 times out on an unpaged txlist for busy addresses; one page covers an
-        // incremental sync, as the row cap is the same as without paging.
+        // Etherscan V2 times out on an unpaged txlist for busy addresses and zkSync returns only
+        // 10 rows unpaged, so every list call is paged; the page size is per source.
         private const val LIST_PAGE = 1
-        private const val LIST_PAGE_SIZE = 10_000
     }
 
     private interface EtherscanServiceAPI {

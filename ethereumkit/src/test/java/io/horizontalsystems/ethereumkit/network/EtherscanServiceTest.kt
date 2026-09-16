@@ -154,6 +154,19 @@ class EtherscanServiceTest {
         assertTrue("no masked apikey in $httpLogs", httpLogs.any { it.contains("apikey=***") })
     }
 
+    @Test
+    fun getTransactionList_configuredPageSize_isSentAsOffset() {
+        enqueueTransactionList()
+
+        EtherscanService(server.url("/").toString(), emptyList(), CHAIN_ID, listPageSize = 1_000)
+            .getTransactionList(ADDRESS, 0)
+            .blockingGet()
+
+        val url = server.takeRequest().requestUrl
+        assertEquals("1", url?.queryParameter("page"))
+        assertEquals("1000", url?.queryParameter("offset"))
+    }
+
     private fun assertFailsWithInvalidApiKey(service: EtherscanService) {
         val error = try {
             service.getTransactionList(ADDRESS, 0).blockingGet()

@@ -12,11 +12,18 @@ class TransactionSource(
         class Etherscan(
             val apiBaseUrl: String,
             override val txBaseUrl: String,
-            val apiKeys: List<String>
+            val apiKeys: List<String>,
+            val listPageSize: Int = DEFAULT_LIST_PAGE_SIZE
         ) : SourceType(txBaseUrl)
     }
 
     companion object {
+        const val DEFAULT_LIST_PAGE_SIZE = 10_000
+
+        // The official zkSync API rejects `page * offset > 1000` with status 0 "Result window is
+        // too large", which would fail every history call.
+        private const val ZKSYNC_LIST_PAGE_SIZE = 1_000
+
         private fun etherscanV2(explorerUrl: String, apiKeys: List<String>) = SourceType.Etherscan(
             apiBaseUrl = "https://api.etherscan.io/v2/",
             txBaseUrl = explorerUrl,
@@ -80,7 +87,8 @@ class TransactionSource(
             type = SourceType.Etherscan(
                 apiBaseUrl = "https://block-explorer-api.mainnet.zksync.io/",
                 txBaseUrl = "https://explorer.zksync.io",
-                apiKeys = emptyList()
+                apiKeys = emptyList(),
+                listPageSize = ZKSYNC_LIST_PAGE_SIZE
             ),
             fallbacks = listOf(blockscoutPro("zksync.blockscout.com", blockscoutApiKeys))
         )
