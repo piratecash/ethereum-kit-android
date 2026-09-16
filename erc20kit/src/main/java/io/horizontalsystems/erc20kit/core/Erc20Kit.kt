@@ -17,7 +17,7 @@ import io.reactivex.Single
 import io.reactivex.disposables.CompositeDisposable
 import io.reactivex.schedulers.Schedulers
 import java.math.BigInteger
-import java.net.URI
+import io.horizontalsystems.ethereumkit.models.RpcSource
 
 class Erc20Kit(
     private val ethereumKit: EthereumKit,
@@ -182,12 +182,12 @@ class Erc20Kit(
 
         fun addTransactionSyncer(ethereumKit: EthereumKit) {
             val transactionSaver = TransactionSaver(ethereumKit.eip20Storage)
-            val ownChainRpcUris = ethereumKit.ownChainRpcUris
+            val ownChainRpcSource = ethereumKit.ownChainRpcSource
 
             ethereumKit.addTransactionSyncer(
                 transactionSyncer = Erc20TransactionSyncer(
                     transactionProvider = ethereumKit.transactionProvider,
-                    tokenTransactionProvider = ownChainRpcUris?.let { rpcLogsProvider(ethereumKit, it) },
+                    tokenTransactionProvider = ownChainRpcSource?.let { rpcLogsProvider(ethereumKit, it) },
                     fallbackHistoryBlockWindow = ethereumKit.fallbackHistoryBlockWindow,
                     storage = ethereumKit.eip20Storage,
                     transactionSaver = transactionSaver,
@@ -197,11 +197,11 @@ class Erc20Kit(
                 )
             )
 
-            if (ethereumKit.scanHistoricalEip20 && ownChainRpcUris != null) {
+            if (ethereumKit.scanHistoricalEip20 && ownChainRpcSource != null) {
                 val historicalSyncer = HistoricalErc20Syncer(
                     transactionManager = ethereumKit.transactionManager,
                     // Separate instance to avoid shared mutable state (caches)
-                    tokenTransactionProvider = rpcLogsProvider(ethereumKit, ownChainRpcUris),
+                    tokenTransactionProvider = rpcLogsProvider(ethereumKit, ownChainRpcSource),
                     storage = ethereumKit.eip20Storage,
                     transactionSaver = transactionSaver,
                     connectionManager = ethereumKit.connectionManager
@@ -210,12 +210,13 @@ class Erc20Kit(
             }
         }
 
-        private fun rpcLogsProvider(ethereumKit: EthereumKit, uris: List<URI>) =
+        private fun rpcLogsProvider(ethereumKit: EthereumKit, rpcSource: RpcSource.Http) =
             RpcLogsTokenTransactionProvider(
-                uris = uris,
+                uris = rpcSource.uris,
                 address = ethereumKit.receiveAddress,
                 chainId = ethereumKit.chain.id,
-                eventListenerFactory = ethereumKit.eventListenerFactory
+                eventListenerFactory = ethereumKit.eventListenerFactory,
+                auth = rpcSource.auth
             )
 
         fun addDecorators(ethereumKit: EthereumKit) {

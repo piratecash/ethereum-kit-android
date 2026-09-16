@@ -100,7 +100,7 @@ class EthereumKit(
     val chain: Chain,
     val walletId: String,
     val transactionProvider: ITransactionProvider,
-    val ownChainRpcUris: List<URI>?,
+    val ownChainRpcSource: RpcSource.Http?,
     val fallbackHistoryBlockWindow: Long,
     val eip20Storage: IEip20Storage,
     private val decorationManager: DecorationManager,
@@ -112,7 +112,7 @@ class EthereumKit(
 ) : IBlockchainListener, ChainHeadProvider {
 
     /** Scanning ERC-20 logs needs HTTP RPC endpoints, which a WebSocket source does not provide. */
-    val scanHistoricalEip20: Boolean = scanHistoricalEip20Requested && ownChainRpcUris != null
+    val scanHistoricalEip20: Boolean = scanHistoricalEip20Requested && ownChainRpcSource != null
 
     private val logger = Logger.getLogger("EthereumKit")
     private val log = kitLogger(chain.id)
@@ -885,7 +885,7 @@ class EthereumKit(
 
             // Log scanning must stay on this kit's own chain: a foreign source writes foreign block
             // heights into the ERC-20 sync cursor. A WebSocket source has no HTTP endpoint to scan.
-            val ownChainRpcUris = (rpcSource as? RpcSource.Http)?.uris
+            val ownChainRpcSource = rpcSource as? RpcSource.Http
 
             val apiDatabase =
                 EthereumDatabaseManager.getEthereumApiDatabase(application, walletId, chain)
@@ -940,7 +940,7 @@ class EthereumKit(
                 chain,
                 walletId,
                 transactionProvider,
-                ownChainRpcUris,
+                ownChainRpcSource,
                 fallbackHistoryBlockWindow,
                 erc20Storage,
                 decorationManager,

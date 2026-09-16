@@ -26,6 +26,7 @@ import io.horizontalsystems.ethereumkit.network.IntTypeAdapter
 import io.horizontalsystems.ethereumkit.network.JsonRpcService
 import io.horizontalsystems.ethereumkit.network.LongTypeAdapter
 import io.horizontalsystems.ethereumkit.network.SharedHttpClient
+import okhttp3.Credentials
 import okhttp3.EventListener
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
@@ -43,7 +44,8 @@ class RpcLogsTokenTransactionProvider(
     private val uris: List<URI>,
     private val address: Address,
     private val chainId: Int,
-    eventListenerFactory: EventListener.Factory? = null
+    eventListenerFactory: EventListener.Factory? = null,
+    auth: String? = null
 ) : TokenTransactionProvider {
 
     private val service: JsonRpcService
@@ -63,6 +65,15 @@ class RpcLogsTokenTransactionProvider(
 
         val httpClient = SharedHttpClient.newClient {
             eventListenerFactory?.let { eventListenerFactory(it) }
+            auth?.let { credentials ->
+                addInterceptor { chain ->
+                    chain.proceed(
+                        chain.request().newBuilder()
+                            .header("Authorization", Credentials.basic("", credentials))
+                            .build()
+                    )
+                }
+            }
             addInterceptor(loggingInterceptor)
         }
 

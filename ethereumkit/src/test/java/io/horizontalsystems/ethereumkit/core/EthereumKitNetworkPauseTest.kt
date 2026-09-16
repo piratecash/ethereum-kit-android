@@ -25,10 +25,11 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import java.math.BigInteger
+import io.horizontalsystems.ethereumkit.models.RpcSource
 import java.net.URI
 import java.time.Duration
 
-private val OWN_CHAIN_URIS = listOf(URI("https://rpc.example.org"))
+private val OWN_CHAIN_RPC = RpcSource.Http(listOf(URI("https://rpc.example.org")), auth = null)
 
 class EthereumKitNetworkPauseTest {
 
@@ -174,7 +175,7 @@ class EthereumKitNetworkPauseTest {
 
     @Test
     fun scanHistoricalEip20_withoutOwnChainRpcUris_isDisabled() {
-        val kit = ethereumKit(ownChainRpcUris = null, scanHistoricalEip20Requested = true)
+        val kit = ethereumKit(ownChainRpcSource = null, scanHistoricalEip20Requested = true)
 
         assertFalse(
             "A WebSocket source has no HTTP endpoint to scan logs on",
@@ -184,7 +185,7 @@ class EthereumKitNetworkPauseTest {
 
     @Test
     fun scanHistoricalEip20_withOwnChainRpcUris_staysEnabled() {
-        val kit = ethereumKit(ownChainRpcUris = OWN_CHAIN_URIS, scanHistoricalEip20Requested = true)
+        val kit = ethereumKit(ownChainRpcSource = OWN_CHAIN_RPC, scanHistoricalEip20Requested = true)
 
         assertTrue(kit.scanHistoricalEip20)
     }
@@ -235,7 +236,7 @@ class EthereumKitNetworkPauseTest {
     }
 
     private fun ethereumKit(
-        ownChainRpcUris: List<URI>? = null,
+        ownChainRpcSource: RpcSource.Http? = null,
         scanHistoricalEip20Requested: Boolean = false
     ): EthereumKit {
         every { blockchain.lastBlockHeight } returns storedBlockHeight
@@ -255,7 +256,7 @@ class EthereumKitNetworkPauseTest {
             chain = Chain.Ethereum,
             walletId = "wallet",
             transactionProvider = mockk(relaxed = true),
-            ownChainRpcUris = ownChainRpcUris,
+            ownChainRpcSource = ownChainRpcSource,
             fallbackHistoryBlockWindow = 0L,
             eip20Storage = eip20Storage,
             decorationManager = mockk(relaxed = true),
@@ -267,7 +268,7 @@ class EthereumKitNetworkPauseTest {
     }
 
     private fun historicalKit(historicalSyncer: FakeHistoricalSyncer): EthereumKit {
-        val kit = ethereumKit(ownChainRpcUris = OWN_CHAIN_URIS, scanHistoricalEip20Requested = true)
+        val kit = ethereumKit(ownChainRpcSource = OWN_CHAIN_RPC, scanHistoricalEip20Requested = true)
         kit.setHistoricalSyncer(historicalSyncer)
         kit.start()
         return kit
