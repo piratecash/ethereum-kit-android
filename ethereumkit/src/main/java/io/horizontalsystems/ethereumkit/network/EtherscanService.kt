@@ -184,7 +184,9 @@ class EtherscanService(
             val resultElement = responseObj["result"]
             val errorText = resultElement?.takeIf { it.isJsonPrimitive }?.asString
             if (status == "0" && message == "NOTOK" && errorText != null) {
-                if (errorText == "Max rate limit reached") {
+                // The wording varies ("Max rate limit reached", "Max calls per sec rate limit
+                // reached (3/sec)", daily variants), so match the stable part.
+                if (errorText.contains(RATE_LIMIT_MARKER, ignoreCase = true)) {
                     throw RequestError.RateLimitExceed()
                 } else if (errorText.startsWith("Invalid API Key") ||
                     errorText.startsWith("Too many invalid api key attempts")
@@ -247,6 +249,7 @@ class EtherscanService(
         // Etherscan V2 times out on an unpaged txlist for busy addresses and zkSync returns only
         // 10 rows unpaged, so every list call is paged; the page size is per source.
         private const val LIST_PAGE = 1
+        private const val RATE_LIMIT_MARKER = "rate limit reached"
     }
 
     private interface EtherscanServiceAPI {

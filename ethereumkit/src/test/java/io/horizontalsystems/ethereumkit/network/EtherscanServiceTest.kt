@@ -68,6 +68,25 @@ class EtherscanServiceTest {
         assertNotEquals(apiKeyOf(server.takeRequest()), apiKeyOf(server.takeRequest()))
     }
 
+    // Etherscan answers HTTP 200 with a NOTOK envelope and keeps changing the wording
+    // ("Max rate limit reached", "Max calls per sec rate limit reached (3/sec)"), so matching the
+    // exact old text turned a throttle into a hard failure of the whole source chain.
+    @Test
+    fun getTransactionList_perSecondRateLimitEnvelope_retriesInsteadOfFailing() {
+        server.enqueue(
+            jsonResponse(
+                200,
+                """{"status":"0","message":"NOTOK","result":"Max calls per sec rate limit reached (3/sec)"}"""
+            )
+        )
+        enqueueTransactionList()
+
+        val response = service().getTransactionList(ADDRESS, 0).blockingGet()
+
+        assertEquals(listOf("10"), response.result.map { it.getValue("blockNumber") })
+        assertEquals(2, server.requestCount)
+    }
+
     @Test
     fun getTransactionList_unauthorized_retriesWithNextApiKey() {
         server.enqueue(jsonResponse(401, """{"error":"Unauthorized"}"""))
