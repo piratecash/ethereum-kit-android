@@ -18,6 +18,7 @@ import java.math.BigInteger
 class Erc20KitNetworkPauseTest {
 
     private val transactions = PublishProcessor.create<List<FullTransaction>>()
+    private val accountStatePolls = PublishProcessor.create<Unit>()
     private val storedBalance = BigInteger.valueOf(42)
 
     private val ethereumKit = mockk<EthereumKit>()
@@ -53,11 +54,30 @@ class Erc20KitNetworkPauseTest {
         verify(exactly = 1) { balanceManager.sync() }
     }
 
+    @Test
+    fun accountStatePoll_whileStarted_syncsTokenBalance() {
+        erc20Kit(ethereumKitStarted = true)
+
+        accountStatePolls.onNext(Unit)
+
+        verify(exactly = 1) { balanceManager.sync() }
+    }
+
+    @Test
+    fun accountStatePoll_whilePaused_doesNotSyncTokenBalance() {
+        erc20Kit(ethereumKitStarted = false)
+
+        accountStatePolls.onNext(Unit)
+
+        verify(exactly = 0) { balanceManager.sync() }
+    }
+
     private fun erc20Kit(ethereumKitStarted: Boolean): Erc20Kit {
         every { ethereumKit.isStarted } returns ethereumKitStarted
         // Synced here would make the constructor itself call balanceManager.sync().
         every { ethereumKit.syncState } returns EthereumKit.SyncState.NotSynced(Throwable())
         every { ethereumKit.syncStateFlowable } returns Flowable.empty()
+        every { ethereumKit.accountStatePollFlowable } returns accountStatePolls
         every { transactionManager.transactionsAsync } returns transactions
         every { balanceManager.balance } returns storedBalance
 

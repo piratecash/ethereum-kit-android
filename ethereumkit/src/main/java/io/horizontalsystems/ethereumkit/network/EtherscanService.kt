@@ -5,11 +5,13 @@ import com.google.gson.GsonBuilder
 import com.google.gson.JsonElement
 import com.google.gson.reflect.TypeToken
 import io.horizontalsystems.ethereumkit.api.models.EtherscanResponse
+import io.horizontalsystems.ethereumkit.core.kitLogger
 import io.horizontalsystems.ethereumkit.core.retryWhenErrors
 import io.horizontalsystems.ethereumkit.core.toHexString
 import io.horizontalsystems.ethereumkit.models.Address
 import io.reactivex.Single
 import okhttp3.EventListener
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.HttpException
 import retrofit2.Retrofit
@@ -36,6 +38,13 @@ class EtherscanService(
     private var lastUsedApiKey: String? = null
 
     private val logger = Logger.getLogger("EtherscanService")
+    private val log = kitLogger(chainId)
+
+    val host: String = baseUrl.toHttpUrlOrNull()?.host ?: baseUrl
+
+    // A rejected key is worth one attempt per remaining key: retrying the same key only delays
+    // the switch to the next source.
+    private val invalidApiKeyRetries = (this.apiKeys.size - 1).coerceAtLeast(0)
 
     private val service: EtherscanServiceAPI
 
@@ -61,7 +70,9 @@ class EtherscanService(
                     .url(urlBuilder.build())
                     .build()
 
-                chain.proceed(request)
+                chain.proceed(request).also { response ->
+                    response.header(CREDITS_HEADER)?.let { log.i { "$host credits remaining: $it" } }
+                }
             }
             addInterceptor(loggingInterceptor)
         }
@@ -96,6 +107,8 @@ class EtherscanService(
             action = "txlist",
             address = address.hex,
             startBlock = startBlock,
+            page = LIST_PAGE,
+            offset = LIST_PAGE_SIZE,
         ).map {
             parseResponse(it)
         }.retryInCaseErrorWithLogging("getTransactionList")
@@ -107,6 +120,8 @@ class EtherscanService(
             address = address.hex,
             startBlock = startBlock,
             sort = "asc",
+            page = LIST_PAGE,
+            offset = LIST_PAGE_SIZE,
         ).map {
             parseResponse(it)
         }.retryInCaseErrorWithLogging("getInternalTransactionList")
@@ -117,6 +132,8 @@ class EtherscanService(
             action = "tokentx",
             address = address.hex,
             startBlock = startBlock,
+            page = LIST_PAGE,
+            offset = LIST_PAGE_SIZE,
         ).map {
             parseResponse(it)
         }.retryInCaseErrorWithLogging("getTokenTransactions")
@@ -136,6 +153,8 @@ class EtherscanService(
             action = "tokennfttx",
             address = address.hex,
             startBlock = startBlock,
+            page = LIST_PAGE,
+            offset = LIST_PAGE_SIZE,
         ).map {
             parseResponse(it)
         }.retryInCaseErrorWithLogging("getEip721Transactions")
@@ -146,6 +165,8 @@ class EtherscanService(
             action = "token1155tx",
             address = address.hex,
             startBlock = startBlock,
+            page = LIST_PAGE,
+            offset = LIST_PAGE_SIZE,
         ).map {
             parseResponse(it)
         }.retryInCaseErrorWithLogging("getEip1155Transactions")
@@ -191,15 +212,18 @@ class EtherscanService(
                 when (error) {
                     is RequestError.RateLimitExceed -> {
                         Timber.d("EtherscanService: Retrying $methodName due to RateLimitExceed. API key ending in $currentApiKey")
+                        log.w { "$host $methodName: rate limit exceeded (key ...$currentApiKey)" }
                     }
                     is RequestError.InvalidApiKey -> {
                         Timber.d("EtherscanService: Retrying $methodName due to InvalidApiKey. API key ending in $currentApiKey")
+                        log.w { "$host $methodName: key rejected or out of credits (key ...$currentApiKey)" }
+                    }
+                    is RequestError.ResponseError -> {
+                        log.w { "$host $methodName: unexpected response envelope" }
                     }
                 }
-            }.retryWhenErrors(
-                RequestError.RateLimitExceed::class,
-                RequestError.InvalidApiKey::class
-            )
+            }.retryWhenErrors(RequestError.RateLimitExceed::class)
+            .retryWhenErrors(RequestError.InvalidApiKey::class, maxRetries = invalidApiKeyRetries)
 
     // Blockscout PRO answers with an HTTP status and a bare {"error": ...} body, not the Etherscan envelope.
     private fun Throwable.toRequestErrorOrSelf(): Throwable = when ((this as? HttpException)?.code()) {
@@ -216,6 +240,12 @@ class EtherscanService(
 
     companion object {
         private val apiKeyRegex = Regex("apikey=[^&\\s]+")
+        private const val CREDITS_HEADER = "x-credits-remaining"
+
+        // Etherscan V2 times out on an unpaged txlist for busy addresses; one page covers an
+        // incremental sync, as the row cap is the same as without paging.
+        private const val LIST_PAGE = 1
+        private const val LIST_PAGE_SIZE = 10_000
     }
 
     private interface EtherscanServiceAPI {
@@ -227,7 +257,9 @@ class EtherscanService(
             @Query("txhash") txHash: String? = null,
             @Query("startblock") startBlock: Long? = null,
             @Query("endblock") endBlock: Long? = null,
-            @Query("sort") sort: String? = "desc"
+            @Query("sort") sort: String? = "desc",
+            @Query("page") page: Int? = null,
+            @Query("offset") offset: Int? = null
         ): Single<JsonElement>
     }
 }

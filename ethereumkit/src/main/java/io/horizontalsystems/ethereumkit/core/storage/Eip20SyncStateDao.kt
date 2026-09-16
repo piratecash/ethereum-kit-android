@@ -14,4 +14,7 @@ interface Eip20SyncStateDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     fun insert(state: Eip20SyncState)
+
+    @Query("DELETE FROM Eip20SyncState WHERE contractAddress = :contractAddress")
+    fun delete(contractAddress: String)
 }

@@ -1,6 +1,10 @@
 package io.horizontalsystems.ethereumkit.models
 
-class TransactionSource(val name: String, val type: SourceType) {
+class TransactionSource(
+    val name: String,
+    val type: SourceType,
+    val fallbacks: List<SourceType.Etherscan> = emptyList()
+) {
 
     fun transactionUrl(hash: String) = "${type.txBaseUrl.trimEnd('/')}/tx/$hash"
 
@@ -13,14 +17,16 @@ class TransactionSource(val name: String, val type: SourceType) {
     }
 
     companion object {
+        private fun etherscanV2(explorerUrl: String, apiKeys: List<String>) = SourceType.Etherscan(
+            apiBaseUrl = "https://api.etherscan.io/v2/",
+            txBaseUrl = explorerUrl,
+            apiKeys = apiKeys
+        )
+
         private fun etherscan(name: String, explorerUrl: String, apiKeys: List<String>): TransactionSource {
             return TransactionSource(
                 name = name,
-                type = SourceType.Etherscan(
-                    apiBaseUrl = "https://api.etherscan.io/v2/",
-                    txBaseUrl = explorerUrl,
-                    apiKeys = apiKeys
-                )
+                type = etherscanV2(explorerUrl, apiKeys)
             )
         }
 
@@ -62,22 +68,28 @@ class TransactionSource(val name: String, val type: SourceType) {
 
         // Blockscout PRO API: Etherscan V2-compatible multichain endpoint for chains Etherscan does not index.
         // Public per-instance APIs are deprecated and challenge non-browser clients, so they are not usable for syncing.
-        private fun blockscoutPro(explorerHost: String, apiKeys: List<String>) = TransactionSource(
-            name = explorerHost,
-            type = SourceType.Etherscan(
-                apiBaseUrl = "https://api.blockscout.com/v2/",
-                txBaseUrl = "https://$explorerHost",
-                apiKeys = apiKeys
-            )
+        private fun blockscoutPro(explorerHost: String, apiKeys: List<String>) = SourceType.Etherscan(
+            apiBaseUrl = "https://api.blockscout.com/v2/",
+            txBaseUrl = "https://$explorerHost",
+            apiKeys = apiKeys
         )
 
-        fun zkSync(apiKeys: List<String>): TransactionSource {
-            return blockscoutPro("zksync.blockscout.com", apiKeys)
-        }
+        // The official zkSync API is keyless and quota-free, so Blockscout credits are only spent when it fails.
+        fun zkSync(blockscoutApiKeys: List<String>) = TransactionSource(
+            name = "explorer.zksync.io",
+            type = SourceType.Etherscan(
+                apiBaseUrl = "https://block-explorer-api.mainnet.zksync.io/",
+                txBaseUrl = "https://explorer.zksync.io",
+                apiKeys = emptyList()
+            ),
+            fallbacks = listOf(blockscoutPro("zksync.blockscout.com", blockscoutApiKeys))
+        )
 
-        fun robinhood(apiKeys: List<String>): TransactionSource {
-            return blockscoutPro("robinhoodchain.blockscout.com", apiKeys)
-        }
+        fun robinhood(blockscoutApiKeys: List<String>, etherscanApiKeys: List<String>) = TransactionSource(
+            name = "robinhoodchain.blockscout.com",
+            type = blockscoutPro("robinhoodchain.blockscout.com", blockscoutApiKeys),
+            fallbacks = listOf(etherscanV2("https://robin.etherscan.io", etherscanApiKeys))
+        )
     }
 
 }

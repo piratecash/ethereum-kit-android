@@ -1,10 +1,13 @@
 package io.horizontalsystems.ethereumkit.core
 
+import co.touchlab.kermit.Logger
 import io.horizontalsystems.ethereumkit.api.models.AccountState
 import io.horizontalsystems.ethereumkit.api.models.EthereumKitState
 import io.horizontalsystems.ethereumkit.models.Address
 import io.horizontalsystems.ethereumkit.models.Chain
 import io.horizontalsystems.ethereumkit.models.FullTransaction
+import io.horizontalsystems.ethereumkit.transactionsyncers.ExplorerSyncScheduler
+import io.horizontalsystems.ethereumkit.transactionsyncers.MutableTestClock
 import io.horizontalsystems.ethereumkit.transactionsyncers.TransactionSyncManager
 import io.mockk.every
 import io.mockk.mockk
@@ -22,6 +25,10 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import java.math.BigInteger
+import java.net.URI
+import java.time.Duration
+
+private val OWN_CHAIN_URIS = listOf(URI("https://rpc.example.org"))
 
 class EthereumKitNetworkPauseTest {
 
@@ -32,12 +39,16 @@ class EthereumKitNetworkPauseTest {
     private val transactionManager = mockk<TransactionManager>(relaxed = true)
     private val transactionSyncManager = mockk<TransactionSyncManager>(relaxed = true)
     private val rawTransactionBroadcaster = mockk<RawTransactionBroadcaster>()
+    private val eip20Storage = mockk<IEip20Storage>(relaxed = true)
     private val fullTransactions = PublishProcessor.create<Pair<List<FullTransaction>, Boolean>>()
     private val syncStates = PublishProcessor.create<EthereumKit.SyncState>()
+    private val clock = MutableTestClock()
 
     @Before
     fun setUp() {
         RxJavaPlugins.setIoSchedulerHandler { Schedulers.trampoline() }
+        // Android's Log is not available in unit tests, and Kermit writes to it by default.
+        Logger.setLogWriters(emptyList())
     }
 
     @After
@@ -114,7 +125,119 @@ class EthereumKitNetworkPauseTest {
         verify(exactly = 2) { transactionSyncManager.sync() }
     }
 
-    private fun ethereumKit(): EthereumKit {
+    @Test
+    fun onUpdateLastBlockHeight_syncsAccountStateOncePerSyncInterval() {
+        val kit = startedKit()
+
+        kit.onUpdateLastBlockHeight(storedBlockHeight + 1)
+        kit.onUpdateLastBlockHeight(storedBlockHeight + 2)
+
+        verify(exactly = 1) { blockchain.syncAccountState() }
+        verify(exactly = 1) { transactionSyncManager.syncRpcOnly() }
+
+        clock.advance(Duration.ofSeconds(Chain.Ethereum.syncInterval))
+        kit.onUpdateLastBlockHeight(storedBlockHeight + 3)
+
+        verify(exactly = 2) { blockchain.syncAccountState() }
+    }
+
+    @Test
+    fun onUpdateLastBlockHeight_withinPeriod_doesNotRunExplorerSync() {
+        val kit = startedKit()
+
+        kit.onUpdateLastBlockHeight(storedBlockHeight + 1)
+
+        verify(exactly = 1) { transactionSyncManager.sync() }
+    }
+
+    @Test
+    fun onUpdateAccountState_balanceChanged_runsExplorerSync() {
+        val kit = startedKit()
+        clock.advance(Duration.ofSeconds(31))
+
+        kit.onUpdateAccountState(AccountState(BigInteger.ONE, 9L))
+
+        verify(exactly = 2) { transactionSyncManager.sync() }
+    }
+
+    @Test
+    fun refresh_twiceWithin10s_runsExplorerSyncOnce() {
+        val kit = startedKit()
+        clock.advance(Duration.ofSeconds(11))
+
+        kit.refresh()
+        finishSync()
+        kit.refresh()
+
+        verify(exactly = 2) { transactionSyncManager.sync() }
+    }
+
+    @Test
+    fun scanHistoricalEip20_withoutOwnChainRpcUris_isDisabled() {
+        val kit = ethereumKit(ownChainRpcUris = null, scanHistoricalEip20Requested = true)
+
+        assertFalse(
+            "A WebSocket source has no HTTP endpoint to scan logs on",
+            kit.scanHistoricalEip20
+        )
+    }
+
+    @Test
+    fun scanHistoricalEip20_withOwnChainRpcUris_staysEnabled() {
+        val kit = ethereumKit(ownChainRpcUris = OWN_CHAIN_URIS, scanHistoricalEip20Requested = true)
+
+        assertTrue(kit.scanHistoricalEip20)
+    }
+
+    @Test
+    fun historicalGate_syncedWithoutCursor_defersDecision() {
+        every { eip20Storage.getLastScannedBlock() } returns null
+        val historicalSyncer = FakeHistoricalSyncer(isEnabled = false)
+        historicalKit(historicalSyncer)
+
+        finishSync()
+
+        assertFalse("A swallowed explorer error also publishes Synced", historicalSyncer.isEnabled)
+        assertEquals(0, historicalSyncer.startCount)
+
+        every { eip20Storage.getLastScannedBlock() } returns storedBlockHeight
+        every { eip20Storage.getHistoricalMinScannedBlock() } returns null
+        every { eip20Storage.getLastEvent() } returns null
+        finishSync()
+
+        assertEquals(1, historicalSyncer.startCount)
+    }
+
+    @Test
+    fun historicalGate_syncedWithCursorAndNoEvents_startsHistorical() {
+        every { eip20Storage.getLastScannedBlock() } returns storedBlockHeight
+        every { eip20Storage.getHistoricalMinScannedBlock() } returns null
+        every { eip20Storage.getLastEvent() } returns null
+        val historicalSyncer = FakeHistoricalSyncer(isEnabled = false)
+        historicalKit(historicalSyncer)
+
+        finishSync()
+        finishSync()
+
+        assertTrue(historicalSyncer.isEnabled)
+        assertEquals("The gate closes after it decided once", 1, historicalSyncer.startCount)
+    }
+
+    private fun startedKit(): EthereumKit {
+        val kit = ethereumKit()
+        kit.start()
+        finishSync()
+        return kit
+    }
+
+    private fun finishSync() {
+        syncStates.onNext(EthereumKit.SyncState.Synced())
+    }
+
+    private fun ethereumKit(
+        ownChainRpcUris: List<URI>? = null,
+        scanHistoricalEip20Requested: Boolean = false
+    ): EthereumKit {
         every { blockchain.lastBlockHeight } returns storedBlockHeight
         every { blockchain.accountState } returns storedAccountState
         every { transactionManager.fullTransactionsAsync } returns fullTransactions
@@ -126,20 +249,28 @@ class EthereumKitNetworkPauseTest {
             nonceProvider = mockk(relaxed = true),
             transactionManager = transactionManager,
             transactionSyncManager = transactionSyncManager,
+            scheduler = ExplorerSyncScheduler(Chain.Ethereum, clock),
             connectionManager = mockk(relaxed = true),
             address = Address("0x3535353535353535353535353535353535353535"),
             chain = Chain.Ethereum,
             walletId = "wallet",
             transactionProvider = mockk(relaxed = true),
-            tokenTransactionProvider = mockk(relaxed = true),
+            ownChainRpcUris = ownChainRpcUris,
             fallbackHistoryBlockWindow = 0L,
-            eip20Storage = mockk(relaxed = true),
+            eip20Storage = eip20Storage,
             decorationManager = mockk(relaxed = true),
-            scanHistoricalEip20 = false,
+            scanHistoricalEip20Requested = scanHistoricalEip20Requested,
             transactionSyncSourceStorage = mockk(relaxed = true),
             rawTransactionBroadcaster = rawTransactionBroadcaster,
             state = EthereumKitState(),
         )
+    }
+
+    private fun historicalKit(historicalSyncer: FakeHistoricalSyncer): EthereumKit {
+        val kit = ethereumKit(ownChainRpcUris = OWN_CHAIN_URIS, scanHistoricalEip20Requested = true)
+        kit.setHistoricalSyncer(historicalSyncer)
+        kit.start()
+        return kit
     }
 
     private class FakeHistoricalSyncer(

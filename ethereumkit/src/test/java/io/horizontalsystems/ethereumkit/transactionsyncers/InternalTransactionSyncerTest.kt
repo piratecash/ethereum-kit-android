@@ -17,7 +17,9 @@ import io.mockk.spyk
 import io.mockk.verify
 import io.reactivex.Single
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.IOException
 import java.math.BigInteger
 
 class InternalTransactionSyncerTest {
@@ -117,6 +119,22 @@ class InternalTransactionSyncerTest {
             ),
             storedKeys
         )
+    }
+
+    // An explorer outage (402/429) must stay invisible to the UI: empty history, green state.
+    @Test
+    fun getTransactionsSingle_providerFails_returnsEmptyAndDoesNotAdvanceState() {
+        val storage = mockk<ITransactionStorage>()
+        every { storage.getLastInternalTransaction() } returns null
+        val provider = mockk<ITransactionProvider>()
+        every { provider.getInternalTransactions(any()) } returns Single.error(IOException("HTTP 402"))
+
+        val (transactions, initial) =
+            InternalTransactionSyncer(provider, storage).getTransactionsSingle().blockingGet()
+
+        assertEquals(emptyList<Transaction>(), transactions)
+        assertTrue(initial)
+        verify(exactly = 0) { storage.saveInternalTransactions(any()) }
     }
 
     private class FakeInternalTransactionStorage : ITransactionStorage {

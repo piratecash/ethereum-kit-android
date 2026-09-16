@@ -74,7 +74,7 @@ class ForwardSyncStateTest {
         assertEquals(30000L, historical.blocksRemaining)
 
         val forwardResult = EthereumKit.computeForwardSyncState(
-            Chain.BinanceSmartChain, 1000L, 1500L
+            Chain.BinanceSmartChain, 1000L, 1000L + EthereumKit.FORWARD_GAP_THRESHOLD + 1
         )
         assertTrue(forwardResult is ForwardSyncState.Syncing)
     }
@@ -82,13 +82,14 @@ class ForwardSyncStateTest {
     @Test
     fun syncCompleted_updatesLastForwardSyncTip_andClearsForwardState() {
         val oldTip = 1000L
-        val chainTip = 1200L
+        val gap = EthereumKit.FORWARD_GAP_THRESHOLD + 1
+        val chainTip = oldTip + gap
 
         val before = EthereumKit.computeForwardSyncState(
             Chain.BinanceSmartChain, oldTip, chainTip
         )
         assertTrue(before is ForwardSyncState.Syncing)
-        assertEquals(200L, (before as ForwardSyncState.Syncing).blocksRemaining)
+        assertEquals(gap, (before as ForwardSyncState.Syncing).blocksRemaining)
 
         val advancedTip = chainTip
 
@@ -101,7 +102,7 @@ class ForwardSyncStateTest {
     @Test
     fun syncFailed_tipNotAdvanced_gapReappearsOnNextUpdate() {
         val oldTip = 1000L
-        val chainTip = 1200L
+        val chainTip = oldTip + EthereumKit.FORWARD_GAP_THRESHOLD + 1
 
         val before = EthereumKit.computeForwardSyncState(
             Chain.BinanceSmartChain, oldTip, chainTip

@@ -7,9 +7,12 @@ import io.horizontalsystems.ethereumkit.models.Eip20SyncState
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-class Eip20Storage(database: Eip20Database) : IEip20Storage {
-    private val erc20EventDao = database.eip20EventDao()
-    private val syncStateDao = database.eip20SyncStateDao()
+class Eip20Storage(
+    private val erc20EventDao: Eip20EventDao,
+    private val syncStateDao: Eip20SyncStateDao
+) : IEip20Storage {
+
+    constructor(database: Eip20Database) : this(database.eip20EventDao(), database.eip20SyncStateDao())
 
     private val syncDataMutex = Mutex()
 
@@ -69,6 +72,21 @@ class Eip20Storage(database: Eip20Database) : IEip20Storage {
             )
         }
     }
+
+    override suspend fun clearForeignSyncState(chainHead: Long, margin: Long): Boolean =
+        // Same lock as saveSyncBlockInfo: the sync that reads the cursor next must not race a write
+        // that would re-persist the foreign value.
+        syncDataMutex.withLock {
+            val state = syncStateDao.get(CURSOR_KEY) ?: return@withLock false
+            val limit = chainHead + margin
+            val foreign = (state.lastScannedBlock ?: 0L) > limit ||
+                    (state.historicalMinScannedBlock ?: 0L) > limit
+
+            if (foreign) {
+                syncStateDao.delete(CURSOR_KEY)
+            }
+            foreign
+        }
 
     companion object {
         private const val CURSOR_KEY = "0x0000000000000000000000000000000000000000"

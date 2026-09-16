@@ -35,7 +35,7 @@ class RobinhoodChainTest {
     @Test
     fun robinhoodSource_factoryUsesBlockscoutProEndpoints() {
         val apiKeys = listOf("key1", "key2")
-        val source = TransactionSource.robinhood(apiKeys)
+        val source = TransactionSource.robinhood(apiKeys, emptyList())
         val type = source.type as TransactionSource.SourceType.Etherscan
 
         assertEquals("robinhoodchain.blockscout.com", source.name)
@@ -49,18 +49,12 @@ class RobinhoodChainTest {
     }
 
     @Test
-    fun zkSyncSource_factoryUsesBlockscoutProEndpoints() {
+    fun zkSyncSource_factoryKeepsBlockscoutProEndpointsAsFallback() {
         val apiKeys = listOf("key1", "key2")
-        val source = TransactionSource.zkSync(apiKeys)
-        val type = source.type as TransactionSource.SourceType.Etherscan
+        val fallback = TransactionSource.zkSync(apiKeys).fallbacks.single()
 
-        assertEquals("zksync.blockscout.com", source.name)
-        assertEquals("https://api.blockscout.com/v2/", type.apiBaseUrl)
-        assertEquals("https://zksync.blockscout.com", type.txBaseUrl)
-        assertEquals(apiKeys, type.apiKeys)
-        assertEquals(
-            "https://zksync.blockscout.com/tx/0x1234",
-            source.transactionUrl("0x1234")
-        )
+        assertEquals("https://api.blockscout.com/v2/", fallback.apiBaseUrl)
+        assertEquals("https://zksync.blockscout.com", fallback.txBaseUrl)
+        assertEquals(apiKeys, fallback.apiKeys)
     }
 }

@@ -2,14 +2,14 @@ package io.horizontalsystems.erc20kit.core
 
 import android.content.Context
 import io.horizontalsystems.erc20kit.contract.Eip20ContractMethodFactories
-import io.horizontalsystems.ethereumkit.core.BinanceTokenTransactionProvider
 import io.horizontalsystems.ethereumkit.core.EthereumKit
 import io.horizontalsystems.ethereumkit.core.EthereumKit.SyncState
+import io.horizontalsystems.ethereumkit.core.RpcLogsTokenTransactionProvider
+import io.horizontalsystems.ethereumkit.core.kitLogger
 import io.horizontalsystems.ethereumkit.models.Address
 import io.horizontalsystems.ethereumkit.models.Chain
 import io.horizontalsystems.ethereumkit.models.DefaultBlockParameter
 import io.horizontalsystems.ethereumkit.models.FullTransaction
-import io.horizontalsystems.ethereumkit.models.RpcSource
 import io.horizontalsystems.ethereumkit.models.TransactionData
 import io.reactivex.BackpressureStrategy
 import io.reactivex.Flowable
@@ -17,6 +17,7 @@ import io.reactivex.Single
 import io.reactivex.disposables.CompositeDisposable
 import io.reactivex.schedulers.Schedulers
 import java.math.BigInteger
+import java.net.URI
 
 class Erc20Kit(
     private val ethereumKit: EthereumKit,
@@ -43,6 +44,16 @@ class Erc20Kit(
             .subscribeOn(Schedulers.io())
             .subscribe {
                 // A response arriving after pauseNetwork() must not put the kit back on the network.
+                if (ethereumKit.isStarted) {
+                    balanceManager.sync()
+                }
+            }.let {
+                disposables.add(it)
+            }
+
+        ethereumKit.accountStatePollFlowable
+            .subscribeOn(Schedulers.io())
+            .subscribe {
                 if (ethereumKit.isStarted) {
                     balanceManager.sync()
                 }
@@ -109,8 +120,12 @@ class Erc20Kit(
 
     //region IBalanceManagerListener
     override fun onSyncBalanceSuccess(balance: BigInteger) {
+        val changed = state.balance != balance
         state.balance = balance
         state.syncState = SyncState.Synced()
+
+        // A token balance can only change through a transaction the history does not have yet.
+        if (changed) ethereumKit.onTokenBalanceChanged()
     }
 
     override fun onSyncBalanceError(error: Throwable) {
@@ -167,30 +182,26 @@ class Erc20Kit(
 
         fun addTransactionSyncer(ethereumKit: EthereumKit) {
             val transactionSaver = TransactionSaver(ethereumKit.eip20Storage)
+            val ownChainRpcUris = ethereumKit.ownChainRpcUris
 
             ethereumKit.addTransactionSyncer(
                 transactionSyncer = Erc20TransactionSyncer(
                     transactionProvider = ethereumKit.transactionProvider,
-                    tokenTransactionProvider = ethereumKit.tokenTransactionProvider,
+                    tokenTransactionProvider = ownChainRpcUris?.let { rpcLogsProvider(ethereumKit, it) },
                     fallbackHistoryBlockWindow = ethereumKit.fallbackHistoryBlockWindow,
                     storage = ethereumKit.eip20Storage,
                     transactionSaver = transactionSaver,
-                    syncSourceStorage = ethereumKit.transactionSyncSourceStorage
+                    syncSourceStorage = ethereumKit.transactionSyncSourceStorage,
+                    chainHeadProvider = ethereumKit,
+                    log = kitLogger(ethereumKit.chain.id)
                 )
             )
 
-            if (ethereumKit.scanHistoricalEip20) {
-                // Create separate instance to avoid shared mutable state (caches)
-                val historicalTokenProvider = BinanceTokenTransactionProvider(
-                    uris = RpcSource.binanceSmartChainHttp().uris,
-                    address = ethereumKit.receiveAddress,
-                    chainId = ethereumKit.chain.id,
-                    eventListenerFactory = ethereumKit.eventListenerFactory
-                )
-
+            if (ethereumKit.scanHistoricalEip20 && ownChainRpcUris != null) {
                 val historicalSyncer = HistoricalErc20Syncer(
                     transactionManager = ethereumKit.transactionManager,
-                    tokenTransactionProvider = historicalTokenProvider,
+                    // Separate instance to avoid shared mutable state (caches)
+                    tokenTransactionProvider = rpcLogsProvider(ethereumKit, ownChainRpcUris),
                     storage = ethereumKit.eip20Storage,
                     transactionSaver = transactionSaver,
                     connectionManager = ethereumKit.connectionManager
@@ -198,6 +209,14 @@ class Erc20Kit(
                 ethereumKit.setHistoricalSyncer(historicalSyncer)
             }
         }
+
+        private fun rpcLogsProvider(ethereumKit: EthereumKit, uris: List<URI>) =
+            RpcLogsTokenTransactionProvider(
+                uris = uris,
+                address = ethereumKit.receiveAddress,
+                chainId = ethereumKit.chain.id,
+                eventListenerFactory = ethereumKit.eventListenerFactory
+            )
 
         fun addDecorators(ethereumKit: EthereumKit) {
             ethereumKit.addMethodDecorator(Eip20MethodDecorator(Eip20ContractMethodFactories))

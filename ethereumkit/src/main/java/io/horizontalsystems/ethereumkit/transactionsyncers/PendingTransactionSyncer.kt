@@ -22,6 +22,8 @@ class PendingTransactionSyncer(
     private val transactionManager: TransactionManager
 ) : ITransactionSyncer {
 
+    override val requiresExplorer = false
+
     override fun getTransactionsSingle(): Single<Pair<List<Transaction>, Boolean>> {
         val pendingTransactions = storage.getPendingTransactions()
 

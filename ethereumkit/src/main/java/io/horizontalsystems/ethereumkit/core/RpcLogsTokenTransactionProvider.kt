@@ -39,7 +39,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import kotlin.coroutines.coroutineContext
 import kotlinx.coroutines.ensureActive
 
-class BinanceTokenTransactionProvider(
+class RpcLogsTokenTransactionProvider(
     private val uris: List<URI>,
     private val address: Address,
     private val chainId: Int,

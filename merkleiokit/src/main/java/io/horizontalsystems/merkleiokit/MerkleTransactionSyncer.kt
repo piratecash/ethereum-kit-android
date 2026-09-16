@@ -16,6 +16,8 @@ class MerkleTransactionSyncer(
     private val syncSourceStorage: TransactionSyncSourceStorage
 ) : ITransactionSyncer, IExtraDecorator {
 
+    override val requiresExplorer = false
+
     @OptIn(ExperimentalStdlibApi::class)
     override fun getTransactionsSingle(): Single<Pair<List<Transaction>, Boolean>> {
         val hashes = manager.hashes()

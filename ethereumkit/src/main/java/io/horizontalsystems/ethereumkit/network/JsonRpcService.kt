@@ -11,7 +11,7 @@ import java.net.URI
 /**
  * Retrofit service interface for JSON-RPC calls.
  *
- * This is a unified interface used by both NodeApiProvider and BinanceTokenTransactionProvider
+ * This is a unified interface used by both NodeApiProvider and RpcLogsTokenTransactionProvider
  * for making JSON-RPC requests to Ethereum-compatible nodes.
  */
 interface JsonRpcService {

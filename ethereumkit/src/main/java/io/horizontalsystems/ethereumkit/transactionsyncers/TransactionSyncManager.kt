@@ -51,14 +51,7 @@ class TransactionSyncManager(
 
         syncState = EthereumKit.SyncState.Syncing()
 
-        Single.zip(syncers.map {
-            it.getTransactionsSingle()
-        }) { array ->
-            array.map { it as Pair<List<Transaction>, Boolean> }
-                .reduce { acc, list ->
-                    Pair(acc.first + list.first, acc.second && list.second)
-                }
-        }
+        zipped(syncers)
             .subscribeOn(Schedulers.io())
             // subscribe() schedules the sources before it returns the disposable; onSubscribe hands
             // it over while the caller still owns the chain, so a pause can never miss it.
@@ -75,6 +68,43 @@ class TransactionSyncManager(
                 logger.warning("sync ERROR = ${it.message}")
             })
     }
+
+    /**
+     * Runs the syncers that never touch the explorer, leaving [syncState] alone: the historical
+     * gate, the forward-gap tip and the app's transaction sync state must only see real explorer
+     * syncs. Skipped while a full sync runs, because that run already covers these syncers.
+     */
+    fun syncRpcOnly() {
+        if (syncState is EthereumKit.SyncState.Syncing) return
+
+        val rpcSyncers = syncers.filterNot { it.requiresExplorer }
+        if (rpcSyncers.isEmpty()) return
+
+        val generation = disposables
+        val run = SerialDisposable()
+        if (!generation.add(run)) return
+
+        zipped(rpcSyncers)
+            .subscribeOn(Schedulers.io())
+            .doOnSubscribe { run.set(it) }
+            .subscribe({ transactions ->
+                if (run.isDisposed) return@subscribe
+
+                handle(transactions)
+            }, {
+                logger.warning("rpc-only sync ERROR = ${it.javaClass.simpleName}")
+            })
+    }
+
+    private fun zipped(syncers: List<ITransactionSyncer>): Single<Pair<List<Transaction>, Boolean>> =
+        Single.zip(syncers.map {
+            it.getTransactionsSingle()
+        }) { array ->
+            array.map { it as Pair<List<Transaction>, Boolean> }
+                .reduce { acc, list ->
+                    Pair(acc.first + list.first, acc.second && list.second)
+                }
+        }
 
     /**
      * Publishes the outcome of [run] and repairs it if a concurrent [pause] disposed it.

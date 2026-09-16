@@ -120,9 +120,23 @@ interface IEip20Storage {
     fun getLastScannedBlock(): Long?
     fun getHistoricalMinScannedBlock(): Long?
     suspend fun saveSyncBlockInfo(lastScannedBlock: Long?, historicalMinScannedBlock: Long?)
+
+    /**
+     * Drops the sync state when a cursor sits more than [margin] blocks above [chainHead]: such a
+     * value cannot come from this chain, only from a fallback that scanned a foreign one.
+     */
+    suspend fun clearForeignSyncState(chainHead: Long, margin: Long): Boolean
+}
+
+interface ChainHeadProvider {
+    /** Head as pushed by the RPC in this process; null until one has arrived, never the stored one. */
+    val liveBlockHeight: Long?
 }
 
 interface ITransactionSyncer {
+    /** False for syncers that only talk to the RPC node, so they can run without spending explorer quota. */
+    val requiresExplorer: Boolean get() = true
+
     fun getTransactionsSingle(): Single<Pair<List<Transaction>, Boolean>>
 }
 
@@ -151,6 +165,9 @@ interface ITransactionDecorator {
 }
 
 interface ITransactionProvider {
+    /** Explorer hosts and last-sync facts, shown on the Blockchain Status screen. */
+    val statusInfo: Map<String, Any> get() = emptyMap()
+
     fun getTransactions(startBlock: Long): Single<List<ProviderTransaction>>
     fun getInternalTransactions(startBlock: Long): Single<List<ProviderInternalTransaction>>
     fun getInternalTransactionsAsync(hash: ByteArray): Single<List<ProviderInternalTransaction>>

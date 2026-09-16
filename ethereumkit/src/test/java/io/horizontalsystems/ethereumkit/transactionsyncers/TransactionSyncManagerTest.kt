@@ -12,9 +12,14 @@ import io.horizontalsystems.ethereumkit.models.InternalTransaction
 import io.horizontalsystems.ethereumkit.models.Transaction
 import io.horizontalsystems.ethereumkit.models.TransactionTag
 import io.reactivex.Single
+import io.reactivex.plugins.RxJavaPlugins
+import io.reactivex.schedulers.Schedulers
+import org.junit.After
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Test
 import java.lang.reflect.Proxy
 import java.math.BigInteger
@@ -22,6 +27,16 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
 class TransactionSyncManagerTest {
+
+    @Before
+    fun setUp() {
+        RxJavaPlugins.setIoSchedulerHandler { Schedulers.trampoline() }
+    }
+
+    @After
+    fun tearDown() {
+        RxJavaPlugins.reset()
+    }
 
     @Test
     fun sync_nativeAndTokenTransactionsWithSameHash_preservesNativeValue() {
@@ -86,6 +101,71 @@ class TransactionSyncManagerTest {
         )
 
         assertEquals(nativeValue, storage.getTransaction(hash)?.value)
+    }
+
+    @Test
+    fun syncRpcOnly_runsOnlyRpcSyncers_andKeepsSyncState() {
+        val hash = ByteArray(32) { it.toByte() }
+        val storage = FakeTransactionStorage()
+        val syncManager = TransactionSyncManager(transactionManager(storage))
+        val explorer = RecordingSyncer(requiresExplorer = true)
+        val rpcOnly = RecordingSyncer(
+            requiresExplorer = false,
+            result = Single.just(Pair(listOf(Transaction(hash, 1L, false)), false))
+        )
+        syncManager.add(explorer)
+        syncManager.add(rpcOnly)
+        val states = syncManager.syncStateAsync.test()
+
+        syncManager.syncRpcOnly()
+
+        assertEquals(0, explorer.calls)
+        assertEquals(1, rpcOnly.calls)
+        assertNotNull(storage.getTransaction(hash))
+        states.assertNoValues()
+    }
+
+    @Test
+    fun syncRpcOnly_whileFullSyncing_isSkipped() {
+        val syncManager = TransactionSyncManager(transactionManager(FakeTransactionStorage()))
+        val explorer = RecordingSyncer(requiresExplorer = true, result = Single.never())
+        val rpcOnly = RecordingSyncer(requiresExplorer = false)
+        syncManager.add(explorer)
+        syncManager.add(rpcOnly)
+        syncManager.sync()
+
+        syncManager.syncRpcOnly()
+
+        assertTrue(syncManager.syncState is EthereumKit.SyncState.Syncing)
+        assertEquals(1, rpcOnly.calls) // the in-flight full sync already covers it
+    }
+
+    @Test
+    fun syncRpcOnly_syncerFails_keepsSyncState() {
+        val syncManager = TransactionSyncManager(transactionManager(FakeTransactionStorage()))
+        syncManager.add(
+            RecordingSyncer(requiresExplorer = false, result = Single.error(IllegalStateException()))
+        )
+        val states = syncManager.syncStateAsync.test()
+
+        syncManager.syncRpcOnly()
+
+        states.assertNoValues()
+        assertTrue(syncManager.syncState is EthereumKit.SyncState.NotSynced)
+    }
+
+    private class RecordingSyncer(
+        override val requiresExplorer: Boolean,
+        private val result: Single<Pair<List<Transaction>, Boolean>> =
+            Single.just(Pair(emptyList(), false))
+    ) : ITransactionSyncer {
+        var calls = 0
+            private set
+
+        override fun getTransactionsSingle(): Single<Pair<List<Transaction>, Boolean>> {
+            calls++
+            return result
+        }
     }
 
     private fun transactionSyncer(transaction: Transaction) = object : ITransactionSyncer {

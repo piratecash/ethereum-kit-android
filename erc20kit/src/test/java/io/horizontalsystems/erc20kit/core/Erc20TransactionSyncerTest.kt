@@ -1,5 +1,7 @@
 package io.horizontalsystems.erc20kit.core
 
+import co.touchlab.kermit.Logger
+import io.horizontalsystems.ethereumkit.core.ChainHeadProvider
 import io.horizontalsystems.ethereumkit.core.IEip20Storage
 import io.horizontalsystems.ethereumkit.core.ITransactionProvider
 import io.horizontalsystems.ethereumkit.core.TokenTransactionProvider
@@ -17,6 +19,8 @@ import io.reactivex.Single
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Test
 import java.math.BigInteger
 
@@ -53,30 +57,33 @@ internal fun createTokenTransaction(
 )
 
 class Erc20TransactionSyncerTest {
+
+    private val transactionProvider = FakeTransactionProvider()
+
+    @Before
+    fun setUp() {
+        // The module's unit tests have no Android stubs, so a real log writer would hit android.util.Log.
+        Logger.setLogWriters(emptyList())
+    }
+
     private fun createSyncer(
         storage: IEip20Storage,
         etherscanResult: Single<List<ProviderTokenTransaction>> =
             Single.just(listOf(createTokenTransaction(2000L))),
-        rpcResult: TokenTransactionProvider.TokenTransactionsResult? = null
+        rpcResult: TokenTransactionProvider.TokenTransactionsResult? = null,
+        withFallbackProvider: Boolean = true,
+        liveBlockHeight: Long? = null
     ): Erc20TransactionSyncer {
-        val transactionProvider = object : ITransactionProvider {
-            override fun getTransactions(startBlock: Long) =
-                Single.just(emptyList<ProviderTransaction>())
-            override fun getInternalTransactions(startBlock: Long) =
-                Single.just(emptyList<ProviderInternalTransaction>())
-            override fun getInternalTransactionsAsync(hash: ByteArray) =
-                Single.just(emptyList<ProviderInternalTransaction>())
-            override fun getTokenTransactions(startBlock: Long): Single<List<ProviderTokenTransaction>> =
-                etherscanResult
-            override fun getEip721Transactions(startBlock: Long) =
-                Single.just(emptyList<ProviderEip721Transaction>())
-            override fun getEip1155Transactions(startBlock: Long) =
-                Single.just(emptyList<ProviderEip1155Transaction>())
-        }
+        transactionProvider.tokenTransactions = etherscanResult
 
-        val tokenTransactionProvider = mockk<TokenTransactionProvider>()
-        if (rpcResult != null) {
-            coEvery { tokenTransactionProvider.getTokenTransactions(any<Long>()) } returns rpcResult
+        val tokenTransactionProvider = if (withFallbackProvider) {
+            mockk<TokenTransactionProvider>().also { provider ->
+                if (rpcResult != null) {
+                    coEvery { provider.getTokenTransactions(any<Long>()) } returns rpcResult
+                }
+            }
+        } else {
+            null
         }
         val transactionSaver = TransactionSaver(storage)
         val syncSourceStorage = mockk<TransactionSyncSourceStorage>(relaxed = true)
@@ -87,7 +94,9 @@ class Erc20TransactionSyncerTest {
             fallbackHistoryBlockWindow = 1000L,
             storage = storage,
             transactionSaver = transactionSaver,
-            syncSourceStorage = syncSourceStorage
+            syncSourceStorage = syncSourceStorage,
+            chainHeadProvider = FakeChainHeadProvider(liveBlockHeight),
+            log = Logger
         )
     }
 
@@ -159,7 +168,7 @@ class Erc20TransactionSyncerTest {
     }
 
     @Test
-    fun getTransactionsSingle_etherscanFails_rpcFallback_savesSyncBlockInfo() = runTest {
+    fun getTransactionsSingle_explorerFails_incrementalFallback_persistsOwnChainHead() = runTest {
         val storage = FakeEip20Storage(lastScannedBlock = 1000L)
         val rpcResult = TokenTransactionProvider.TokenTransactionsResult(
             transactions = listOf(createTokenTransaction(3000L)),
@@ -181,6 +190,47 @@ class Erc20TransactionSyncerTest {
     }
 
     @Test
+    fun getTransactionsSingle_explorerFails_initialFallback_doesNotPersistCursor() = runTest {
+        val storage = FakeEip20Storage(lastScannedBlock = null)
+        val rpcResult = TokenTransactionProvider.TokenTransactionsResult(
+            transactions = listOf(createTokenTransaction(3000L)),
+            lastScannedBlock = 3000L
+        )
+        val syncer = createSyncer(
+            storage = storage,
+            etherscanResult = Single.error(RuntimeException("Etherscan unavailable")),
+            rpcResult = rpcResult
+        )
+
+        val result = syncer.getTransactionsSingle().blockingGet()
+
+        assertEquals(1, result.first.size)
+        assertEquals("Transfers the window scan found are still saved", 1, storage.savedEvents.size)
+        assertEquals(
+            "A window scan says nothing about older history, so the explorer must still fetch it",
+            0,
+            storage.saveSyncBlockInfoCallCount
+        )
+        assertNull(storage.getLastScannedBlock())
+    }
+
+    @Test
+    fun getTransactionsSingle_explorerFails_noFallbackProvider_returnsEmptyAndPersistsNothing() = runTest {
+        val storage = FakeEip20Storage(lastScannedBlock = 1000L)
+        val syncer = createSyncer(
+            storage = storage,
+            etherscanResult = Single.error(RuntimeException("Etherscan unavailable")),
+            withFallbackProvider = false
+        )
+
+        val result = syncer.getTransactionsSingle().blockingGet()
+
+        assertEquals(emptyList<Any>(), result.first)
+        assertEquals(0, storage.saveSyncBlockInfoCallCount)
+        assertEquals(1000L, storage.getLastScannedBlock())
+    }
+
+    @Test
     fun getTransactionsSingle_bothFail_doesNotSaveSyncBlockInfo() = runTest {
         val storage = FakeEip20Storage(lastScannedBlock = 1000L)
         val syncer = createSyncer(
@@ -199,6 +249,92 @@ class Erc20TransactionSyncerTest {
         )
     }
 
+    @Test
+    fun getTransactionsSingle_cursorAboveChainHead_clearsStateBeforeReading_andSyncsAsInitial() = runTest {
+        val storage = FakeEip20Storage(
+            lastScannedBlock = FOREIGN_CURSOR,
+            historicalMinScannedBlock = FOREIGN_CURSOR
+        )
+        val syncer = createSyncer(storage = storage, liveBlockHeight = CHAIN_HEAD)
+
+        val result = syncer.getTransactionsSingle().blockingGet()
+
+        assertEquals(
+            "The foreign cursor must be gone before this sync reads it",
+            0L,
+            transactionProvider.tokenTransactionsStartBlock
+        )
+        assertTrue("A healed sync is the wallet's first real token sync", result.second)
+        assertNull(storage.getHistoricalMinScannedBlock())
+        assertEquals(2000L, storage.savedLastScannedBlock)
+    }
+
+    @Test
+    fun getTransactionsSingle_cursorBelowChainHead_keepsCursor() = runTest {
+        val storage = FakeEip20Storage(lastScannedBlock = 1000L)
+        val syncer = createSyncer(storage = storage, liveBlockHeight = CHAIN_HEAD)
+
+        syncer.getTransactionsSingle().blockingGet()
+
+        assertEquals(994L, transactionProvider.tokenTransactionsStartBlock)
+    }
+
+    @Test
+    fun getTransactionsSingle_cursorWithinMargin_keepsCursor() = runTest {
+        val cursor = CHAIN_HEAD + 999_000L
+        val storage = FakeEip20Storage(lastScannedBlock = cursor)
+        val syncer = createSyncer(storage = storage, liveBlockHeight = CHAIN_HEAD)
+
+        syncer.getTransactionsSingle().blockingGet()
+
+        assertEquals(cursor - 6L, transactionProvider.tokenTransactionsStartBlock)
+    }
+
+    @Test
+    fun getTransactionsSingle_noLiveHeadYet_skipsHeal() = runTest {
+        val storage = FakeEip20Storage(lastScannedBlock = FOREIGN_CURSOR)
+        val syncer = createSyncer(storage = storage, liveBlockHeight = null)
+
+        syncer.getTransactionsSingle().blockingGet()
+
+        assertEquals(
+            "Without a head from the RPC there is nothing to compare the cursor against",
+            FOREIGN_CURSOR - 6L,
+            transactionProvider.tokenTransactionsStartBlock
+        )
+    }
+
+    companion object {
+        private const val CHAIN_HEAD = 60_000_000L
+        private const val FOREIGN_CURSOR = 121_100_220L
+    }
+}
+
+private class FakeChainHeadProvider(override val liveBlockHeight: Long?) : ChainHeadProvider
+
+private class FakeTransactionProvider : ITransactionProvider {
+    var tokenTransactions: Single<List<ProviderTokenTransaction>> = Single.just(emptyList())
+    var tokenTransactionsStartBlock: Long? = null
+        private set
+
+    override fun getTransactions(startBlock: Long) = Single.just(emptyList<ProviderTransaction>())
+
+    override fun getInternalTransactions(startBlock: Long) =
+        Single.just(emptyList<ProviderInternalTransaction>())
+
+    override fun getInternalTransactionsAsync(hash: ByteArray) =
+        Single.just(emptyList<ProviderInternalTransaction>())
+
+    override fun getTokenTransactions(startBlock: Long): Single<List<ProviderTokenTransaction>> {
+        tokenTransactionsStartBlock = startBlock
+        return tokenTransactions
+    }
+
+    override fun getEip721Transactions(startBlock: Long) =
+        Single.just(emptyList<ProviderEip721Transaction>())
+
+    override fun getEip1155Transactions(startBlock: Long) =
+        Single.just(emptyList<ProviderEip1155Transaction>())
 }
 
 internal class FakeEip20Storage(
@@ -238,5 +374,16 @@ internal class FakeEip20Storage(
         historicalMinScannedBlock?.let {
             this.historicalMinScannedBlock = it
         }
+    }
+
+    override suspend fun clearForeignSyncState(chainHead: Long, margin: Long): Boolean {
+        val limit = chainHead + margin
+        val foreign = (lastScannedBlock ?: 0L) > limit || (historicalMinScannedBlock ?: 0L) > limit
+
+        if (foreign) {
+            lastScannedBlock = null
+            historicalMinScannedBlock = null
+        }
+        return foreign
     }
 }
