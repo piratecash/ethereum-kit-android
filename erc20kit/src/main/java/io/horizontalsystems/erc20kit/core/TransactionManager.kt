@@ -14,7 +14,7 @@ import io.reactivex.subjects.PublishSubject
 import java.math.BigInteger
 
 class TransactionManager(
-        private val contractAddress: Address,
+        val contractAddress: Address,
         private val ethereumKit: EthereumKit
 ) {
     private val disposables = CompositeDisposable()

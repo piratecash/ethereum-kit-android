@@ -40,8 +40,8 @@ class UniswapV3ViewModel(
     private var uniswapV3Kit = UniswapV3Kit.getInstance(DexType.PancakeSwap)
     private var gasPrice: GasPrice = GasPrice.Legacy(20_000_000_000)
 
-    val fromToken: Erc20Token? = Configuration.erc20Tokens[5]
-    val toToken: Erc20Token? = Configuration.erc20Tokens[3]
+    val fromToken: Erc20Token? = Configuration.erc20Tokens[0]
+    val toToken: Erc20Token? = Configuration.erc20Tokens[1]
 
     private val fromUniswapToken = uniswapToken(fromToken)
     private val toUniswapToken = uniswapToken(toToken)

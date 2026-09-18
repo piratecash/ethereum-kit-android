@@ -5,12 +5,16 @@ import com.google.gson.GsonBuilder
 import com.google.gson.JsonElement
 import com.google.gson.reflect.TypeToken
 import io.horizontalsystems.ethereumkit.api.models.EtherscanResponse
+import io.horizontalsystems.ethereumkit.core.kitLogger
 import io.horizontalsystems.ethereumkit.core.retryWhenErrors
 import io.horizontalsystems.ethereumkit.core.toHexString
 import io.horizontalsystems.ethereumkit.models.Address
+import io.horizontalsystems.ethereumkit.models.TransactionSource
 import io.reactivex.Single
-import okhttp3.OkHttpClient
+import okhttp3.EventListener
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.logging.HttpLoggingInterceptor
+import retrofit2.HttpException
 import retrofit2.Retrofit
 import retrofit2.adapter.rxjava2.RxJava2CallAdapterFactory
 import retrofit2.converter.gson.GsonConverterFactory
@@ -23,16 +27,26 @@ import kotlin.random.Random
 
 class EtherscanService(
     baseUrl: String,
-    private val apiKeys: List<String>,
+    apiKeys: List<String>,
     private val chainId: Int,
+    eventListenerFactory: EventListener.Factory? = null,
+    private val listPageSize: Int = TransactionSource.DEFAULT_LIST_PAGE_SIZE,
 ) {
-    private val apiKeysSize = apiKeys.size
-    private val apiKeyIndex = AtomicInteger(Random.nextInt(apiKeysSize))
+    private val apiKeys = apiKeys.filter { it.isNotBlank() }
+    private val apiKeyIndex =
+        AtomicInteger(if (this.apiKeys.isEmpty()) 0 else Random.nextInt(this.apiKeys.size))
 
     @Volatile
     private var lastUsedApiKey: String? = null
 
     private val logger = Logger.getLogger("EtherscanService")
+    private val log = kitLogger(chainId)
+
+    val host: String = baseUrl.toHttpUrlOrNull()?.host ?: baseUrl
+
+    // A rejected key is worth one attempt per remaining key: retrying the same key only delays
+    // the switch to the next source.
+    private val invalidApiKeyRetries = (this.apiKeys.size - 1).coerceAtLeast(0)
 
     private val service: EtherscanServiceAPI
 
@@ -40,27 +54,30 @@ class EtherscanService(
 
     init {
         val loggingInterceptor = HttpLoggingInterceptor {
-            logger.info(it)
+            logger.info(it.replace(apiKeyRegex, "apikey=***"))
         }.setLevel(HttpLoggingInterceptor.Level.BASIC)
 
-        val httpClient = OkHttpClient.Builder()
-            .addInterceptor { chain ->
+        val httpClient = SharedHttpClient.newClient {
+            eventListenerFactory?.let { eventListenerFactory(it) }
+            addInterceptor { chain ->
                 val originalRequest = chain.request()
                 val originalUrl = originalRequest.url
 
-                val url = originalUrl.newBuilder()
-                    .addQueryParameter("apikey", getNextApiKey())
+                val urlBuilder = originalUrl.newBuilder()
                     .addQueryParameter("chainid", chainId.toString())
-                    .build()
+                getNextApiKey()?.let { urlBuilder.addQueryParameter("apikey", it) }
 
                 val request = originalRequest.newBuilder()
                     .header("User-Agent", "Mobile App Agent")
-                    .url(url)
+                    .url(urlBuilder.build())
                     .build()
 
-                chain.proceed(request)
+                chain.proceed(request).also { response ->
+                    response.header(CREDITS_HEADER)?.let { log.i { "$host credits remaining: $it" } }
+                }
             }
-            .addInterceptor(loggingInterceptor)
+            addInterceptor(loggingInterceptor)
+        }
 
         gson = GsonBuilder()
             .setLenient()
@@ -70,15 +87,17 @@ class EtherscanService(
             .baseUrl(baseUrl)
             .addCallAdapterFactory(RxJava2CallAdapterFactory.create())
             .addConverterFactory(GsonConverterFactory.create(gson))
-            .client(httpClient.build())
+            .client(httpClient)
             .build()
 
         service = retrofit.create(EtherscanServiceAPI::class.java)
     }
 
-    private fun getNextApiKey(): String {
+    private fun getNextApiKey(): String? {
+        if (apiKeys.isEmpty()) return null
+
         val index = apiKeyIndex.getAndUpdate { i ->
-            if (i + 1 >= apiKeysSize) 0 else i + 1
+            if (i + 1 >= apiKeys.size) 0 else i + 1
         }
         return apiKeys[index].also {
             lastUsedApiKey = it
@@ -90,6 +109,8 @@ class EtherscanService(
             action = "txlist",
             address = address.hex,
             startBlock = startBlock,
+            page = LIST_PAGE,
+            offset = listPageSize,
         ).map {
             parseResponse(it)
         }.retryInCaseErrorWithLogging("getTransactionList")
@@ -100,6 +121,9 @@ class EtherscanService(
             action = "txlistinternal",
             address = address.hex,
             startBlock = startBlock,
+            sort = "asc",
+            page = LIST_PAGE,
+            offset = listPageSize,
         ).map {
             parseResponse(it)
         }.retryInCaseErrorWithLogging("getInternalTransactionList")
@@ -110,6 +134,8 @@ class EtherscanService(
             action = "tokentx",
             address = address.hex,
             startBlock = startBlock,
+            page = LIST_PAGE,
+            offset = listPageSize,
         ).map {
             parseResponse(it)
         }.retryInCaseErrorWithLogging("getTokenTransactions")
@@ -129,6 +155,8 @@ class EtherscanService(
             action = "tokennfttx",
             address = address.hex,
             startBlock = startBlock,
+            page = LIST_PAGE,
+            offset = listPageSize,
         ).map {
             parseResponse(it)
         }.retryInCaseErrorWithLogging("getEip721Transactions")
@@ -139,6 +167,8 @@ class EtherscanService(
             action = "token1155tx",
             address = address.hex,
             startBlock = startBlock,
+            page = LIST_PAGE,
+            offset = listPageSize,
         ).map {
             parseResponse(it)
         }.retryInCaseErrorWithLogging("getEip1155Transactions")
@@ -150,20 +180,22 @@ class EtherscanService(
             val status = responseObj["status"].asJsonPrimitive.asString
             val message = responseObj["message"].asJsonPrimitive.asString
 
-            if (status == "0" && message != "No transactions found") {
-                val result = responseObj["result"].asJsonPrimitive.asString
-                if (message == "NOTOK") {
-                    if (result == "Max rate limit reached") {
-                        throw RequestError.RateLimitExceed()
-                    } else if (result.startsWith("Invalid API Key") ||
-                        result.startsWith("Too many invalid api key attempts")
-                    ) {
-                        throw RequestError.InvalidApiKey()
-                    }
+            // A "status 0" envelope with an array result is a normal empty list, not an error text.
+            val resultElement = responseObj["result"]
+            val errorText = resultElement?.takeIf { it.isJsonPrimitive }?.asString
+            if (status == "0" && message == "NOTOK" && errorText != null) {
+                // The wording varies ("Max rate limit reached", "Max calls per sec rate limit
+                // reached (3/sec)", daily variants), so match the stable part.
+                if (errorText.contains(RATE_LIMIT_MARKER, ignoreCase = true)) {
+                    throw RequestError.RateLimitExceed()
+                } else if (errorText.startsWith("Invalid API Key") ||
+                    errorText.startsWith("Too many invalid api key attempts")
+                ) {
+                    throw RequestError.InvalidApiKey()
                 }
             }
             val result: List<Map<String, String>> = gson.fromJson(
-                responseObj["result"],
+                resultElement,
                 object : TypeToken<List<Map<String, String>>>() {}.type
             )
             return EtherscanResponse(status, message, result)
@@ -178,25 +210,46 @@ class EtherscanService(
     }
 
     private fun <T> Single<T>.retryInCaseErrorWithLogging(methodName: String) =
-        this.doOnError { error ->
-            val currentApiKey = lastUsedApiKey ?: "unknown"
-            when (error) {
-                is RequestError.RateLimitExceed -> {
-                    Timber.d("EtherscanService: Retrying $methodName due to RateLimitExceed. API key: $currentApiKey")
+        this.onErrorResumeNext { error: Throwable -> Single.error(error.toRequestErrorOrSelf()) }
+            .doOnError { error ->
+                val currentApiKey = lastUsedApiKey?.takeLast(4) ?: "unknown"
+                when (error) {
+                    is RequestError.RateLimitExceed -> {
+                        Timber.d("EtherscanService: Retrying $methodName due to RateLimitExceed. API key ending in $currentApiKey")
+                        log.w { "$host $methodName: rate limit exceeded (key ...$currentApiKey)" }
+                    }
+                    is RequestError.InvalidApiKey -> {
+                        Timber.d("EtherscanService: Retrying $methodName due to InvalidApiKey. API key ending in $currentApiKey")
+                        log.w { "$host $methodName: key rejected or out of credits (key ...$currentApiKey)" }
+                    }
+                    is RequestError.ResponseError -> {
+                        log.w { "$host $methodName: unexpected response envelope" }
+                    }
                 }
-                is RequestError.InvalidApiKey -> {
-                    Timber.d("EtherscanService: Retrying $methodName due to InvalidApiKey. API key: $currentApiKey")
-                }
-            }
-        }.retryWhenErrors(
-            RequestError.RateLimitExceed::class,
-            RequestError.InvalidApiKey::class
-        )
+            }.retryWhenErrors(RequestError.RateLimitExceed::class)
+            .retryWhenErrors(RequestError.InvalidApiKey::class, maxRetries = invalidApiKeyRetries)
+
+    // Blockscout PRO answers with an HTTP status and a bare {"error": ...} body, not the Etherscan envelope.
+    private fun Throwable.toRequestErrorOrSelf(): Throwable = when ((this as? HttpException)?.code()) {
+        429 -> RequestError.RateLimitExceed()
+        401, 402 -> RequestError.InvalidApiKey()
+        else -> this
+    }
 
     open class RequestError(message: String? = null) : Exception(message ?: "") {
         class ResponseError(message: String) : RequestError(message)
         class RateLimitExceed : RequestError()
         class InvalidApiKey : RequestError()
+    }
+
+    companion object {
+        private val apiKeyRegex = Regex("apikey=[^&\\s]+")
+        private const val CREDITS_HEADER = "x-credits-remaining"
+
+        // Etherscan V2 times out on an unpaged txlist for busy addresses and zkSync returns only
+        // 10 rows unpaged, so every list call is paged; the page size is per source.
+        private const val LIST_PAGE = 1
+        private const val RATE_LIMIT_MARKER = "rate limit reached"
     }
 
     private interface EtherscanServiceAPI {
@@ -208,7 +261,9 @@ class EtherscanService(
             @Query("txhash") txHash: String? = null,
             @Query("startblock") startBlock: Long? = null,
             @Query("endblock") endBlock: Long? = null,
-            @Query("sort") sort: String? = "desc"
+            @Query("sort") sort: String? = "desc",
+            @Query("page") page: Int? = null,
+            @Query("offset") offset: Int? = null
         ): Single<JsonElement>
     }
 }

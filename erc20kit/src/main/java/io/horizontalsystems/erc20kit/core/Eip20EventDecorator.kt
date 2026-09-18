@@ -16,11 +16,7 @@ class Eip20EventDecorator(
 ) : IEventDecorator {
 
     override fun contractEventInstancesMap(transactions: List<Transaction>): Map<String, List<ContractEventInstance>> {
-        val erc20Events = if (transactions.size > 100) {
-            storage.getEvents()
-        } else {
-            storage.getEventsByHashes(transactions.map { it.hash })
-        }
+        val erc20Events = storage.getEvents()
 
         val map: MutableMap<String, List<ContractEventInstance>> = mutableMapOf()
 

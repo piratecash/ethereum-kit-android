@@ -2,8 +2,10 @@ package io.horizontalsystems.ethereumkit.api.core
 
 import com.google.gson.Gson
 import com.tinder.scarlet.Event
+import com.tinder.scarlet.Lifecycle
 import com.tinder.scarlet.Scarlet
 import com.tinder.scarlet.WebSocket
+import com.tinder.scarlet.lifecycle.LifecycleRegistry
 import com.tinder.scarlet.messageadapter.gson.GsonMessageAdapter
 import com.tinder.scarlet.retry.ExponentialWithJitterBackoffStrategy
 import com.tinder.scarlet.streamadapter.rxjava2.RxJava2StreamAdapterFactory
@@ -15,6 +17,7 @@ import io.reactivex.Flowable
 import io.reactivex.disposables.CompositeDisposable
 import io.reactivex.schedulers.Schedulers
 import okhttp3.Credentials
+import okhttp3.EventListener
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
@@ -24,7 +27,8 @@ import java.util.logging.Logger
 class NodeWebSocket(
     uri: URI,
     private val gson: Gson,
-    auth: String? = null
+    auth: String? = null,
+    eventListenerFactory: EventListener.Factory? = null
 ) : IRpcWebSocket {
     private val logger = Logger.getLogger(this.javaClass.simpleName)
     private var disposables = CompositeDisposable()
@@ -34,6 +38,10 @@ class NodeWebSocket(
 
     private val scarlet: Scarlet
     private var socket: WebSocketService? = null
+
+    // Scarlet keeps the connection alive on its own lifecycle: without one it reconnects forever
+    // and dropping our subscriptions in stop() would not take the socket off the network.
+    private val lifecycleRegistry = LifecycleRegistry()
 
     private var state: WebSocketState = WebSocketState.Disconnected(WebSocketState.DisconnectError.NotStarted)
         set(value) {
@@ -62,9 +70,12 @@ class NodeWebSocket(
             chain.proceed(requestBuilder.build())
         }
 
+        // WebSocket uses its own OkHttpClient to avoid coupling long-lived WebSocket
+        // connections with REST/RPC traffic in the shared connection pool
         val okHttpClient = OkHttpClient.Builder()
                 .addInterceptor(headersInterceptor)
                 .addInterceptor(loggingInterceptor)
+                .apply { eventListenerFactory?.let { eventListenerFactory(it) } }
                 .build()
 
         scarlet = Scarlet.Builder()
@@ -72,6 +83,7 @@ class NodeWebSocket(
                 .addMessageAdapterFactory(GsonMessageAdapter.Factory(gson))
                 .addStreamAdapterFactory(RxJava2StreamAdapterFactory())
                 .backoffStrategy(backoffStrategy)
+                .lifecycle(lifecycleRegistry)
                 .build()
     }
 
@@ -101,16 +113,27 @@ class NodeWebSocket(
     //endregion
 
     private fun connect() {
-        if (socket == null) {
+        val service = socket
+        if (service == null) {
             scarlet.create<WebSocketService>().apply {
                 socket = this
                 observeSocket(this)
             }
+        } else if (disposables.isDisposed) {
+            // stop() dropped the previous subscriptions; the Scarlet service itself is reusable.
+            disposables = CompositeDisposable()
+            observeSocket(service)
         }
+
+        lifecycleRegistry.onNext(Lifecycle.State.Started)
     }
 
     private fun disconnect() {
-        disposables.clear()
+        lifecycleRegistry.onNext(Lifecycle.State.Stopped.AndAborted)
+        disposables.dispose()
+        // Publish the terminal state ourselves: the socket events that would have reported it are
+        // no longer observed, and the listener has to release its pending requests.
+        state = WebSocketState.Disconnected(WebSocketState.DisconnectError.NotStarted)
     }
 
     private fun observeSocket(socket: WebSocketService) {

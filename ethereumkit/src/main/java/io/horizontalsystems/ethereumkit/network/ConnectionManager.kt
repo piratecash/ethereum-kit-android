@@ -5,16 +5,28 @@ import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
+import java.util.concurrent.CopyOnWriteArraySet
 
-class ConnectionManager(context: Context) {
+class ConnectionManager private constructor(context: Context) {
 
     interface Listener {
         fun onConnectionChange()
     }
 
+    companion object {
+        @Volatile
+        private var instance: ConnectionManager? = null
+
+        fun getInstance(context: Context): ConnectionManager =
+            instance ?: synchronized(this) {
+                instance ?: ConnectionManager(context.applicationContext).also { instance = it }
+            }
+    }
+
     private val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
 
-    var listener: Listener? = null
+    private val listeners = CopyOnWriteArraySet<Listener>()
+
     var isConnected = getInitialConnectionStatus()
     private var hasValidInternet = false
     private var hasConnection = false
@@ -64,19 +76,20 @@ class ConnectionManager(context: Context) {
         }
     }
 
+    fun addListener(listener: Listener) {
+        listeners.add(listener)
+    }
+
+    fun removeListener(listener: Listener) {
+        listeners.remove(listener)
+    }
+
     private fun updatedConnectionState() {
         val oldValue = isConnected
         isConnected = hasConnection && hasValidInternet
         if (oldValue != isConnected) {
-            listener?.onConnectionChange()
+            listeners.forEach { it.onConnectionChange() }
         }
     }
 
-    fun stop() {
-        try {
-            connectivityManager.unregisterNetworkCallback(callback)
-        } catch (e: Exception) {
-            //already unregistered
-        }
-    }
 }

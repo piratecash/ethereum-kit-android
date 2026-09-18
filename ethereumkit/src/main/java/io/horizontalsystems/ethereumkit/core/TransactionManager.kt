@@ -78,7 +78,7 @@ class TransactionManager(
                     from = newTx.from ?: existingTx.from,
                     to = newTx.to ?: existingTx.to,
                     value = newTx.value ?: existingTx.value,
-                    input = newTx.input ?: existingTx.input,
+                    input = newTx.input.takeIf { it?.isNotEmpty() == true } ?: existingTx.input,
                     nonce = newTx.nonce ?: existingTx.nonce,
                     gasPrice = newTx.gasPrice ?: existingTx.gasPrice,
                     maxFeePerGas = newTx.maxFeePerGas ?: existingTx.maxFeePerGas,
@@ -101,7 +101,13 @@ class TransactionManager(
 
         save(transactions)
         val failedTransactions = failPendingTransactions()
-        val fullTransactions = decorationManager.decorateTransactions(transactions + failedTransactions)
+
+        // Fetch merged transactions from storage to ensure complete data for decoration.
+        // This fixes an issue where partial transactions (e.g., from Erc20TransactionSyncer with to=null)
+        // would fail decoration even though storage had complete data.
+        val allHashes = (transactions + failedTransactions).map { it.hash }
+        val mergedTransactions = storage.getTransactions(allHashes)
+        val fullTransactions = decorationManager.decorateTransactions(mergedTransactions)
 
         val transactionWithTags = mutableListOf<TransactionWithTags>()
         val allTags = mutableListOf<TransactionTag>()
@@ -162,7 +168,10 @@ class TransactionManager(
         val processedTransactions: MutableList<Transaction> = mutableListOf()
 
         for (nonPendingTransaction in nonPendingTransactions) {
-            val duplicateTransactions = pendingTransactions.filter { it.nonce == nonPendingTransaction.nonce }
+            // The pending list may be stale: a concurrent handle() can confirm the same transaction in between.
+            val duplicateTransactions = pendingTransactions.filter {
+                it.nonce == nonPendingTransaction.nonce && !it.hash.contentEquals(nonPendingTransaction.hash)
+            }
             for (transaction in duplicateTransactions) {
                 transaction.isFailed = true
                 transaction.replacedWith = nonPendingTransaction.hash

@@ -1,17 +1,20 @@
 package io.horizontalsystems.ethereumkit.core.storage
 
 import androidx.sqlite.db.SimpleSQLiteQuery
+import io.horizontalsystems.ethereumkit.core.IRawTransactionBroadcastStorage
 import io.horizontalsystems.ethereumkit.core.ITransactionStorage
 import io.horizontalsystems.ethereumkit.core.toRawHexString
 import io.horizontalsystems.ethereumkit.models.Address
 import io.horizontalsystems.ethereumkit.models.InternalTransaction
+import io.horizontalsystems.ethereumkit.models.RawTransactionBroadcastRecord
 import io.horizontalsystems.ethereumkit.models.Transaction
 import io.horizontalsystems.ethereumkit.models.TransactionTag
 import io.reactivex.Single
 
-class TransactionStorage(database: TransactionDatabase) : ITransactionStorage {
+class TransactionStorage(database: TransactionDatabase) : ITransactionStorage, IRawTransactionBroadcastStorage {
     private val transactionDao = database.transactionDao()
     private val tagsDao = database.transactionTagDao()
+    private val rawTransactionBroadcastDao = database.rawTransactionBroadcastDao()
 
     override fun getTransactions(hashes: List<ByteArray>): List<Transaction> =
         transactionDao.getTransactions(hashes)
@@ -177,5 +180,23 @@ class TransactionStorage(database: TransactionDatabase) : ITransactionStorage {
                       """
 
         return transactionDao.getTransactionsByRawQuery(SimpleSQLiteQuery(sqlQuery))
+    }
+
+    override fun getRawTransactionBroadcast(hash: ByteArray): RawTransactionBroadcastRecord? =
+        rawTransactionBroadcastDao.get(hash)
+
+    override fun getRawTransactionBroadcasts(): List<RawTransactionBroadcastRecord> =
+        rawTransactionBroadcastDao.getAll()
+
+    override fun addRawTransactionBroadcast(record: RawTransactionBroadcastRecord) {
+        rawTransactionBroadcastDao.insert(record)
+    }
+
+    override fun updateRawTransactionBroadcast(record: RawTransactionBroadcastRecord) {
+        rawTransactionBroadcastDao.update(record)
+    }
+
+    override fun deleteRawTransactionBroadcast(record: RawTransactionBroadcastRecord) {
+        rawTransactionBroadcastDao.delete(record)
     }
 }

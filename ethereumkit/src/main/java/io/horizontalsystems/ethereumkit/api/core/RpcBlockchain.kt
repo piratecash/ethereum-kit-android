@@ -141,6 +141,10 @@ class RpcBlockchain(
             .map { transaction }
     }
 
+    override fun sendRawTransaction(rawTransaction: ByteArray): Single<ByteArray> {
+        return syncer.single(SendRawTransactionJsonRpc(rawTransaction))
+    }
+
     override fun getNonce(defaultBlockParameter: DefaultBlockParameter): Single<Long> {
         return syncer.single(GetTransactionCountJsonRpc(address, defaultBlockParameter))
     }

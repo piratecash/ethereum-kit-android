@@ -90,6 +90,10 @@ class SpvBlockchain(
         }
     }
 
+    override fun sendRawTransaction(rawTransaction: ByteArray): Single<ByteArray> {
+        return Single.error(UnsupportedOperationException("Raw transaction broadcast is not supported by SPV blockchain"))
+    }
+
     override fun getNonce(defaultBlockParameter: DefaultBlockParameter): Single<Long> {
         TODO("not implemented")
     }

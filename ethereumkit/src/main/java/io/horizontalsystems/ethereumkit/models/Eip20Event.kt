@@ -2,11 +2,12 @@ package io.horizontalsystems.ethereumkit.models
 
 import androidx.room.Entity
 import androidx.room.Ignore
-import androidx.room.PrimaryKey
 import io.horizontalsystems.ethereumkit.core.toHexString
 import java.math.BigInteger
 
-@Entity
+@Entity(
+    primaryKeys = ["hash", "contractAddress", "from", "to", "value"]
+)
 class Eip20Event(
     val hash: ByteArray,
     val blockNumber: Long,
@@ -18,8 +19,6 @@ class Eip20Event(
     val tokenName: String,
     val tokenSymbol: String,
     val tokenDecimal: Int,
-
-    @PrimaryKey(autoGenerate = true) val id: Long = 0
 ) {
 
     @delegate:Ignore
