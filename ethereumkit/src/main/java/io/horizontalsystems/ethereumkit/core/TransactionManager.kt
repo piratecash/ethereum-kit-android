@@ -168,7 +168,10 @@ class TransactionManager(
         val processedTransactions: MutableList<Transaction> = mutableListOf()
 
         for (nonPendingTransaction in nonPendingTransactions) {
-            val duplicateTransactions = pendingTransactions.filter { it.nonce == nonPendingTransaction.nonce }
+            // The pending list may be stale: a concurrent handle() can confirm the same transaction in between.
+            val duplicateTransactions = pendingTransactions.filter {
+                it.nonce == nonPendingTransaction.nonce && !it.hash.contentEquals(nonPendingTransaction.hash)
+            }
             for (transaction in duplicateTransactions) {
                 transaction.isFailed = true
                 transaction.replacedWith = nonPendingTransaction.hash
