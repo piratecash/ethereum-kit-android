@@ -9,6 +9,7 @@ import io.horizontalsystems.ethereumkit.models.FullTransaction
 import io.horizontalsystems.ethereumkit.transactionsyncers.ExplorerSyncScheduler
 import io.horizontalsystems.ethereumkit.transactionsyncers.MutableTestClock
 import io.horizontalsystems.ethereumkit.transactionsyncers.TransactionSyncManager
+import io.mockk.clearMocks
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -69,6 +70,23 @@ class EthereumKitNetworkPauseTest {
         assertEquals(storedAccountState, kit.accountState)
         verify(exactly = 1) { blockchain.stop() }
         verify(exactly = 1) { transactionSyncManager.pause() }
+    }
+
+    // Offline mode pauses the kit but leaves it installed in the app, so the UI keeps calling
+    // syncTransactions() when a screen opens. No explorer request may leave while paused.
+    @Test
+    fun syncTransactions_whilePaused_issuesNoExplorerRequest() {
+        val kit = ethereumKit()
+        kit.start()
+        kit.pauseNetwork()
+        clearMocks(transactionSyncManager, answers = false)
+
+        kit.syncTransactions()
+        kit.onTokenBalanceChanged()
+        kit.refresh()
+
+        verify(exactly = 0) { transactionSyncManager.sync() }
+        verify(exactly = 0) { blockchain.refresh() }
     }
 
     @Test
