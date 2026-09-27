@@ -52,17 +52,20 @@ class TransactionManagerTest {
         private val rows = linkedMapOf<String, Transaction>()
         var beforeNextNonPendingRead: (() -> Unit)? = null
 
-        override fun getTransactions(hashes: List<ByteArray>) = hashes.mapNotNull { rows[it.toHexString()]?.copy() }
-        override fun getTransaction(hash: ByteArray) = rows[hash.toHexString()]?.copy()
+        override fun getTransactions(hashes: List<ByteArray>) = hashes.mapNotNull { rows[it.toHexString()]?.detached() }
+        override fun getTransaction(hash: ByteArray) = rows[hash.toHexString()]?.detached()
         override fun getTransactionsBeforeAsync(tags: List<List<String>>, hash: ByteArray?, limit: Int?) =
             Single.just(emptyList<Transaction>())
 
+        /** Room materializes a fresh blob per read, so no two rows may share a hash array. */
+        private fun Transaction.detached() = copy(hash = hash.copyOf())
+
         override fun save(transactions: List<Transaction>) {
-            transactions.forEach { rows[it.hashString] = it.copy() }
+            transactions.forEach { rows[it.hashString] = it.detached() }
         }
 
         override fun getPendingTransactions() =
-            rows.values.filter { it.blockNumber == null && !it.isFailed }.map { it.copy() }
+            rows.values.filter { it.blockNumber == null && !it.isFailed }.map { it.detached() }
 
         override fun getPendingTransactions(tags: List<List<String>>) = getPendingTransactions()
 
@@ -70,7 +73,7 @@ class TransactionManagerTest {
             beforeNextNonPendingRead?.also { beforeNextNonPendingRead = null }?.invoke()
             return rows.values
                 .filter { it.blockNumber != null && it.nonce in pendingTransactionNonces && it.from == from }
-                .map { it.copy() }
+                .map { it.detached() }
         }
 
         override fun getLastInternalTransaction(): InternalTransaction? = null
