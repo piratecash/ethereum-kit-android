@@ -3,7 +3,6 @@ package io.horizontalsystems.uniswapkit
 import co.touchlab.kermit.Logger
 import io.horizontalsystems.ethereumkit.contracts.ContractMethod
 import io.horizontalsystems.ethereumkit.core.EthereumKit
-import io.horizontalsystems.ethereumkit.core.toHexString
 import io.horizontalsystems.ethereumkit.models.Address
 import io.horizontalsystems.ethereumkit.models.Chain
 import io.horizontalsystems.ethereumkit.models.RpcSource
@@ -43,8 +42,6 @@ class TradeManager(
 
         return EthereumKit.call(rpcSource, pairAddress, GetReservesMethod().encodedABI())
                 .map { data ->
-                    logger.d { "getReserves data: ${data.toHexString()}" }
-
                     var rawReserve0: BigInteger = BigInteger.ZERO
                     var rawReserve1: BigInteger = BigInteger.ZERO
 
