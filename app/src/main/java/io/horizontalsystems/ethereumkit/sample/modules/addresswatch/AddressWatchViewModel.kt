@@ -22,11 +22,16 @@ import io.horizontalsystems.hdwalletkit.Mnemonic
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.net.URI
 
 class AddressWatchViewModel : ViewModel() {
 
     private val disposables = CompositeDisposable()
+
+    // Concurrent requests would clear/open the same walletId databases under different keys.
+    private val watchMutex = Mutex()
 
     private var showTxType = ShowTxType.Eth
     private var ethTxs = listOf<TransactionRecord>()
@@ -55,8 +60,10 @@ class AddressWatchViewModel : ViewModel() {
         }
 
         viewModelScope.launch {
-            clearKits()
-            watch(wordList)
+            watchMutex.withLock {
+                clearKits()
+                watch(wordList)
+            }
         }
     }
 
