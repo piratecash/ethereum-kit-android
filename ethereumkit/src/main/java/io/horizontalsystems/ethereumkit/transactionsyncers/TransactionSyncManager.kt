@@ -1,5 +1,6 @@
 package io.horizontalsystems.ethereumkit.transactionsyncers
 
+import co.touchlab.kermit.Logger
 import io.horizontalsystems.ethereumkit.core.EthereumKit
 import io.horizontalsystems.ethereumkit.core.ITransactionSyncer
 import io.horizontalsystems.ethereumkit.core.TransactionManager
@@ -14,12 +15,11 @@ import io.reactivex.schedulers.Schedulers
 import io.reactivex.subjects.PublishSubject
 import kotlinx.coroutines.rx2.rxSingle
 import java.util.concurrent.CopyOnWriteArrayList
-import java.util.logging.Logger
 
 class TransactionSyncManager(
-    private val transactionManager: TransactionManager
+    private val transactionManager: TransactionManager,
+    private val logger: Logger
 ) {
-    private val logger = Logger.getLogger(this.javaClass.simpleName)
 
     // The container IS the authority to run: pause() disposes it and only resume() opens a new one,
     // so a sync that captured it before a pause registers into the very container pause disposes.
@@ -66,7 +66,7 @@ class TransactionSyncManager(
                 if (run.isDisposed) return@subscribe
 
                 publishTerminal(generation, run, EthereumKit.SyncState.NotSynced(it))
-                logger.warning("sync ERROR = ${it.message}")
+                logger.w(it) { "sync ERROR" }
             })
     }
 
@@ -89,7 +89,7 @@ class TransactionSyncManager(
             .subscribeOn(Schedulers.io())
             .doOnSubscribe { run.set(it) }
             .subscribe({}, {
-                logger.warning("rpc-only sync ERROR = ${it.javaClass.simpleName}")
+                logger.w(it) { "rpc-only sync ERROR" }
             })
     }
 

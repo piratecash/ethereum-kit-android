@@ -1,5 +1,6 @@
 package io.horizontalsystems.ethereumkit.core
 
+import co.touchlab.kermit.Logger as KermitLogger
 import io.horizontalsystems.ethereumkit.api.core.RpcResponse
 import io.horizontalsystems.ethereumkit.api.jsonrpc.JsonRpc
 import io.horizontalsystems.ethereumkit.api.jsonrpc.models.RpcBlock
@@ -50,6 +51,8 @@ class RawTransactionBroadcasterTest {
 
     @Before
     fun setup() {
+        // The module's unit tests have no Android stubs, so a real log writer would hit android.util.Log.
+        KermitLogger.setLogWriters(emptyList())
         // Storage calls are bridged onto the io scheduler; keep them on the test thread as before.
         RxJavaPlugins.setIoSchedulerHandler { Schedulers.trampoline() }
         storage = InMemoryBroadcastStorage()
@@ -57,6 +60,7 @@ class RawTransactionBroadcasterTest {
             blockchain = blockchain,
             storage = storage,
             currentTime = { now },
+            logger = KermitLogger.withTag("Test"),
         )
     }
 
@@ -204,6 +208,7 @@ class RawTransactionBroadcasterTest {
             storage = storage,
             currentTime = { now },
             networkTimeoutMs = 1,
+            logger = KermitLogger.withTag("Test"),
         )
         storage.records[hash.toRawHexString()] = queuedRecord(lastSendTime = 0L)
         now = RawTransactionBroadcaster.retriesPeriod + 1

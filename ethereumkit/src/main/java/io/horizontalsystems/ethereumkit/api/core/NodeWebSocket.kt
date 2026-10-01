@@ -1,5 +1,6 @@
 package io.horizontalsystems.ethereumkit.api.core
 
+import co.touchlab.kermit.Logger
 import com.google.gson.Gson
 import com.tinder.scarlet.Event
 import com.tinder.scarlet.Lifecycle
@@ -20,17 +21,16 @@ import okhttp3.Credentials
 import okhttp3.EventListener
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
-import okhttp3.logging.HttpLoggingInterceptor
+import io.horizontalsystems.ethereumkit.network.RedactedLoggingInterceptor
 import java.net.URI
-import java.util.logging.Logger
 
 class NodeWebSocket(
     uri: URI,
     private val gson: Gson,
     auth: String? = null,
-    eventListenerFactory: EventListener.Factory? = null
+    eventListenerFactory: EventListener.Factory? = null,
+    private val logger: Logger
 ) : IRpcWebSocket {
-    private val logger = Logger.getLogger(this.javaClass.simpleName)
     private var disposables = CompositeDisposable()
 
     private val RETRY_BASE_DURATION: Long = 3000
@@ -52,13 +52,7 @@ class NodeWebSocket(
     init {
         val backoffStrategy = ExponentialWithJitterBackoffStrategy(RETRY_BASE_DURATION, RETRY_MAX_DURATION)
 
-        val loggingInterceptor = HttpLoggingInterceptor(
-                object : HttpLoggingInterceptor.Logger {
-                    override fun log(message: String) {
-                        logger.info(message)
-                    }
-                })
-                .setLevel(HttpLoggingInterceptor.Level.BASIC)
+        val loggingInterceptor = RedactedLoggingInterceptor(logger)
 
         val headersInterceptor = Interceptor { chain ->
             val requestBuilder = chain.request().newBuilder()
@@ -103,7 +97,7 @@ class NodeWebSocket(
     }
 
     override fun <T> send(rpc: JsonRpc<T>) {
-        logger.info("Sending ${gson.toJson(rpc)}")
+        logger.d { "Sending rpc id=${rpc.id}" }
 
         check(state == WebSocketState.Connected) {
             throw SocketError.NotConnected
@@ -144,48 +138,43 @@ class NodeWebSocket(
                     when (event) {
                         is Event.OnWebSocket.Event<*> -> when (val webSocketEvent = event.event) {
                             is WebSocket.Event.OnConnectionOpened<*> -> {
-                                logger.info("On WebSocket Connection Opened")
+                                logger.d { "On WebSocket Connection Opened" }
                                 state = WebSocketState.Connected
                             }
                             is WebSocket.Event.OnMessageReceived -> {
-//                                logger.info("On WebSocket Message Received: ${webSocketEvent.message}")
                             }
                             is WebSocket.Event.OnConnectionClosing -> {
-                                logger.info("On WebSocket Connection Closing")
+                                logger.d { "On WebSocket Connection Closing" }
                             }
                             is WebSocket.Event.OnConnectionClosed -> {
-                                logger.info("On WebSocket Connection Closed")
+                                logger.d { "On WebSocket Connection Closed" }
 
                                 state = WebSocketState.Disconnected(WebSocketState.DisconnectError.SocketDisconnected(webSocketEvent.shutdownReason.reason))
                             }
                             is WebSocket.Event.OnConnectionFailed -> {
-                                logger.info("On WebSocket Connection Failed")
+                                logger.w(webSocketEvent.throwable) { "On WebSocket Connection Failed" }
 
                                 state = WebSocketState.Disconnected(webSocketEvent.throwable)
-
-                                webSocketEvent.throwable.printStackTrace()
                             }
                         }
                         Event.OnWebSocket.Terminate -> {
-                            logger.info("On WebSocket Terminate")
+                            logger.d { "On WebSocket Terminate" }
                         }
                         is Event.OnStateChange<*> -> {
-                            event.state
-                            logger.info("On State Change: ${event.state.javaClass.simpleName}")
+                            logger.d { "On State Change: ${event.state.javaClass.simpleName}" }
                         }
                         Event.OnRetry -> {
-                            logger.info("On Retry")
+                            logger.d { "On Retry" }
                         }
                         is Event.OnLifecycle -> {
-                            logger.info("On LifeCycle: $event")
+                            logger.d { "On LifeCycle: ${event.javaClass.simpleName}" }
                         }
                         else -> {
-                            logger.info("On Event: $event")
+                            logger.d { "On Event: ${event.javaClass.simpleName}" }
                         }
                     }
                 }, { error ->
-                    error.printStackTrace()
-                    logger.warning(error.message)
+                    logger.w(error) { "WebSocket events error" }
                 })
                 .let { disposables.add(it) }
 
@@ -193,7 +182,7 @@ class NodeWebSocket(
                 .subscribeOn(Schedulers.io())
                 .observeOn(Schedulers.io())
                 .subscribe({ response ->
-                    logger.info("On Response: $response")
+                    logger.d { "On Response id=${response.id}" }
                     try {
                         when {
                             response.id != null -> {
@@ -203,16 +192,14 @@ class NodeWebSocket(
                                 listener?.didReceive(RpcSubscriptionResponse(response.method, response.params))
                             }
                             else -> {
-                                logger.warning("Unknown Response: $response")
+                                logger.w { "Unknown Response id=${response.id}" }
                             }
                         }
                     } catch (error: Throwable) {
-                        logger.warning("Handle Response error: ${error.javaClass.simpleName}")
-                        error.printStackTrace()
+                        logger.w(error) { "Handle Response error: ${error.javaClass.simpleName}" }
                     }
                 }, { error ->
-                    logger.warning("On Response error: ${error.message ?: error.javaClass.simpleName}")
-                    error.printStackTrace()
+                    logger.w(error) { "On Response error: ${error.message ?: error.javaClass.simpleName}" }
                 })
                 .let { disposables.add(it) }
     }

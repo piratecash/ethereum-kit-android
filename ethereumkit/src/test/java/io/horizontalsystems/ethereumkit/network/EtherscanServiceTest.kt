@@ -1,6 +1,8 @@
 package io.horizontalsystems.ethereumkit.network
 
 import co.touchlab.kermit.Logger as KermitLogger
+import co.touchlab.kermit.LogWriter
+import co.touchlab.kermit.Severity
 import io.horizontalsystems.ethereumkit.models.Address
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
@@ -12,30 +14,16 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
-import timber.log.Timber
-import java.util.logging.Handler
-import java.util.logging.LogRecord
-import java.util.logging.Logger
 
 class EtherscanServiceTest {
 
     private lateinit var server: MockWebServer
 
     private val httpLogs = mutableListOf<String>()
-    private val timberLogs = mutableListOf<String>()
 
-    private val logHandler = object : Handler() {
-        override fun publish(record: LogRecord) {
-            httpLogs.add(record.message)
-        }
-
-        override fun flush() = Unit
-        override fun close() = Unit
-    }
-
-    private val timberTree = object : Timber.Tree() {
-        override fun log(priority: Int, tag: String?, message: String, t: Throwable?) {
-            timberLogs.add(message)
+    private val captureWriter = object : LogWriter() {
+        override fun log(severity: Severity, message: String, tag: String, throwable: Throwable?) {
+            httpLogs.add(message)
         }
     }
 
@@ -43,17 +31,14 @@ class EtherscanServiceTest {
     fun setUp() {
         server = MockWebServer()
         server.start()
-        // The module's unit tests have no Android stubs, so a real log writer would hit android.util.Log.
-        KermitLogger.setLogWriters(emptyList())
-        Logger.getLogger("EtherscanService").addHandler(logHandler)
-        Timber.plant(timberTree)
+        KermitLogger.setLogWriters(listOf(captureWriter))
     }
 
     @After
     fun tearDown() {
         server.shutdown()
-        Logger.getLogger("EtherscanService").removeHandler(logHandler)
-        Timber.uproot(timberTree)
+        // The module's unit tests have no Android stubs, so a real log writer would hit android.util.Log.
+        KermitLogger.setLogWriters(emptyList())
     }
 
     @Test
@@ -162,15 +147,15 @@ class EtherscanServiceTest {
     }
 
     @Test
-    fun getTransactionList_rateLimited_logsMaskedKeyOnly() {
+    fun getTransactionList_rateLimited_logsNoApiKeyOrUrlQuery() {
         server.enqueue(jsonResponse(429, """{"error":"Too Many Requests"}"""))
         enqueueTransactionList()
 
         service().getTransactionList(ADDRESS, 0).blockingGet()
 
-        val leaked = (httpLogs + timberLogs).filter { it.contains(FIRST_KEY) || it.contains(SECOND_KEY) }
+        val leaked = httpLogs.filter { it.contains(FIRST_KEY) || it.contains(SECOND_KEY) || it.contains("apikey") }
         assertEquals(emptyList<String>(), leaked)
-        assertTrue("no masked apikey in $httpLogs", httpLogs.any { it.contains("apikey=***") })
+        assertTrue("expected request/response log lines in $httpLogs", httpLogs.any { it.contains("-->") })
     }
 
     @Test

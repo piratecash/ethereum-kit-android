@@ -1,6 +1,6 @@
 package io.horizontalsystems.ethereumkit.sample.modules.main
 
-import android.util.Log
+import co.touchlab.kermit.Logger
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -38,10 +38,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.rx2.rxSingle
 import java.math.BigDecimal
 import java.net.URI
-import java.util.logging.Logger
 
 class MainViewModel : ViewModel() {
-    private val logger = Logger.getLogger("MainViewModel")
+    private val logger = Logger.withTag("Sample")
 
     private val disposables = CompositeDisposable()
 
@@ -198,12 +197,9 @@ class MainViewModel : ViewModel() {
         gasPriceHelper.gasPriceFlowable()
             .subscribe({
                 gasPrice = it
-                Log.e("AAA", "set gasPrice: $gasPrice")
+                logger.d { "set gasPrice: $gasPrice" }
             }, {
-                Log.e(
-                    "AAA",
-                    "error: ${it.localizedMessage ?: it.message ?: it.javaClass.simpleName}"
-                )
+                logger.e(it) { "gasPrice error" }
             }).let { disposables.add(it) }
     }
 
@@ -343,7 +339,7 @@ class MainViewModel : ViewModel() {
                 //success
                 estimatedGas.value = it.toString()
             }, {
-                logger.warning("Gas estimate: ${it.message}")
+                logger.w(it) { "Gas estimate failed" }
                 estimatedGas.value = it.message
             })
             .let { disposables.add(it) }
@@ -360,11 +356,11 @@ class MainViewModel : ViewModel() {
             .observeOn(AndroidSchedulers.mainThread())
             .subscribe({ fullTransaction ->
                 //success
-                logger.info("Successfully sent, hash: ${fullTransaction.transaction.hash.toHexString()}")
+                logger.d { "Successfully sent, hash: ${fullTransaction.transaction.hash.toHexString()}" }
 
                 sendStatus.value = null
             }, {
-                logger.warning("Ether send failed: ${it.message}")
+                logger.w(it) { "Ether send failed" }
                 sendStatus.value = it
             }).let { disposables.add(it) }
 
@@ -384,11 +380,11 @@ class MainViewModel : ViewModel() {
             .subscribeOn(Schedulers.io())
             .observeOn(AndroidSchedulers.mainThread())
             .subscribe({ fullTransaction ->
-                logger.info("Successfully sent, hash: ${fullTransaction.transaction.hash.toHexString()}")
+                logger.d { "Successfully sent, hash: ${fullTransaction.transaction.hash.toHexString()}" }
                 //success
                 sendStatus.value = null
             }, {
-                logger.warning("Erc20 send failed: ${it.message}")
+                logger.w(it) { "Erc20 send failed" }
                 sendStatus.value = it
             }).let { disposables.add(it) }
     }
@@ -419,7 +415,7 @@ class MainViewModel : ViewModel() {
             .subscribe({
                 swapData.value = it
             }, {
-                logger.warning("swapData ERROR = ${it.message}")
+                logger.w(it) { "swapData ERROR" }
             }).let {
                 disposables.add(it)
             }
@@ -430,9 +426,9 @@ class MainViewModel : ViewModel() {
             .subscribeOn(Schedulers.io())
             .observeOn(AndroidSchedulers.mainThread())
             .subscribe({
-                logger.info("allowance: ${it.toPlainString()}")
+                logger.d { "allowance: ${it.toPlainString()}" }
             }, {
-                logger.warning("swapData ERROR = ${it.message}")
+                logger.w(it) { "swapData ERROR" }
             }).let {
                 disposables.add(it)
             }
@@ -448,7 +444,7 @@ class MainViewModel : ViewModel() {
 
         ethereumKit.estimateGas(transactionData, gasPrice)
             .flatMap { gasLimit ->
-                logger.info("gas limit: $gasLimit")
+                logger.d { "gas limit: $gasLimit" }
                 ethereumKit.rawTransaction(transactionData, gasPrice, gasLimit)
             }
             .flatMap { rawTransaction ->
@@ -458,9 +454,9 @@ class MainViewModel : ViewModel() {
             .subscribeOn(Schedulers.io())
             .observeOn(AndroidSchedulers.mainThread())
             .subscribe({ fullTransaction ->
-                logger.info("approve: ${fullTransaction.transaction.hash}")
+                logger.d { "approve: ${fullTransaction.transaction.hash}" }
             }, {
-                logger.warning("approve ERROR = ${it.message}")
+                logger.w(it) { "approve ERROR" }
             }).let {
                 disposables.add(it)
             }
@@ -479,7 +475,7 @@ class MainViewModel : ViewModel() {
             tradeData.value = try {
                 uniswapKit.bestTradeExactIn(it, amountIn, tradeOptions)
             } catch (error: Throwable) {
-                logger.info("bestTradeExactIn error: ${error.javaClass.simpleName} (${error.localizedMessage})")
+                logger.w(error) { "bestTradeExactIn error" }
                 null
             }
         }
@@ -490,7 +486,7 @@ class MainViewModel : ViewModel() {
             tradeData.value = try {
                 uniswapKit.bestTradeExactOut(it, amountOut, tradeOptions)
             } catch (error: Throwable) {
-                logger.info("bestTradeExactOut error: ${error.javaClass.simpleName} (${error.localizedMessage})")
+                logger.w(error) { "bestTradeExactOut error" }
                 null
             }
         }
@@ -503,7 +499,7 @@ class MainViewModel : ViewModel() {
             val transactionData = uniswapKit.transactionData(ethereumKit.receiveAddress, chain, tradeData)
             ethereumKit.estimateGas(transactionData, gasPrice)
                 .flatMap { gasLimit ->
-                    logger.info("gas limit: $gasLimit")
+                    logger.d { "gas limit: $gasLimit" }
 
                     val transactionData = uniswapKit.transactionData(ethereumKit.receiveAddress, chain, tradeData)
                     ethereumKit.rawTransaction(transactionData, gasPrice, gasLimit)
@@ -516,11 +512,10 @@ class MainViewModel : ViewModel() {
                 .observeOn(AndroidSchedulers.mainThread())
                 .subscribe({ fullTransaction ->
                     swapStatus.value = null
-                    logger.info("swap SUCCESS, txHash=${fullTransaction.transaction.hash.toHexString()}")
+                    logger.d { "swap SUCCESS, txHash=${fullTransaction.transaction.hash.toHexString()}" }
                 }, {
                     swapStatus.value = it
-                    logger.info("swap ERROR, error=${it.message}")
-                    it.printStackTrace()
+                    logger.e(it) { "swap ERROR" }
                 }).let { disposables.add(it) }
         }
     }

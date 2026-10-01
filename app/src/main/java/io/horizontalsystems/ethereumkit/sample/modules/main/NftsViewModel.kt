@@ -1,6 +1,6 @@
 package io.horizontalsystems.ethereumkit.sample.modules.main
 
-import android.util.Log
+import co.touchlab.kermit.Logger
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -16,6 +16,7 @@ class NftsViewModel(
     private val evmKit: EthereumKit
 ) : ViewModel() {
 
+    private val log = Logger.withTag("Sample")
     private val nftBalances = MutableStateFlow<List<NftBalance>>(listOf())
 
     val nftBalancesFlow: Flow<List<NftBalance>>
@@ -32,7 +33,7 @@ class NftsViewModel(
             nftKit.start()
 
             nftKit.nftBalancesFlow.collect {
-                Log.e("nft", "nftBalances: ${it.size}")
+                log.d { "nftBalances: ${it.size}" }
                 nftBalances.value = it
             }
         }

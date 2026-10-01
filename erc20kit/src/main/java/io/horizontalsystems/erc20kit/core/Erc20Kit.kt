@@ -204,7 +204,8 @@ class Erc20Kit(
                     tokenTransactionProvider = rpcLogsProvider(ethereumKit, ownChainRpcSource),
                     storage = ethereumKit.eip20Storage,
                     transactionSaver = transactionSaver,
-                    connectionManager = ethereumKit.connectionManager
+                    connectionManager = ethereumKit.connectionManager,
+                    logger = kitLogger(ethereumKit.chain.id)
                 )
                 ethereumKit.setHistoricalSyncer(historicalSyncer)
             }
@@ -224,7 +225,8 @@ class Erc20Kit(
             ethereumKit.addEventDecorator(
                 Eip20EventDecorator(
                     ethereumKit.receiveAddress,
-                    ethereumKit.eip20Storage
+                    ethereumKit.eip20Storage,
+                    kitLogger(ethereumKit.chain.id)
                 )
             )
             ethereumKit.addTransactionDecorator(Eip20TransactionDecorator(ethereumKit.receiveAddress))

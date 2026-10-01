@@ -6,6 +6,7 @@ import io.horizontalsystems.ethereumkit.api.core.NodeApiProvider
 import io.horizontalsystems.ethereumkit.core.EthereumKit
 import io.horizontalsystems.ethereumkit.core.TransactionBuilder
 import io.horizontalsystems.ethereumkit.core.TransactionManager
+import io.horizontalsystems.ethereumkit.core.kitLogger
 import io.horizontalsystems.ethereumkit.core.storage.TransactionSyncSourceStorage
 import io.horizontalsystems.ethereumkit.models.Address
 import io.horizontalsystems.ethereumkit.models.Chain
@@ -66,7 +67,12 @@ class MerkleTransactionAdapter(
             val blockchainPath = blockchainPathMap[chain] ?: return null
 
             val url = URI("$baseUrl$blockchainPath/$merkleIoPubKey")
-            val rpcProvider = NodeApiProvider(listOf(url), EthereumKit.gson, eventListenerFactory = eventListenerFactory)
+            val rpcProvider = NodeApiProvider(
+                listOf(url),
+                EthereumKit.gson,
+                eventListenerFactory = eventListenerFactory,
+                logger = kitLogger(chain.id)
+            )
 
             val connectionManager = ConnectionManager.getInstance(context)
             val rpcSyncer = ApiRpcSyncer(rpcProvider, connectionManager, chain.syncInterval)

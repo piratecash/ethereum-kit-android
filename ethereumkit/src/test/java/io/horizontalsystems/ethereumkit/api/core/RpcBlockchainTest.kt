@@ -17,7 +17,7 @@ class RpcBlockchainTest {
     private val storage = GatedApiStorage()
     private val listener = mockk<IBlockchainListener>(relaxed = true)
     private val blockchain = RpcBlockchain(
-        Address("0x0000000000000000000000000000000000000001"), storage, mockk(relaxed = true), mockk(relaxed = true)
+        Address("0x0000000000000000000000000000000000000001"), storage, mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true)
     ).also { it.listener = listener }
 
     @Before

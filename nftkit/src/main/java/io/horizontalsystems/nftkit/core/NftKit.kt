@@ -2,6 +2,7 @@ package io.horizontalsystems.nftkit.core
 
 import android.content.Context
 import io.horizontalsystems.ethereumkit.core.EthereumKit
+import io.horizontalsystems.ethereumkit.core.kitLogger
 import io.horizontalsystems.ethereumkit.models.Address
 import io.horizontalsystems.ethereumkit.models.TransactionData
 import io.horizontalsystems.nftkit.contracts.Eip1155ContractMethodFactories
@@ -119,7 +120,7 @@ class NftKit(
             val nftKitDatabase = NftKitDatabaseManager.getNftKitDatabase(context, evmKit.chain, evmKit.walletId)
             val storage = Storage(nftKitDatabase)
             val dataProvider = DataProvider(evmKit)
-            val balanceSyncManager = BalanceSyncManager(evmKit.receiveAddress, storage, dataProvider)
+            val balanceSyncManager = BalanceSyncManager(evmKit.receiveAddress, storage, dataProvider, kitLogger(evmKit.chain.id))
             val balanceManager = BalanceManager(balanceSyncManager, storage, storage.existingNftBalances())
             val transactionManager = TransactionManager(evmKit)
 

@@ -1,5 +1,6 @@
 package io.horizontalsystems.ethereumkit.transactionsyncers
 
+import co.touchlab.kermit.Logger as KermitLogger
 import io.horizontalsystems.ethereumkit.core.EthereumKit
 import io.horizontalsystems.ethereumkit.core.IBlockchain
 import io.horizontalsystems.ethereumkit.core.ITransactionProvider
@@ -31,6 +32,8 @@ class TransactionSyncManagerTest {
 
     @Before
     fun setUp() {
+        // The module's unit tests have no Android stubs, so a real log writer would hit android.util.Log.
+        KermitLogger.setLogWriters(emptyList())
         RxJavaPlugins.setIoSchedulerHandler { Schedulers.trampoline() }
     }
 
@@ -44,7 +47,7 @@ class TransactionSyncManagerTest {
         val hash = ByteArray(32) { it.toByte() }
         val nativeValue = BigInteger("1759231567651249")
         val storage = FakeTransactionStorage()
-        val syncManager = TransactionSyncManager(transactionManager(storage))
+        val syncManager = TransactionSyncManager(transactionManager(storage), KermitLogger.withTag("Test"))
         syncManager.add(transactionSyncer(Transaction(hash, 1L, false, value = nativeValue)))
         syncManager.add(transactionSyncer(Transaction(hash, 1L, false, value = null)))
         val synced = CountDownLatch(1)
@@ -69,7 +72,7 @@ class TransactionSyncManagerTest {
         val hash = ByteArray(32) { it.toByte() }
         val nativeInput = byteArrayOf(1, 2, 3, 4)
         val storage = FakeTransactionStorage()
-        val syncManager = TransactionSyncManager(transactionManager(storage))
+        val syncManager = TransactionSyncManager(transactionManager(storage), KermitLogger.withTag("Test"))
         syncManager.add(transactionSyncer(Transaction(hash, 1L, false, input = nativeInput)))
         syncManager.add(transactionSyncer(Transaction(hash, 1L, false, input = null)))
         val synced = CountDownLatch(1)
@@ -108,7 +111,7 @@ class TransactionSyncManagerTest {
     fun syncRpcOnly_runsOnlyRpcSyncers_andKeepsSyncState() = runTest {
         val hash = ByteArray(32) { it.toByte() }
         val storage = FakeTransactionStorage()
-        val syncManager = TransactionSyncManager(transactionManager(storage))
+        val syncManager = TransactionSyncManager(transactionManager(storage), KermitLogger.withTag("Test"))
         val explorer = RecordingSyncer(requiresExplorer = true)
         val rpcOnly = RecordingSyncer(
             requiresExplorer = false,
@@ -128,7 +131,7 @@ class TransactionSyncManagerTest {
 
     @Test
     fun syncRpcOnly_whileFullSyncing_isSkipped() {
-        val syncManager = TransactionSyncManager(transactionManager(FakeTransactionStorage()))
+        val syncManager = TransactionSyncManager(transactionManager(FakeTransactionStorage()), KermitLogger.withTag("Test"))
         val explorer = RecordingSyncer(requiresExplorer = true, result = Single.never())
         val rpcOnly = RecordingSyncer(requiresExplorer = false)
         syncManager.add(explorer)
@@ -143,7 +146,7 @@ class TransactionSyncManagerTest {
 
     @Test
     fun syncRpcOnly_syncerFails_keepsSyncState() {
-        val syncManager = TransactionSyncManager(transactionManager(FakeTransactionStorage()))
+        val syncManager = TransactionSyncManager(transactionManager(FakeTransactionStorage()), KermitLogger.withTag("Test"))
         syncManager.add(
             RecordingSyncer(requiresExplorer = false, result = Single.error(IllegalStateException()))
         )

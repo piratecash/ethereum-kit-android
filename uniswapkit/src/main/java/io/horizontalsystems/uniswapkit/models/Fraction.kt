@@ -1,5 +1,6 @@
 package io.horizontalsystems.uniswapkit.models
 
+import co.touchlab.kermit.Logger
 import java.math.BigDecimal
 import java.math.BigInteger
 import java.math.RoundingMode
@@ -31,9 +32,13 @@ class Fraction : Comparable<Fraction> {
         return try {
             BigDecimal(numerator).divide(BigDecimal(denominator), decimals, RoundingMode.HALF_UP)
         } catch (ex: ArithmeticException) {
-            ex.printStackTrace()
+            log.w(ex) { "toBigDecimal failed" }
             null
         }
+    }
+
+    companion object {
+        private val log = Logger.withTag("EthereumKit:Uniswap")
     }
 
     override fun toString(): String {

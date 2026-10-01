@@ -1,5 +1,6 @@
 package io.horizontalsystems.ethereumkit.transactionsyncers
 
+import co.touchlab.kermit.Logger
 import io.horizontalsystems.ethereumkit.api.jsonrpc.models.RpcTransactionReceipt
 import io.horizontalsystems.ethereumkit.core.IBlockchain
 import io.horizontalsystems.ethereumkit.core.ITransactionStorage
@@ -9,7 +10,6 @@ import io.horizontalsystems.ethereumkit.core.rxIoDispatcher
 import io.horizontalsystems.ethereumkit.models.Transaction
 import io.reactivex.Single
 import kotlinx.coroutines.rx2.rxSingle
-import timber.log.Timber
 
 /**
  * Syncer that checks pending transactions (blockNumber = null) for confirmation status.
@@ -21,7 +21,8 @@ import timber.log.Timber
 class PendingTransactionSyncer(
     private val storage: ITransactionStorage,
     private val blockchain: IBlockchain,
-    private val transactionManager: TransactionManager
+    private val transactionManager: TransactionManager,
+    private val logger: Logger
 ) : ITransactionSyncer {
 
     override val requiresExplorer = false
@@ -35,7 +36,7 @@ class PendingTransactionSyncer(
             return Single.just(Pair(listOf(), false))
         }
 
-        Timber.i("Checking ${pendingTransactions.size} pending transaction(s) for confirmation")
+        logger.d { "Checking ${pendingTransactions.size} pending transaction(s) for confirmation" }
 
         val singles = pendingTransactions.map { pendingTx ->
             blockchain.getTransactionReceipt(pendingTx.hash)
@@ -60,7 +61,7 @@ class PendingTransactionSyncer(
                     )
                 }
                 .onErrorResumeNext { error ->
-                    Timber.e("Error checking ${pendingTx.hashString}: ${error.message}")
+                    logger.e(error) { "Error checking ${pendingTx.hashString}" }
                     Single.just(null)
                 }
         }
@@ -75,7 +76,7 @@ class PendingTransactionSyncer(
                 if (confirmedTransactions.isNotEmpty()) {
                     // Single call to handle() with all confirmed transactions - avoids race condition
                     transactionManager.handle(confirmedTransactions)
-                    Timber.i("Persisted ${confirmedTransactions.size} confirmed transaction(s)")
+                    logger.d { "Persisted ${confirmedTransactions.size} confirmed transaction(s)" }
                 }
 
                 // Return empty list since we've already handled via transactionManager

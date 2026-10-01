@@ -1,36 +1,35 @@
 package io.horizontalsystems.ethereumkit.api.core
 
+import co.touchlab.kermit.Logger
 import com.google.gson.Gson
 import io.horizontalsystems.ethereumkit.api.jsonrpc.JsonRpc
 import io.horizontalsystems.ethereumkit.network.JsonRpcService
+import io.horizontalsystems.ethereumkit.network.RedactedLoggingInterceptor
 import io.horizontalsystems.ethereumkit.network.SharedHttpClient
 import io.reactivex.Single
 import okhttp3.Credentials
 import okhttp3.EventListener
 import okhttp3.Interceptor
-import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.adapter.rxjava2.RxJava2CallAdapterFactory
 import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.converter.scalars.ScalarsConverterFactory
 import java.net.URI
 import java.util.concurrent.atomic.AtomicInteger
-import java.util.logging.Logger
 
 class NodeApiProvider(
     private val uris: List<URI>,
     private val gson: Gson,
     auth: String? = null,
-    eventListenerFactory: EventListener.Factory? = null
+    eventListenerFactory: EventListener.Factory? = null,
+    logger: Logger
 ) : IRpcApiProvider {
 
-    private val logger = Logger.getLogger(this.javaClass.simpleName)
     private val service: JsonRpcService
     private var currentRpcId = AtomicInteger(0)
 
     init {
-        val loggingInterceptor = HttpLoggingInterceptor { message -> logger.info(message) }
-                .setLevel(HttpLoggingInterceptor.Level.BASIC)
+        val loggingInterceptor = RedactedLoggingInterceptor(logger)
 
         val headersInterceptor = Interceptor { chain ->
             val requestBuilder = chain.request().newBuilder()

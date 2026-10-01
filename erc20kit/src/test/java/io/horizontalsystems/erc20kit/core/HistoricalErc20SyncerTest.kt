@@ -35,7 +35,8 @@ class HistoricalErc20SyncerTest {
             tokenTransactionProvider = tokenTransactionProvider,
             storage = storage,
             transactionSaver = TransactionSaver(storage),
-            connectionManager = connectionManager
+            connectionManager = connectionManager,
+            logger = mockk(relaxed = true)
         )
         syncer.isEnabled = true
 
@@ -62,7 +63,8 @@ class HistoricalErc20SyncerTest {
             tokenTransactionProvider = mockk(relaxed = true),
             storage = FakeEip20Storage(),
             transactionSaver = mockk(relaxed = true),
-            connectionManager = connectionManager
+            connectionManager = connectionManager,
+            logger = mockk(relaxed = true)
         )
 
         syncer.stop()

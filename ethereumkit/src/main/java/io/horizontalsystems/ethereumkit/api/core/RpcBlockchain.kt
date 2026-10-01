@@ -1,5 +1,6 @@
 package io.horizontalsystems.ethereumkit.api.core
 
+import co.touchlab.kermit.Logger
 import io.horizontalsystems.ethereumkit.api.jsonrpc.BlockNumberJsonRpc
 import io.horizontalsystems.ethereumkit.api.jsonrpc.CallJsonRpc
 import io.horizontalsystems.ethereumkit.api.jsonrpc.DataJsonRpc
@@ -47,7 +48,8 @@ class RpcBlockchain(
     private val address: Address,
     private val storage: IApiStorage,
     private val syncer: IRpcSyncer,
-    private val transactionBuilder: TransactionBuilder
+    private val transactionBuilder: TransactionBuilder,
+    private val logger: Logger
 ) : IBlockchain, IRpcSyncerListener, INonceProvider {
 
     private val disposables = CompositeDisposable()
@@ -97,7 +99,7 @@ class RpcBlockchain(
                 listener?.onUpdateAccountState(state)
                 syncState = SyncState.Synced()
             }, {
-                it?.printStackTrace()
+                logger.w(it) { "syncAccountState failed" }
                 syncState = SyncState.NotSynced(it)
             }).let {
                 disposables.add(it)
@@ -284,10 +286,11 @@ class RpcBlockchain(
             address: Address,
             storage: IApiStorage,
             syncer: IRpcSyncer,
-            transactionBuilder: TransactionBuilder
+            transactionBuilder: TransactionBuilder,
+            logger: Logger
         ): RpcBlockchain {
 
-            val rpcBlockchain = RpcBlockchain(address, storage, syncer, transactionBuilder)
+            val rpcBlockchain = RpcBlockchain(address, storage, syncer, transactionBuilder, logger)
             syncer.listener = rpcBlockchain
 
             return rpcBlockchain
@@ -306,7 +309,6 @@ class RpcBlockchain(
             data: ByteArray?
         ): Single<Long> {
             val rpcApiProvider = RpcApiProviderFactory.nodeApiProvider(rpcSource)
-
             return rpcApiProvider.single(EstimateGasJsonRpc(from, to, amount, gasLimit, gasPrice, data))
         }
     }

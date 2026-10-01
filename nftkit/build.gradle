@@ -63,6 +63,7 @@ dependencies {
 
     implementation libs.kotlinx.coroutines.core
     implementation libs.kotlinx.coroutines.rx2
+    implementation libs.kermit
 
     implementation project(':ethereumkit')
 

@@ -69,7 +69,6 @@ import kotlinx.coroutines.rx2.rxMaybe
 import kotlinx.coroutines.rx2.rxSingle
 import okhttp3.EventListener
 import org.bouncycastle.jce.provider.BouncyCastleProvider
-import timber.log.Timber
 import java.math.BigInteger
 import java.net.URI
 import java.security.Security
@@ -77,7 +76,6 @@ import java.util.Objects
 import java.util.Optional
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
-import java.util.logging.Logger
 
 internal fun signedRawTransaction(
     rawTransaction: RawTransaction,
@@ -117,7 +115,6 @@ class EthereumKit(
     /** Scanning ERC-20 logs needs HTTP RPC endpoints, which a WebSocket source does not provide. */
     val scanHistoricalEip20: Boolean = scanHistoricalEip20Requested && ownChainRpcSource != null
 
-    private val logger = Logger.getLogger("EthereumKit")
     private val log = kitLogger(chain.id)
     private val disposables = CompositeDisposable()
 
@@ -270,7 +267,7 @@ class EthereumKit(
 
         val historicalMin = decision.historicalMin
         if (!decision.shouldStartHistorical) {
-            Timber.i("Historical sync not needed (historicalMin=$historicalMin, lastScannedBlock=${decision.lastScannedBlock})")
+            log.d { "Historical sync not needed (historicalMin=$historicalMin, lastScannedBlock=${decision.lastScannedBlock})" }
             return
         }
 
@@ -280,7 +277,7 @@ class EthereumKit(
         historicalSyncer?.isEnabled = true
         if (!started.get()) return
 
-        Timber.i("Starting historical sync (historicalMin=$historicalMin)")
+        log.d { "Starting historical sync (historicalMin=$historicalMin)" }
         historicalSyncer?.start()
     }
 
@@ -484,8 +481,6 @@ class EthereumKit(
     }
 
     fun send(rawTransaction: RawTransaction, signature: Signature): Single<FullTransaction> {
-        logger.info("send rawTransaction: $rawTransaction")
-
         return blockchain.send(rawTransaction, signature)
             .flatMap { transaction ->
                 rxSingle(rxIoDispatcher) { transactionManager.handle(listOf(transaction)).first() }
@@ -615,7 +610,7 @@ class EthereumKit(
             // over while the caller still owns the chain, so a pause can never miss it.
             .doOnSubscribe { run.set(it) }
             .subscribe({}, { error ->
-                Timber.w(error, "Raw transaction broadcast retry failed.")
+                log.w(error) { "Raw transaction broadcast retry failed." }
             })
     }
 
@@ -877,11 +872,12 @@ class EthereumKit(
         ): EthereumKit {
 
             val connectionManager = ConnectionManager.getInstance(application)
+            val log = kitLogger(chain.id)
 
             val syncer: IRpcSyncer = when (rpcSource) {
                 is RpcSource.WebSocket -> {
-                    val rpcWebSocket = NodeWebSocket(rpcSource.uri, gson, rpcSource.auth, eventListenerFactory)
-                    val webSocketRpcSyncer = WebSocketRpcSyncer(rpcWebSocket, gson)
+                    val rpcWebSocket = NodeWebSocket(rpcSource.uri, gson, rpcSource.auth, eventListenerFactory, log)
+                    val webSocketRpcSyncer = WebSocketRpcSyncer(rpcWebSocket, gson, log)
 
                     rpcWebSocket.listener = webSocketRpcSyncer
 
@@ -889,7 +885,7 @@ class EthereumKit(
                 }
 
                 is RpcSource.Http -> {
-                    val apiProvider = RpcApiProviderFactory.nodeApiProvider(rpcSource, eventListenerFactory)
+                    val apiProvider = RpcApiProviderFactory.nodeApiProvider(rpcSource, eventListenerFactory, chain)
                     ApiRpcSyncer(apiProvider, connectionManager, chain.syncInterval)
                 }
             }
@@ -905,7 +901,7 @@ class EthereumKit(
                 EthereumDatabaseManager.getEthereumApiDatabase(application, walletId, chain)
             val storage = ApiStorage(apiDatabase)
 
-            val blockchain = RpcBlockchain.instance(address, storage, syncer, transactionBuilder)
+            val blockchain = RpcBlockchain.instance(address, storage, syncer, transactionBuilder, log)
 
             val transactionDatabase =
                 EthereumDatabaseManager.getTransactionDatabase(application, walletId, chain)
@@ -931,15 +927,15 @@ class EthereumKit(
                 blockchain,
                 transactionProvider
             )
-            val transactionSyncManager = TransactionSyncManager(transactionManager)
+            val transactionSyncManager = TransactionSyncManager(transactionManager, log)
             val explorerSyncScheduler = ExplorerSyncScheduler(chain)
 
             transactionSyncManager.add(internalTransactionsSyncer)
             transactionSyncManager.add(ethereumTransactionSyncer)
 
-            val pendingTransactionSyncer = PendingTransactionSyncer(transactionStorage, blockchain, transactionManager)
+            val pendingTransactionSyncer = PendingTransactionSyncer(transactionStorage, blockchain, transactionManager, log)
             transactionSyncManager.add(pendingTransactionSyncer)
-            val rawTransactionBroadcaster = RawTransactionBroadcaster(blockchain, transactionStorage)
+            val rawTransactionBroadcaster = RawTransactionBroadcaster(blockchain, transactionStorage, logger = log)
 
             val nonceProvider = NonceProvider()
             nonceProvider.addProvider(blockchain)

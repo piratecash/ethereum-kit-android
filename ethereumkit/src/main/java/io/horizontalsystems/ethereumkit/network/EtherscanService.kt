@@ -13,16 +13,13 @@ import io.horizontalsystems.ethereumkit.models.TransactionSource
 import io.reactivex.Single
 import okhttp3.EventListener
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
-import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.HttpException
 import retrofit2.Retrofit
 import retrofit2.adapter.rxjava2.RxJava2CallAdapterFactory
 import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.http.GET
 import retrofit2.http.Query
-import timber.log.Timber
 import java.util.concurrent.atomic.AtomicInteger
-import java.util.logging.Logger
 import kotlin.random.Random
 
 class EtherscanService(
@@ -39,7 +36,6 @@ class EtherscanService(
     @Volatile
     private var lastUsedApiKey: String? = null
 
-    private val logger = Logger.getLogger("EtherscanService")
     private val log = kitLogger(chainId)
 
     val host: String = baseUrl.toHttpUrlOrNull()?.host ?: baseUrl
@@ -53,9 +49,7 @@ class EtherscanService(
     private val gson: Gson
 
     init {
-        val loggingInterceptor = HttpLoggingInterceptor {
-            logger.info(it.replace(apiKeyRegex, "apikey=***"))
-        }.setLevel(HttpLoggingInterceptor.Level.BASIC)
+        val loggingInterceptor = RedactedLoggingInterceptor(log)
 
         val httpClient = SharedHttpClient.newClient {
             eventListenerFactory?.let { eventListenerFactory(it) }
@@ -215,11 +209,9 @@ class EtherscanService(
                 val currentApiKey = lastUsedApiKey?.takeLast(4) ?: "unknown"
                 when (error) {
                     is RequestError.RateLimitExceed -> {
-                        Timber.d("EtherscanService: Retrying $methodName due to RateLimitExceed. API key ending in $currentApiKey")
                         log.w { "$host $methodName: rate limit exceeded (key ...$currentApiKey)" }
                     }
                     is RequestError.InvalidApiKey -> {
-                        Timber.d("EtherscanService: Retrying $methodName due to InvalidApiKey. API key ending in $currentApiKey")
                         log.w { "$host $methodName: key rejected or out of credits (key ...$currentApiKey)" }
                     }
                     is RequestError.ResponseError -> {
@@ -243,7 +235,6 @@ class EtherscanService(
     }
 
     companion object {
-        private val apiKeyRegex = Regex("apikey=[^&\\s]+")
         private const val CREDITS_HEADER = "x-credits-remaining"
 
         // Etherscan V2 times out on an unpaged txlist for busy addresses and zkSync returns only

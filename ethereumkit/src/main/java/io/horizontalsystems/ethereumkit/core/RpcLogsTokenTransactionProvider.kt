@@ -25,15 +25,14 @@ import io.horizontalsystems.ethereumkit.network.DefaultBlockParameterTypeAdapter
 import io.horizontalsystems.ethereumkit.network.IntTypeAdapter
 import io.horizontalsystems.ethereumkit.network.JsonRpcService
 import io.horizontalsystems.ethereumkit.network.LongTypeAdapter
+import io.horizontalsystems.ethereumkit.network.RedactedLoggingInterceptor
 import io.horizontalsystems.ethereumkit.network.SharedHttpClient
 import okhttp3.Credentials
 import okhttp3.EventListener
-import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.adapter.rxjava2.RxJava2CallAdapterFactory
 import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.converter.scalars.ScalarsConverterFactory
-import timber.log.Timber
 import java.math.BigInteger
 import java.net.URI
 import java.util.concurrent.atomic.AtomicInteger
@@ -48,6 +47,7 @@ class RpcLogsTokenTransactionProvider(
     auth: String? = null
 ) : TokenTransactionProvider {
 
+    private val logger = kitLogger(chainId)
     private val service: JsonRpcService
     private var currentRpcId = AtomicInteger(0)
 
@@ -60,8 +60,7 @@ class RpcLogsTokenTransactionProvider(
     private val receiptCache = mutableMapOf<String, RpcTransactionReceipt>()
 
     init {
-        val loggingInterceptor = HttpLoggingInterceptor { message -> Timber.d(message) }
-            .setLevel(HttpLoggingInterceptor.Level.BASIC)
+        val loggingInterceptor = RedactedLoggingInterceptor(logger)
 
         val httpClient = SharedHttpClient.newClient {
             eventListenerFactory?.let { eventListenerFactory(it) }
@@ -154,7 +153,7 @@ class RpcLogsTokenTransactionProvider(
             val to = minOf(currentFrom + currentChunkSize - 1, endBlock)
             try {
                 val chunkLogs = fetchLogsForChunk(currentFrom, to, uri)
-                Timber.d("Fetched logs (${chunkLogs.size} from $currentFrom to $to (${to - currentFrom}), left ${endBlock - to} blocks on $uri for chanid $chainId")
+                logger.d { "Fetched logs (${chunkLogs.size} from $currentFrom to $to (${to - currentFrom}), left ${endBlock - to} blocks for chainId $chainId" }
                 allLogs.addAll(chunkLogs)
                 currentFrom = to + 1
                 // Reset to initial size on success
@@ -164,12 +163,12 @@ class RpcLogsTokenTransactionProvider(
                 if (currentChunkSize > MIN_CHUNK_SIZE) {
                     // Halve the chunk size and retry on same URI
                     currentChunkSize = maxOf(currentChunkSize / 2, MIN_CHUNK_SIZE)
-                    Timber.w("Chunk failed, reducing size to $currentChunkSize")
+                    logger.w { "Chunk failed, reducing size to $currentChunkSize" }
                 } else {
                     // Min chunk size failed, switch to next URI and reset chunk size
                     uriIndex++
                     currentChunkSize = INITIAL_CHUNK_SIZE
-                    Timber.w("Min chunk failed on $uri, switching to next URI")
+                    logger.w { "Min chunk failed, switching to next URI" }
                 }
             }
         }
@@ -221,7 +220,7 @@ class RpcLogsTokenTransactionProvider(
             tx?.let { transaction ->
                 val txChainId = transaction.chainId ?: extractChainIdFromV(transaction.v)
                 if (txChainId != null && txChainId != chainId.toLong()) {
-                    Timber.w("Skipping tx from chainId=$txChainId (expected $chainId): $txHashHex")
+                    logger.w { "Skipping tx from chainId=$txChainId (expected $chainId): $txHashHex" }
                     return null
                 }
             }
@@ -271,7 +270,7 @@ class RpcLogsTokenTransactionProvider(
                 transactionSender = tx?.from
             )
         } catch (e: Throwable) {
-            Timber.w(e, "Failed to convert log to transaction")
+            logger.w(e) { "Failed to convert log to transaction" }
             null
         }
     }

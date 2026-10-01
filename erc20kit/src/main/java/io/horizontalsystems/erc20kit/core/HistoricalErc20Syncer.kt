@@ -1,5 +1,6 @@
 package io.horizontalsystems.erc20kit.core
 
+import co.touchlab.kermit.Logger
 import io.horizontalsystems.ethereumkit.core.EthereumKit
 import io.horizontalsystems.ethereumkit.core.IEip20Storage
 import io.horizontalsystems.ethereumkit.core.TokenTransactionProvider
@@ -19,7 +20,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import timber.log.Timber
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.coroutines.coroutineContext
 
@@ -28,7 +28,8 @@ class HistoricalErc20Syncer(
     private val tokenTransactionProvider: TokenTransactionProvider,
     private val storage: IEip20Storage,
     private val transactionSaver: TransactionSaver,
-    private val connectionManager: ConnectionManager
+    private val connectionManager: ConnectionManager,
+    private val logger: Logger
 ) : EthereumKit.HistoricalSyncer, ConnectionManager.Listener {
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -84,21 +85,21 @@ class HistoricalErc20Syncer(
         runJob.get()?.cancel()
         _syncState.value = EthereumKit.HistoricalSyncState.Idle
         connectionManager.removeListener(this)
-        Timber.i("Stopped historical ERC20 sync")
+        logger.d { "Stopped historical ERC20 sync" }
     }
 
     private fun launchSync(run: Job) {
         if (!isEnabled) {
-            Timber.i("Historical sync not enabled, skipping")
+            logger.d { "Historical sync not enabled, skipping" }
             return
         }
 
         if (syncJob?.isActive == true) {
-            Timber.i("Historical sync already running")
+            logger.d { "Historical sync already running" }
             return
         }
 
-        Timber.i("Starting historical ERC20 sync")
+        logger.d { "Starting historical ERC20 sync" }
 
         // Launching into [run] is the fence: if stop() cancelled it — even after the checks above —
         // the coroutine is born cancelled and its body never executes.
@@ -106,9 +107,9 @@ class HistoricalErc20Syncer(
             try {
                 syncHistoricalBatches()
             } catch (e: CancellationException) {
-                Timber.i("Historical sync cancelled")
+                logger.d { "Historical sync cancelled" }
             } catch (e: Throwable) {
-                Timber.e(e, "Historical sync failed")
+                logger.e(e) { "Historical sync failed" }
                 _syncState.value = EthereumKit.HistoricalSyncState.Idle
             }
         }
@@ -135,7 +136,7 @@ class HistoricalErc20Syncer(
             }
             if (!repeat && latest > 0 && retryAttemptsRemaining > 0) {
                 // Wait random time to avoid limits
-                Timber.i("Waiting before next historical sync attempt")
+                logger.d { "Waiting before next historical sync attempt" }
                 delay((1_000L..10_000L).random())
                 --retryAttemptsRemaining
                 repeat = true
@@ -149,12 +150,12 @@ class HistoricalErc20Syncer(
 
     private suspend fun performBatchSync(latest: Long): Boolean {
         if (!coroutineContext.isActive) {
-            Timber.i("Historical sync stopped by user")
+            logger.d { "Historical sync stopped by user" }
             return false
         }
 
         if (latest <= 0) {
-            Timber.i("Reached genesis block, historical sync complete")
+            logger.d { "Reached genesis block, historical sync complete" }
             _syncState.value = EthereumKit.HistoricalSyncState.Completed
             return false
         }
@@ -162,7 +163,7 @@ class HistoricalErc20Syncer(
         val fromBlock = maxOf(0, latest - HIST_WINDOW)
         val toBlock = maxOf(0, latest + SAFETY_OVERLAP)
 
-        Timber.i("Historical sync step: fetching blocks $fromBlock to $toBlock")
+        logger.d { "Historical sync step: fetching blocks $fromBlock to $toBlock" }
 
         return try {
             val result = tokenTransactionProvider.getTokenTransactions(fromBlock, toBlock)
@@ -172,7 +173,7 @@ class HistoricalErc20Syncer(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Throwable) {
-            Timber.e(e, "Historical sync batch failed for blocks $fromBlock-$toBlock")
+            logger.e(e) { "Historical sync batch failed for blocks $fromBlock-$toBlock" }
             false
         }
     }
@@ -183,7 +184,7 @@ class HistoricalErc20Syncer(
     ) {
         withContext(Dispatchers.IO + CoroutineExceptionHandler {
             _, exception ->
-            Timber.e(exception, "Error handling historical sync batch result")
+            logger.e(exception) { "Error handling historical sync batch result" }
         }) {
             transactionSaver.handle(transactions)
 
@@ -193,14 +194,14 @@ class HistoricalErc20Syncer(
 
             if (transactionObjects.isNotEmpty()) {
                 transactionManager.handle(transactions = transactionObjects, initial = false)
-                Timber.i("Historical sync: saved ${transactionObjects.size} events and transactions from batch $fromBlock-${fromBlock + HIST_WINDOW - 1}")
+                logger.d { "Historical sync: saved ${transactionObjects.size} events and transactions from batch $fromBlock-${fromBlock + HIST_WINDOW - 1}" }
             }
 
             storage.saveSyncBlockInfo(
                 lastScannedBlock = null,
                 historicalMinScannedBlock = fromBlock
             )
-            Timber.i("Historical sync: updated cursor to $fromBlock")
+            logger.d { "Historical sync: updated cursor to $fromBlock" }
         }
     }
 

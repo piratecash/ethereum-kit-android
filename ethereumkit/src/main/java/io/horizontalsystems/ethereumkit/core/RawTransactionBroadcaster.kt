@@ -1,5 +1,6 @@
 package io.horizontalsystems.ethereumkit.core
 
+import co.touchlab.kermit.Logger
 import io.horizontalsystems.ethereumkit.api.jsonrpc.JsonRpc
 import io.horizontalsystems.ethereumkit.crypto.CryptoUtils
 import io.horizontalsystems.ethereumkit.models.RawTransactionBroadcastRecord
@@ -8,7 +9,6 @@ import io.horizontalsystems.ethereumkit.models.RawTransactionBroadcastStatus
 import io.reactivex.Observable
 import io.reactivex.Single
 import kotlinx.coroutines.rx2.rxSingle
-import timber.log.Timber
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
@@ -17,6 +17,7 @@ class RawTransactionBroadcaster(
     private val storage: IRawTransactionBroadcastStorage,
     private val currentTime: () -> Long = { System.currentTimeMillis() },
     private val networkTimeoutMs: Long = networkTimeout,
+    private val logger: Logger,
 ) {
     private val inFlight = mutableSetOf<String>()
     private var retryRunning = false
@@ -55,7 +56,7 @@ class RawTransactionBroadcaster(
             .flatMapObservable { Observable.fromIterable(it) }
             .concatMapSingle { record ->
                 retry(record).onErrorReturn { error ->
-                    Timber.w(error, "Raw transaction retry failed unexpectedly.")
+                    logger.w(error) { "Raw transaction retry failed unexpectedly." }
                     Unit
                 }
             }
@@ -71,7 +72,7 @@ class RawTransactionBroadcaster(
         if (record.expiresAt <= now || record.retriesCount >= maxRetriesCount) {
             return@defer rxSingle(rxIoDispatcher) {
                 storage.deleteRawTransactionBroadcast(record)
-                Timber.w("Dropping raw transaction broadcast after retries=${record.retriesCount}.")
+                logger.w { "Dropping raw transaction broadcast after retries=${record.retriesCount}." }
             }
         }
 
@@ -160,7 +161,7 @@ class RawTransactionBroadcaster(
                 rxSingle(rxIoDispatcher) {
                     storage.deleteRawTransactionBroadcast(record)
                     if (!exists) {
-                        Timber.w(error, "Dropping raw transaction broadcast after permanent error.")
+                        logger.w(error) { "Dropping raw transaction broadcast after permanent error." }
                     }
                 }
             }

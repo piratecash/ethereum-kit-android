@@ -1,5 +1,6 @@
 package io.horizontalsystems.ethereumkit.core
 
+import co.touchlab.kermit.Logger as KermitLogger
 import io.horizontalsystems.ethereumkit.models.Address
 import kotlinx.coroutines.runBlocking
 import okhttp3.Credentials
@@ -20,6 +21,8 @@ class RpcLogsTokenTransactionProviderTest {
     fun setUp() {
         server = MockWebServer()
         server.start()
+        // The module's unit tests have no Android stubs, so a real log writer would hit android.util.Log.
+        KermitLogger.setLogWriters(emptyList())
     }
 
     @After
