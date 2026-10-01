@@ -72,7 +72,6 @@ import io.reactivex.subjects.PublishSubject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.rx2.rxMaybe
-import kotlinx.coroutines.rx2.rxSingle
 import okhttp3.EventListener
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import java.math.BigInteger
@@ -488,9 +487,7 @@ class EthereumKit(
 
     fun send(rawTransaction: RawTransaction, signature: Signature): Single<FullTransaction> {
         return blockchain.send(rawTransaction, signature)
-            .flatMap { transaction ->
-                rxSingle(rxIoDispatcher) { transactionManager.handle(listOf(transaction)).first() }
-            }
+            .flatMapPersisting { transaction -> transactionManager.handle(listOf(transaction)).first() }
     }
 
     fun signedRawTransaction(
@@ -893,15 +890,12 @@ class EthereumKit(
             val databases = EthereumDatabaseManager.open(application, chain, walletId, databaseKey)
             val storage = ApiStorage(databases.api)
             val erc20Storage = Eip20Storage(databases.erc20)
-            // All reads happen before any listener is registered; nothing below suspends, so cancellation cannot leak.
+            // All reads happen before any listener is registered.
             val state = EthereumKitState()
-            val lastScannedBlock = try {
+            val lastScannedBlock = EthereumKitDatabases.readOrClose(databases::close) {
                 state.lastBlockHeight = storage.getLastBlockHeight()
                 state.accountState = storage.getAccountState()
                 erc20Storage.getLastScannedBlock()
-            } catch (error: Throwable) {
-                databases.close()
-                throw error
             }
 
             val connectionManager = ConnectionManager.getInstance(application)

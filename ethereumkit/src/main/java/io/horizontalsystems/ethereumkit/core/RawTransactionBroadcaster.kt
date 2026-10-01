@@ -34,12 +34,10 @@ class RawTransactionBroadcaster(
 
         blockchain.sendRawTransaction(rawTransaction)
             .withNetworkTimeout()
-            .flatMap { rpcHash ->
-                rxSingle(rxIoDispatcher) {
-                    validateRpcHash(hash, rpcHash)
-                    deleteQueuedBroadcast(hash)
-                    RawTransactionBroadcastResult(hash, RawTransactionBroadcastStatus.Submitted)
-                }
+            .flatMapPersisting { rpcHash ->
+                validateRpcHash(hash, rpcHash)
+                deleteQueuedBroadcast(hash)
+                RawTransactionBroadcastResult(hash, RawTransactionBroadcastStatus.Submitted)
             }
             .onErrorResumeNext { error: Throwable ->
                 handleInitialBroadcastError(hash, rawTransaction, error)
@@ -100,11 +98,9 @@ class RawTransactionBroadcaster(
     private fun retryBroadcast(record: RawTransactionBroadcastRecord, now: Long): Single<Unit> {
         return blockchain.sendRawTransaction(record.rawTransaction)
             .withNetworkTimeout()
-            .flatMap { rpcHash ->
-                rxSingle(rxIoDispatcher) {
-                    validateRpcHash(record.hash, rpcHash)
-                    storage.deleteRawTransactionBroadcast(record)
-                }
+            .flatMapPersisting { rpcHash ->
+                validateRpcHash(record.hash, rpcHash)
+                storage.deleteRawTransactionBroadcast(record)
             }
             .onErrorResumeNext { error: Throwable ->
                 handleRetryBroadcastError(record, error, now)
@@ -117,30 +113,28 @@ class RawTransactionBroadcaster(
         error: Throwable
     ): Single<RawTransactionBroadcastResult> {
         if (error is UnsupportedOperationException) {
-            return rxSingle(rxIoDispatcher) {
+            return persisting {
                 deleteQueuedBroadcast(hash)
                 throw error
             }
         }
 
         if (isKnownTransactionError(error)) {
-            return rxSingle(rxIoDispatcher) {
+            return persisting {
                 deleteQueuedBroadcast(hash)
                 RawTransactionBroadcastResult(hash, RawTransactionBroadcastStatus.AlreadyKnown)
             }
         }
 
         if (isPermanentError(error)) {
-            return transactionExists(hash).flatMap { exists ->
-                rxSingle(rxIoDispatcher) {
-                    deleteQueuedBroadcast(hash)
-                    if (!exists) throw error
-                    RawTransactionBroadcastResult(hash, RawTransactionBroadcastStatus.AlreadyKnown)
-                }
+            return transactionExists(hash).flatMapPersisting { exists ->
+                deleteQueuedBroadcast(hash)
+                if (!exists) throw error
+                RawTransactionBroadcastResult(hash, RawTransactionBroadcastStatus.AlreadyKnown)
             }
         }
 
-        return rxSingle(rxIoDispatcher) { queueForRetry(hash, rawTransaction) }
+        return persisting { queueForRetry(hash, rawTransaction) }
     }
 
     private fun handleRetryBroadcastError(
@@ -149,25 +143,23 @@ class RawTransactionBroadcaster(
         now: Long
     ): Single<Unit> {
         if (error is UnsupportedOperationException) {
-            return rxSingle(rxIoDispatcher) { storage.deleteRawTransactionBroadcast(record) }
+            return persisting { storage.deleteRawTransactionBroadcast(record) }
         }
 
         if (isKnownTransactionError(error)) {
-            return rxSingle(rxIoDispatcher) { storage.deleteRawTransactionBroadcast(record) }
+            return persisting { storage.deleteRawTransactionBroadcast(record) }
         }
 
         if (isPermanentError(error)) {
-            return transactionExists(record.hash).flatMap { exists ->
-                rxSingle(rxIoDispatcher) {
-                    storage.deleteRawTransactionBroadcast(record)
-                    if (!exists) {
-                        logger.w(error) { "Dropping raw transaction broadcast after permanent error." }
-                    }
+            return transactionExists(record.hash).flatMapPersisting { exists ->
+                storage.deleteRawTransactionBroadcast(record)
+                if (!exists) {
+                    logger.w(error) { "Dropping raw transaction broadcast after permanent error." }
                 }
             }
         }
 
-        return rxSingle(rxIoDispatcher) {
+        return persisting {
             storage.updateRawTransactionBroadcast(
                 record.copy(
                     lastSendTime = now,

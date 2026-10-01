@@ -20,6 +20,8 @@ import io.horizontalsystems.ethereumkit.models.TransactionLog
 import io.reactivex.Single
 import io.reactivex.plugins.RxJavaPlugins
 import io.reactivex.schedulers.Schedulers
+import io.reactivex.schedulers.TestScheduler
+import io.reactivex.subjects.SingleSubject
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertArrayEquals
@@ -278,6 +280,55 @@ class RawTransactionBroadcasterTest {
         assertEquals(0, blockchain.getTransactionCallCount)
         assertEquals(0, blockchain.getTransactionReceiptCallCount)
     }
+
+    @Test
+    fun broadcast_disposedRightAfterAccepted_stillDeletesQueuedRecord() = runTest {
+        val io = deferIoScheduler()
+        storage.addRawTransactionBroadcast(queuedRecord(lastSendTime = now))
+        val accepted = SingleSubject.create<ByteArray>()
+        blockchain.sendRawTransactionResult = accepted
+
+        val observer = broadcaster.broadcast(rawTransaction).test()
+        accepted.onSuccess(hash)
+        observer.dispose()
+        io.triggerActions()
+
+        assertTrue(storage.records.isEmpty())
+    }
+
+    @Test
+    fun broadcast_disposedRightAfterTransientError_stillQueues() = runTest {
+        val io = deferIoScheduler()
+        val failed = SingleSubject.create<ByteArray>()
+        blockchain.sendRawTransactionResult = failed
+
+        val observer = broadcaster.broadcast(rawTransaction).test()
+        failed.onError(IOException("offline"))
+        observer.dispose()
+        io.triggerActions()
+
+        assertEquals(1, storage.records.size)
+    }
+
+    @Test
+    fun retry_disposedRightAfterAccepted_stillDeletesRecord() = runTest {
+        val io = deferIoScheduler()
+        storage.addRawTransactionBroadcast(queuedRecord(lastSendTime = now - RawTransactionBroadcaster.retriesPeriod - 1))
+        stubTransactionAbsent()
+        val accepted = SingleSubject.create<ByteArray>()
+        blockchain.sendRawTransactionResult = accepted
+
+        val observer = broadcaster.retryQueued().test()
+        io.triggerActions()
+        accepted.onSuccess(hash)
+        observer.dispose()
+        io.triggerActions()
+
+        assertTrue(storage.records.isEmpty())
+    }
+
+    // Storage work then waits for triggerActions(), so the test can dispose before it starts.
+    private fun deferIoScheduler(): TestScheduler = TestScheduler().also { io -> RxJavaPlugins.setIoSchedulerHandler { io } }
 
     private fun stubTransactionAbsent() {
         blockchain.getTransactionResult = Single.error(JsonRpc.ResponseError.InvalidResult(null))

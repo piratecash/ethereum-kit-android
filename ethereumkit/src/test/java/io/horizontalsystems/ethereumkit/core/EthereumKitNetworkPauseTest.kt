@@ -7,11 +7,13 @@ import io.horizontalsystems.ethereumkit.models.Address
 import io.horizontalsystems.ethereumkit.models.Chain
 import io.horizontalsystems.ethereumkit.models.Eip20Event
 import io.horizontalsystems.ethereumkit.models.FullTransaction
+import io.horizontalsystems.ethereumkit.models.Transaction
 import io.horizontalsystems.ethereumkit.transactionsyncers.ExplorerSyncScheduler
 import io.horizontalsystems.ethereumkit.transactionsyncers.MutableTestClock
 import io.horizontalsystems.ethereumkit.transactionsyncers.TransactionSyncManager
 import io.mockk.clearMocks
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -19,6 +21,8 @@ import io.reactivex.Single
 import io.reactivex.plugins.RxJavaPlugins
 import io.reactivex.processors.PublishProcessor
 import io.reactivex.schedulers.Schedulers
+import io.reactivex.schedulers.TestScheduler
+import io.reactivex.subjects.SingleSubject
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runTest
@@ -120,6 +124,24 @@ class EthereumKitNetworkPauseTest {
         verify(exactly = 1) { blockchain.start() }
         verify(exactly = 0) { blockchain.refresh() }
         verify(exactly = 0) { blockchain.syncAccountState() }
+    }
+
+    @Test
+    fun send_disposedRightAfterBroadcastAccepted_stillHandlesTransaction() {
+        val io = TestScheduler()
+        RxJavaPlugins.setIoSchedulerHandler { io }
+        val transaction = Transaction(hash = byteArrayOf(1), timestamp = 0, isFailed = false)
+        val accepted = SingleSubject.create<Transaction>()
+        every { blockchain.send(any(), any()) } returns accepted
+        coEvery { transactionManager.handle(any(), any()) } returns listOf(mockk())
+        val kit = ethereumKit()
+
+        val observer = kit.send(mockk(), mockk()).test()
+        accepted.onSuccess(transaction)
+        observer.dispose()
+        io.triggerActions()
+
+        coVerify(exactly = 1) { transactionManager.handle(listOf(transaction), any()) }
     }
 
     @Test

@@ -17,8 +17,6 @@ import io.horizontalsystems.ethereumkit.models.Signature
 import io.horizontalsystems.ethereumkit.network.ConnectionManager
 import io.horizontalsystems.sqlcipher.room.DatabaseMigrationResult
 import io.reactivex.Single
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.rx2.rxSingle
 import okhttp3.EventListener
 import java.net.URI
 
@@ -29,10 +27,9 @@ class MerkleTransactionAdapter(
     private val sourceTag: String,
 ) {
     fun send(rawTransaction: RawTransaction, signature: Signature): Single<FullTransaction> {
-        return blockchain.send(rawTransaction, signature, sourceTag)
-            .flatMap { transaction ->
-                rxSingle(Dispatchers.IO) { transactionManager.handle(listOf(transaction)).first() }
-            }
+        return blockchain.send(rawTransaction, signature, sourceTag) { transaction ->
+            transactionManager.handle(listOf(transaction)).first()
+        }
     }
 
     fun registerInKit(ethereumKit: EthereumKit) {
@@ -83,14 +80,15 @@ class MerkleTransactionAdapter(
                 logger = kitLogger(chain.id)
             )
 
+            // Opened first: the syncer registers a connection listener, and nothing may suspend after that.
+            val merkleDatabase = EthereumKitDatabases.open {
+                MerkleDatabase.getInstance(context, databaseName(chain, walletId), databaseKey)
+            }
+
             val connectionManager = ConnectionManager.getInstance(context)
             val rpcSyncer = ApiRpcSyncer(rpcProvider, connectionManager, chain.syncInterval)
 
             val transactionBuilder = TransactionBuilder(address, chain.id)
-
-            val merkleDatabase = EthereumKitDatabases.open {
-                MerkleDatabase.getInstance(context, databaseName(chain, walletId), databaseKey)
-            }
 
             val merkleTransactionHashManager =
                 MerkleTransactionHashManager(merkleDatabase.merkleTransactionDao())

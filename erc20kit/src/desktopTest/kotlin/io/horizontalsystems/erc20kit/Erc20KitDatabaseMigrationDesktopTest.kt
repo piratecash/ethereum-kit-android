@@ -6,6 +6,7 @@ import io.horizontalsystems.ethereumkit.PlatformContext
 import io.horizontalsystems.ethereumkit.fixture.BACKUP_SUFFIX
 import io.horizontalsystems.ethereumkit.fixture.ManifestPhase
 import io.horizontalsystems.ethereumkit.fixture.STAGING_SUFFIX
+import io.horizontalsystems.ethereumkit.fixture.assertCancelledAtAnyStepReleases
 import io.horizontalsystems.ethereumkit.fixture.assertUnchanged
 import io.horizontalsystems.ethereumkit.fixture.copyFixture
 import io.horizontalsystems.ethereumkit.fixture.databaseFamily
@@ -14,6 +15,7 @@ import io.horizontalsystems.ethereumkit.fixture.encryptedTables
 import io.horizontalsystems.ethereumkit.fixture.foreignFiles
 import io.horizontalsystems.ethereumkit.fixture.hasPlaintextSqliteHeader
 import io.horizontalsystems.ethereumkit.fixture.migrationArtifacts
+import io.horizontalsystems.ethereumkit.fixture.openDatabases
 import io.horizontalsystems.ethereumkit.fixture.plaintextTables
 import io.horizontalsystems.ethereumkit.fixture.watchKit
 import io.horizontalsystems.ethereumkit.fixture.writeManifest
@@ -112,6 +114,15 @@ class Erc20KitDatabaseMigrationDesktopTest {
         Erc20Kit.clear(context, Chain.Ethereum, "a")
 
         assertEquals(listOf(manifest.name), migrationArtifacts(directory))
+    }
+
+    @Test
+    fun getInstance_callerCancelledAtAnyStep_closesTokenDatabase() = runBlocking {
+        val ethereumKit = watchKit(context, FIXTURE_WALLET, databaseKey)
+
+        assertCancelledAtAnyStepReleases(held = { openDatabases(directory, "Erc20-") }) {
+            Erc20Kit.getInstance(context, ethereumKit, Address("0xdac17f958d2ee523a2206206994597c13d831ec7"), databaseKey)
+        }
     }
 
     private fun token(name: String): File = copyFixture(Erc20KitFixture.USDT_DB, File(directory, name))

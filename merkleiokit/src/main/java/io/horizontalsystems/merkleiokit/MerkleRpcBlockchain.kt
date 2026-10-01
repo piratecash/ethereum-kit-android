@@ -7,14 +7,13 @@ import io.horizontalsystems.ethereumkit.api.jsonrpc.JsonRpc
 import io.horizontalsystems.ethereumkit.api.jsonrpc.models.RpcTransaction
 import io.horizontalsystems.ethereumkit.core.INonceProvider
 import io.horizontalsystems.ethereumkit.core.TransactionBuilder
+import io.horizontalsystems.ethereumkit.core.flatMapPersisting
 import io.horizontalsystems.ethereumkit.models.Address
 import io.horizontalsystems.ethereumkit.models.DefaultBlockParameter
 import io.horizontalsystems.ethereumkit.models.RawTransaction
 import io.horizontalsystems.ethereumkit.models.Signature
 import io.horizontalsystems.ethereumkit.models.Transaction
 import io.reactivex.Single
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.rx2.rxSingle
 import java.util.Optional
 
 class MerkleRpcBlockchain(
@@ -33,16 +32,23 @@ class MerkleRpcBlockchain(
         return syncer.single(GetTransactionCountJsonRpc(address, defaultBlockParameter))
     }
 
-    fun send(rawTransaction: RawTransaction, signature: Signature, sourceTag: String): Single<Transaction> {
+    fun send(rawTransaction: RawTransaction, signature: Signature, sourceTag: String): Single<Transaction> =
+        send(rawTransaction, signature, sourceTag) { it }
+
+    /** [afterSaved] runs in the same non-skippable step as saving the hash, once Merkle accepted the transaction. */
+    internal fun <R : Any> send(
+        rawTransaction: RawTransaction,
+        signature: Signature,
+        sourceTag: String,
+        afterSaved: suspend (Transaction) -> R,
+    ): Single<R> {
         val tx = transactionBuilder.transaction(rawTransaction, signature)
         val encoded = transactionBuilder.encode(rawTransaction, signature)
 
         return syncer.single(MerkleSendRawTransactionJsonRpc(encoded, sourceTag))
-            .flatMap { txHash ->
-                rxSingle(Dispatchers.IO) {
-                    manager.save(MerkleTransactionHash(txHash))
-                    tx
-                }
+            .flatMapPersisting { txHash ->
+                manager.save(MerkleTransactionHash(txHash))
+                afterSaved(tx)
             }
     }
 

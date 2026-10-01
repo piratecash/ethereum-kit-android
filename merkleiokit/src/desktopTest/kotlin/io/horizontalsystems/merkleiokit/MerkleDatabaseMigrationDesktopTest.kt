@@ -3,6 +3,7 @@ package io.horizontalsystems.merkleiokit
 import io.horizontalsystems.ethereumkit.PlatformContext
 import io.horizontalsystems.ethereumkit.core.EthereumKit
 import io.horizontalsystems.ethereumkit.fixture.BACKUP_SUFFIX
+import io.horizontalsystems.ethereumkit.fixture.assertCancelledAtAnyStepReleases
 import io.horizontalsystems.ethereumkit.fixture.assertUnchanged
 import io.horizontalsystems.ethereumkit.fixture.copyFixture
 import io.horizontalsystems.ethereumkit.fixture.databaseFamily
@@ -11,12 +12,19 @@ import io.horizontalsystems.ethereumkit.fixture.encryptedTables
 import io.horizontalsystems.ethereumkit.fixture.foreignFiles
 import io.horizontalsystems.ethereumkit.fixture.hasPlaintextSqliteHeader
 import io.horizontalsystems.ethereumkit.fixture.migrationArtifacts
+import io.horizontalsystems.ethereumkit.fixture.openDatabases
 import io.horizontalsystems.ethereumkit.fixture.plaintextTables
 import io.horizontalsystems.ethereumkit.fixture.watchKit
 import io.horizontalsystems.ethereumkit.models.Chain
+import io.horizontalsystems.ethereumkit.network.ConnectionManager
 import io.horizontalsystems.merkleiokit.fixture.MerkleIoFixture
 import io.horizontalsystems.sqlcipher.room.DatabaseMigrationResult
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.mockkObject
+import io.mockk.unmockkAll
 import kotlinx.coroutines.runBlocking
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Rule
@@ -36,6 +44,11 @@ class MerkleDatabaseMigrationDesktopTest {
     private val directory: File get() = tmp.root
     private val context: PlatformContext get() = PlatformContext(directory)
     private val database: File get() = File(directory, MerkleIoFixture.DB)
+
+    @After
+    fun tearDown() {
+        unmockkAll()
+    }
 
     @Test
     fun migrateDatabase_fixture_encryptsItAndAdapterReadsProtectedHashes() = runBlocking {
@@ -68,6 +81,16 @@ class MerkleDatabaseMigrationDesktopTest {
         assertUnchanged(foreign)
     }
 
+    @Test
+    fun getInstance_callerCancelledAtAnyStep_closesDatabaseAndKeepsNoConnectionListener() = runBlocking {
+        val kit = watchKit(context, WALLET_ID, databaseKey)
+        val listeners = recordConnectionListeners()
+
+        assertCancelledAtAnyStepReleases(held = { openDatabases(directory, "MerkleIo-") + listeners.map { "listener" } }) {
+            adapter(kit)
+        }
+    }
+
     private suspend fun adapter(kit: EthereumKit): MerkleTransactionAdapter = checkNotNull(
         MerkleTransactionAdapter.getInstance(
             merkleIoPubKey = "key",
@@ -81,6 +104,19 @@ class MerkleDatabaseMigrationDesktopTest {
             transactionSyncSourceStorage = kit.transactionSyncSourceStorage,
         )
     )
+
+    // The desktop ConnectionManager drops listeners, so record them to see which stay registered.
+    private fun recordConnectionListeners(): Set<ConnectionManager.Listener> {
+        val listeners = mutableSetOf<ConnectionManager.Listener>()
+        val connectionManager = mockk<ConnectionManager> {
+            every { isConnected } returns true
+            every { addListener(any()) } answers { listeners.add(firstArg()) }
+            every { removeListener(any()) } answers { listeners.remove(firstArg()) }
+        }
+        mockkObject(ConnectionManager.Companion)
+        every { ConnectionManager.getInstance(any()) } returns connectionManager
+        return listeners
+    }
 
     private companion object {
         const val WALLET_ID = "fixturewallet"

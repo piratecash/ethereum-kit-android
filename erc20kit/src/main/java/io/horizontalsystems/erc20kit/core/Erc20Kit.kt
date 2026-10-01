@@ -174,11 +174,12 @@ class Erc20Kit(
             )
             val roomStorage = Erc20Storage(erc20KitDatabase)
             val balanceStorage: ITokenBalanceStorage = roomStorage
+            val storedBalance = EthereumKitDatabases.readOrClose(erc20KitDatabase::close) { balanceStorage.getBalance() }
 
             val dataProvider: IDataProvider = DataProvider(ethereumKit)
             val transactionManager = TransactionManager(contractAddress, ethereumKit)
             val balanceManager: IBalanceManager =
-                BalanceManager(contractAddress, address, balanceStorage, dataProvider, balanceStorage.getBalance())
+                BalanceManager(contractAddress, address, balanceStorage, dataProvider, storedBalance)
             val allowanceManager = AllowanceManager(ethereumKit, contractAddress, address)
 
             val erc20Kit =

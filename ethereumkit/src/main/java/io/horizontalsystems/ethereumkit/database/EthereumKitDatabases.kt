@@ -86,6 +86,17 @@ object EthereumKitDatabases {
         }
     }
 
+    /**
+     * Runs a factory's reads of databases it just opened, calling [close] if they fail or the caller is cancelled.
+     * Nothing may suspend after it in the factory, or a cancellation there would leak the databases again.
+     */
+    suspend fun <T> readOrClose(close: () -> Unit, read: suspend () -> T): T = try {
+        read()
+    } catch (error: Throwable) {
+        close()
+        throw error
+    }
+
     /** Checks the file at [path] against [databaseKey] and configures [builder] to open it encrypted. */
     fun <T : RoomDatabase> encrypted(
         builder: RoomDatabase.Builder<T>,

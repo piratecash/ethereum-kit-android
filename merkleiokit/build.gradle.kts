@@ -29,6 +29,7 @@ kotlin {
                 implementation(libs.junit)
                 implementation(libs.robolectric)
                 implementation(libs.androidx.test.core)
+                implementation(libs.mockk)
                 implementation(libs.kotlinx.coroutines.test)
             }
         }
@@ -45,6 +46,7 @@ kotlin {
             resources.srcDir("src/test/resources")
             dependencies {
                 implementation(libs.junit)
+                implementation(libs.mockk)
                 implementation(libs.kotlinx.coroutines.test)
                 implementation(libs.sqlite.bundled)
                 implementation(libs.sqlcipher.driver)

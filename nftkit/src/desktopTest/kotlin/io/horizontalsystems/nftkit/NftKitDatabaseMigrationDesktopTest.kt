@@ -2,6 +2,7 @@ package io.horizontalsystems.nftkit
 
 import io.horizontalsystems.ethereumkit.PlatformContext
 import io.horizontalsystems.ethereumkit.fixture.BACKUP_SUFFIX
+import io.horizontalsystems.ethereumkit.fixture.assertCancelledAtAnyStepReleases
 import io.horizontalsystems.ethereumkit.fixture.assertUnchanged
 import io.horizontalsystems.ethereumkit.fixture.copyFixture
 import io.horizontalsystems.ethereumkit.fixture.databaseFamily
@@ -10,6 +11,7 @@ import io.horizontalsystems.ethereumkit.fixture.encryptedTables
 import io.horizontalsystems.ethereumkit.fixture.foreignFiles
 import io.horizontalsystems.ethereumkit.fixture.hasPlaintextSqliteHeader
 import io.horizontalsystems.ethereumkit.fixture.migrationArtifacts
+import io.horizontalsystems.ethereumkit.fixture.openDatabases
 import io.horizontalsystems.ethereumkit.fixture.plaintextTables
 import io.horizontalsystems.ethereumkit.fixture.watchKit
 import io.horizontalsystems.ethereumkit.models.Chain
@@ -69,6 +71,15 @@ class NftKitDatabaseMigrationDesktopTest {
         assertEquals(emptyList<String>(), databaseFamily(directory, database.name).filterNot { it == otherWallet.name })
         assertEquals(emptyList<String>(), migrationArtifacts(directory) - foreign.keys.map(File::getName).toSet())
         assertUnchanged(foreign)
+    }
+
+    @Test
+    fun getInstance_callerCancelledAtAnyStep_closesDatabase() = runBlocking {
+        val ethereumKit = watchKit(context, WALLET_ID, databaseKey)
+
+        assertCancelledAtAnyStepReleases(held = { openDatabases(directory, "NftKit-") }) {
+            NftKit.getInstance(context, ethereumKit, databaseKey)
+        }
     }
 
     private companion object {

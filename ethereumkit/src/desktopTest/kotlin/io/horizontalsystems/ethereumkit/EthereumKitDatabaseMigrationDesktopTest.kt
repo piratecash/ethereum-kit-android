@@ -11,7 +11,9 @@ import io.horizontalsystems.ethereumkit.fixture.EthereumKitFixture.snapshot
 import io.horizontalsystems.ethereumkit.fixture.BACKUP_SUFFIX
 import io.horizontalsystems.ethereumkit.fixture.LOCK_FILE_NAME
 import io.horizontalsystems.ethereumkit.fixture.ManifestPhase
+import io.horizontalsystems.ethereumkit.fixture.QueueDispatcher
 import io.horizontalsystems.ethereumkit.fixture.STAGING_SUFFIX
+import io.horizontalsystems.ethereumkit.fixture.assertCancelledAtAnyStepReleases
 import io.horizontalsystems.ethereumkit.fixture.assertUnchanged
 import io.horizontalsystems.ethereumkit.fixture.copyFixture
 import io.horizontalsystems.ethereumkit.fixture.databaseFamily
@@ -21,6 +23,7 @@ import io.horizontalsystems.ethereumkit.fixture.foreignFiles
 import io.horizontalsystems.ethereumkit.fixture.hasPlaintextSqliteHeader
 import io.horizontalsystems.ethereumkit.fixture.interruptStagedMigration
 import io.horizontalsystems.ethereumkit.fixture.migrationArtifacts
+import io.horizontalsystems.ethereumkit.fixture.openDatabases
 import io.horizontalsystems.ethereumkit.fixture.otherDatabaseKey
 import io.horizontalsystems.ethereumkit.fixture.plaintextTables
 import io.horizontalsystems.ethereumkit.fixture.watchKit
@@ -30,7 +33,6 @@ import io.horizontalsystems.sqlcipher.room.DatabaseKeyMismatchException
 import io.horizontalsystems.sqlcipher.room.DatabaseMigrationInProgressException
 import io.horizontalsystems.sqlcipher.room.DatabaseMigrationRequiredException
 import io.horizontalsystems.sqlcipher.room.DatabaseMigrationResult
-import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -45,9 +47,6 @@ import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import org.junit.rules.Timeout
 import java.io.File
-import java.util.concurrent.LinkedBlockingQueue
-import java.util.concurrent.TimeUnit
-import kotlin.coroutines.CoroutineContext
 
 /** How EthereumKit wires sqlcipher-room for its databases; engine internals are covered by that module. */
 class EthereumKitDatabaseMigrationDesktopTest {
@@ -267,27 +266,9 @@ class EthereumKitDatabaseMigrationDesktopTest {
     fun getInstance_callerCancelledAtAnyStep_closesDatabases() = runBlocking {
         copyFixtures()
         migrate(databaseKey)
-        var cancelledWithOpenDatabases = 0
 
-        for (steps in 1..MAX_STEPS) {
-            val caller = QueueDispatcher()
-            val job = CoroutineScope(caller).launch { kit(databaseKey) }
-            repeat(steps) { if (!job.isCompleted) caller.runNext() }
-            if (job.isCompleted) break
-            if (openDatabaseFiles().isNotEmpty()) cancelledWithOpenDatabases++
-
-            job.cancel()
-            while (!job.isCompleted) caller.runNext()
-
-            assertTrue("step $steps", job.isCancelled)
-            // SQLite deletes a database's -wal file when its last connection closes.
-            assertEquals("step $steps", emptyList<String>(), openDatabaseFiles())
-        }
-
-        assertTrue(cancelledWithOpenDatabases > 0)
+        assertCancelledAtAnyStepReleases(held = { openDatabases(directory, "Ethereum-") }) { kit(databaseKey) }
     }
-
-    private fun openDatabaseFiles(): List<String> = directory.list().orEmpty().filter { it.endsWith("-wal") }
 
     private fun copyFixtures() {
         fixtureNames.forEach { copyFixture(it, File(directory, it)) }
@@ -313,19 +294,7 @@ class EthereumKitDatabaseMigrationDesktopTest {
         "wallet.sqlcipher-migrating" to databaseKey,
     )
 
-    /** Runs the caller's continuations only when the test says so. */
-    private class QueueDispatcher : CoroutineDispatcher() {
-        private val tasks = LinkedBlockingQueue<Runnable>()
-
-        override fun dispatch(context: CoroutineContext, block: Runnable) = tasks.put(block)
-
-        fun next(): Runnable = checkNotNull(tasks.poll(30, TimeUnit.SECONDS)) { "No continuation was dispatched" }
-
-        fun runNext() = next().run()
-    }
-
     private companion object {
         const val WALLET_ID = "fixturewallet"
-        const val MAX_STEPS = 100
     }
 }
