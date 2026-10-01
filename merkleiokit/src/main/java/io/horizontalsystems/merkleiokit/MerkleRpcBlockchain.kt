@@ -13,6 +13,8 @@ import io.horizontalsystems.ethereumkit.models.RawTransaction
 import io.horizontalsystems.ethereumkit.models.Signature
 import io.horizontalsystems.ethereumkit.models.Transaction
 import io.reactivex.Single
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.rx2.rxSingle
 import java.util.Optional
 
 class MerkleRpcBlockchain(
@@ -36,10 +38,12 @@ class MerkleRpcBlockchain(
         val encoded = transactionBuilder.encode(rawTransaction, signature)
 
         return syncer.single(MerkleSendRawTransactionJsonRpc(encoded, sourceTag))
-            .doOnSuccess { txHash ->
-                manager.save(MerkleTransactionHash(txHash))
+            .flatMap { txHash ->
+                rxSingle(Dispatchers.IO) {
+                    manager.save(MerkleTransactionHash(txHash))
+                    tx
+                }
             }
-            .map { tx }
     }
 
     fun transaction(transactionHash: ByteArray): Single<Optional<RpcTransaction>> {

@@ -10,9 +10,9 @@ import io.horizontalsystems.ethereumkit.models.TransactionSyncerState
 interface TransactionSyncerStateDao {
 
     @Query("SELECT * FROM `TransactionSyncerState` WHERE syncerId = :syncerId LIMIT 1")
-    fun get(syncerId: String) : TransactionSyncerState?
+    suspend fun get(syncerId: String) : TransactionSyncerState?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    fun save(transactionSyncerState: TransactionSyncerState)
+    suspend fun save(transactionSyncerState: TransactionSyncerState)
 
 }

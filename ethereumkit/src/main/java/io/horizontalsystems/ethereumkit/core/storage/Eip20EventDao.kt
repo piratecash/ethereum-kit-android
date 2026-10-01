@@ -10,19 +10,19 @@ import io.horizontalsystems.ethereumkit.models.Eip20Event
 interface Eip20EventDao {
 
     @Query("SELECT * FROM Eip20Event ORDER BY blockNumber DESC LIMIT 1")
-    fun getLastEip20Event(): Eip20Event?
+    suspend fun getLastEip20Event(): Eip20Event?
 
     @Query("SELECT * FROM Eip20Event ORDER BY blockNumber ASC LIMIT 1")
-    fun getEarliestEip20Event(): Eip20Event?
+    suspend fun getEarliestEip20Event(): Eip20Event?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    fun insertEip20Events(events: List<Eip20Event>)
+    suspend fun insertEip20Events(events: List<Eip20Event>)
 
     @Query("SELECT * FROM Eip20Event")
-    fun getEip20Events(): List<Eip20Event>
+    suspend fun getEip20Events(): List<Eip20Event>
 
     @Query("SELECT * FROM Eip20Event WHERE hash IN (:hashes)")
-    fun getEip20EventsByHashes(hashes: List<ByteArray>): List<Eip20Event>
+    suspend fun getEip20EventsByHashes(hashes: List<ByteArray>): List<Eip20Event>
 
     @Query("""
         DELETE FROM Eip20Event
@@ -32,7 +32,7 @@ interface Eip20EventDao {
           AND `to` = :to
           AND value = 0
     """)
-    fun deleteZeroValueDuplicate(
+    suspend fun deleteZeroValueDuplicate(
         hash: ByteArray,
         contractAddress: ByteArray,
         from: ByteArray,

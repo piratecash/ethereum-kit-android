@@ -65,6 +65,8 @@ import io.reactivex.schedulers.Schedulers
 import io.reactivex.subjects.PublishSubject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.rx2.rxMaybe
+import kotlinx.coroutines.rx2.rxSingle
 import okhttp3.EventListener
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import timber.log.Timber
@@ -107,6 +109,7 @@ class EthereumKit(
     scanHistoricalEip20Requested: Boolean,
     val transactionSyncSourceStorage: TransactionSyncSourceStorage,
     private val rawTransactionBroadcaster: RawTransactionBroadcaster,
+    lastScannedBlock: Long?,
     private val state: EthereumKitState = EthereumKitState(),
     val eventListenerFactory: EventListener.Factory? = null
 ) : IBlockchainListener, ChainHeadProvider {
@@ -183,13 +186,9 @@ class EthereumKit(
     private val _forwardSyncState = MutableStateFlow<ForwardSyncState>(ForwardSyncState.Idle)
     val forwardSyncState: StateFlow<ForwardSyncState> get() = _forwardSyncState
 
-    private var lastForwardSyncTip: Long = 0L
+    private var lastForwardSyncTip: Long = lastScannedBlock ?: 0L
 
     init {
-        state.lastBlockHeight = blockchain.lastBlockHeight
-        state.accountState = blockchain.accountState
-        lastForwardSyncTip = eip20Storage.getLastScannedBlock() ?: 0L
-
         transactionManager.fullTransactionsAsync
             .subscribeOn(Schedulers.io())
             .subscribe {
@@ -211,7 +210,8 @@ class EthereumKit(
                     // must not decide anything — the next sync after resume gets to start historical.
                     .filter { it is SyncState.Synced && started.get() }
                     .subscribeOn(Schedulers.io())
-                    .subscribe { decideHistoricalSync(gate) }
+                    .concatMapMaybe { rxMaybe(rxIoDispatcher) { historicalSyncDecision() } }
+                    .subscribe { decision -> decideHistoricalSync(gate, decision) }
             )
         }
 
@@ -239,13 +239,18 @@ class EthereumKit(
             }
     }
 
+    private class HistoricalSyncDecision(
+        val lastScannedBlock: Long,
+        val historicalMin: Long?,
+        val shouldStartHistorical: Boolean
+    )
+
     /**
      * A swallowed explorer error also publishes Synced, so an absent cursor is no evidence: the
      * decision waits for a token sync that actually reached a source.
      */
-    private fun decideHistoricalSync(gate: Disposable) {
-        val lastScannedBlock = eip20Storage.getLastScannedBlock() ?: return
-        gate.dispose()
+    private suspend fun historicalSyncDecision(): HistoricalSyncDecision? {
+        val lastScannedBlock = eip20Storage.getLastScannedBlock() ?: return null
 
         val historicalMin = eip20Storage.getHistoricalMinScannedBlock()
         val shouldStartHistorical = when {
@@ -256,9 +261,16 @@ class EthereumKit(
             // Complete historical sync (reached 0) or Etherscan provided data
             else -> false
         }
+        return HistoricalSyncDecision(lastScannedBlock, historicalMin, shouldStartHistorical)
+    }
 
-        if (!shouldStartHistorical) {
-            Timber.i("Historical sync not needed (historicalMin=$historicalMin, lastScannedBlock=$lastScannedBlock)")
+    // Every read is done by now: the gate disposes the subscription that ran them.
+    private fun decideHistoricalSync(gate: Disposable, decision: HistoricalSyncDecision) {
+        gate.dispose()
+
+        val historicalMin = decision.historicalMin
+        if (!decision.shouldStartHistorical) {
+            Timber.i("Historical sync not needed (historicalMin=$historicalMin, lastScannedBlock=${decision.lastScannedBlock})")
             return
         }
 
@@ -350,9 +362,9 @@ class EthereumKit(
     }
 
     /** Re-reads the locally stored balance and block height after a [stop] that cleared them. */
-    fun attachLocalState() {
-        blockchain.lastBlockHeight?.let { onUpdateLastBlockHeight(it) }
-        blockchain.accountState?.let { onUpdateAccountState(it) }
+    suspend fun attachLocalState() {
+        blockchain.storedLastBlockHeight()?.let { onUpdateLastBlockHeight(it) }
+        blockchain.storedAccountState()?.let { onUpdateAccountState(it) }
     }
 
     fun refresh() {
@@ -393,11 +405,11 @@ class EthereumKit(
         return transactionManager.getFullTransactionsAsync(tags, fromHash, limit)
     }
 
-    fun getPendingFullTransactions(tags: List<List<String>>): List<FullTransaction> {
+    suspend fun getPendingFullTransactions(tags: List<List<String>>): List<FullTransaction> {
         return transactionManager.getPendingFullTransactions(tags)
     }
 
-    fun getFullTransactions(hashes: List<ByteArray>): List<FullTransaction> {
+    suspend fun getFullTransactions(hashes: List<ByteArray>): List<FullTransaction> {
         return transactionManager.getFullTransactions(hashes)
     }
 
@@ -475,7 +487,9 @@ class EthereumKit(
         logger.info("send rawTransaction: $rawTransaction")
 
         return blockchain.send(rawTransaction, signature)
-            .map { transactionManager.handle(listOf(it)).first() }
+            .flatMap { transaction ->
+                rxSingle(rxIoDispatcher) { transactionManager.handle(listOf(transaction)).first() }
+            }
     }
 
     fun signedRawTransaction(
@@ -546,7 +560,7 @@ class EthereumKit(
         return statusInfo
     }
 
-    fun getTagTokenContractAddresses(): List<String> {
+    suspend fun getTagTokenContractAddresses(): List<String> {
         return transactionManager.getDistinctTokenContractAddresses()
     }
 
@@ -822,7 +836,7 @@ class EthereumKit(
             Security.addProvider(InternalBouncyCastleProvider.getInstance())
         }
 
-        fun getInstance(
+        suspend fun getInstance(
             application: Application,
             words: List<String>,
             passphrase: String = "",
@@ -850,7 +864,7 @@ class EthereumKit(
             )
         }
 
-        fun getInstance(
+        suspend fun getInstance(
             application: Application,
             address: Address,
             chain: Chain,
@@ -909,6 +923,7 @@ class EthereumKit(
                 InternalTransactionSyncer(transactionProvider, transactionStorage)
 
             val decorationManager = DecorationManager(address, transactionStorage)
+            decorationManager.addExtraDecorator(transactionSyncSourceStorage)
             val transactionManager = TransactionManager(
                 address,
                 transactionStorage,
@@ -929,6 +944,11 @@ class EthereumKit(
             val nonceProvider = NonceProvider()
             nonceProvider.addProvider(blockchain)
 
+            val state = EthereumKitState().apply {
+                lastBlockHeight = blockchain.storedLastBlockHeight()
+                accountState = blockchain.storedAccountState()
+            }
+
             val ethereumKit = EthereumKit(
                 blockchain,
                 nonceProvider,
@@ -947,7 +967,9 @@ class EthereumKit(
                 scanHistoricalEip20,
                 transactionSyncSourceStorage,
                 rawTransactionBroadcaster,
-                eventListenerFactory = eventListenerFactory
+                erc20Storage.getLastScannedBlock(),
+                state,
+                eventListenerFactory
             )
 
             blockchain.listener = ethereumKit

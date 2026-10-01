@@ -3,6 +3,7 @@ package io.horizontalsystems.ethereumkit.transactionsyncers
 import io.horizontalsystems.ethereumkit.core.EthereumKit
 import io.horizontalsystems.ethereumkit.core.ITransactionSyncer
 import io.horizontalsystems.ethereumkit.core.TransactionManager
+import io.horizontalsystems.ethereumkit.core.rxIoDispatcher
 import io.horizontalsystems.ethereumkit.models.Transaction
 import io.reactivex.BackpressureStrategy
 import io.reactivex.Flowable
@@ -11,6 +12,7 @@ import io.reactivex.disposables.CompositeDisposable
 import io.reactivex.disposables.SerialDisposable
 import io.reactivex.schedulers.Schedulers
 import io.reactivex.subjects.PublishSubject
+import kotlinx.coroutines.rx2.rxSingle
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.logging.Logger
 
@@ -51,15 +53,14 @@ class TransactionSyncManager(
 
         syncState = EthereumKit.SyncState.Syncing()
 
-        zipped(syncers)
+        zippedAndHandled(syncers)
             .subscribeOn(Schedulers.io())
             // subscribe() schedules the sources before it returns the disposable; onSubscribe hands
             // it over while the caller still owns the chain, so a pause can never miss it.
             .doOnSubscribe { run.set(it) }
-            .subscribe({ transactions ->
+            .subscribe({
                 if (run.isDisposed) return@subscribe
 
-                handle(transactions)
                 publishTerminal(generation, run, EthereumKit.SyncState.Synced())
             }, {
                 if (run.isDisposed) return@subscribe
@@ -84,14 +85,10 @@ class TransactionSyncManager(
         val run = SerialDisposable()
         if (!generation.add(run)) return
 
-        zipped(rpcSyncers)
+        zippedAndHandled(rpcSyncers)
             .subscribeOn(Schedulers.io())
             .doOnSubscribe { run.set(it) }
-            .subscribe({ transactions ->
-                if (run.isDisposed) return@subscribe
-
-                handle(transactions)
-            }, {
+            .subscribe({}, {
                 logger.warning("rpc-only sync ERROR = ${it.javaClass.simpleName}")
             })
     }
@@ -105,6 +102,9 @@ class TransactionSyncManager(
                     Pair(acc.first + list.first, acc.second && list.second)
                 }
         }
+
+    private fun zippedAndHandled(syncers: List<ITransactionSyncer>): Single<Unit> =
+        zipped(syncers).flatMap { transactions -> rxSingle(rxIoDispatcher) { handle(transactions) } }
 
     /**
      * Publishes the outcome of [run] and repairs it if a concurrent [pause] disposed it.
@@ -162,7 +162,7 @@ class TransactionSyncManager(
             tx1.gasUsed ?: tx2.gasUsed
         )
 
-    private fun handle(result: Pair<List<Transaction>, Boolean>) {
+    private suspend fun handle(result: Pair<List<Transaction>, Boolean>) {
         val transactions = result.first
         val initial = result.second
 

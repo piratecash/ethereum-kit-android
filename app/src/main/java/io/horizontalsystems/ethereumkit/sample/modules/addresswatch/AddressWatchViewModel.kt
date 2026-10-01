@@ -2,6 +2,7 @@ package io.horizontalsystems.ethereumkit.sample.modules.addresswatch
 
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import io.horizontalsystems.erc20kit.core.Erc20Kit
 import io.horizontalsystems.ethereumkit.core.EthereumKit
 import io.horizontalsystems.ethereumkit.models.Chain
@@ -17,6 +18,7 @@ import io.horizontalsystems.ethereumkit.sample.modules.main.ShowTxType
 import io.reactivex.android.schedulers.AndroidSchedulers
 import io.reactivex.disposables.CompositeDisposable
 import io.reactivex.schedulers.Schedulers
+import kotlinx.coroutines.launch
 import java.net.URI
 
 class AddressWatchViewModel : ViewModel() {
@@ -51,9 +53,18 @@ class AddressWatchViewModel : ViewModel() {
 
         clearKits()
 
+        viewModelScope.launch { watch(wordList) }
+    }
+
+    private suspend fun watch(wordList: List<String>) {
         val evmKit = createKit(wordList)
         val evmAdapter = EthereumBaseAdapter(evmKit)
-        val erc20Adapter = Erc20BaseAdapter(App.instance, Configuration.erc20Tokens.first(), evmKit)
+        val token = Configuration.erc20Tokens.first()
+        val erc20Adapter = Erc20BaseAdapter(
+            token,
+            evmKit,
+            Erc20Kit.getInstance(App.instance, evmKit, token.contractAddress)
+        )
 
         Erc20Kit.addTransactionSyncer(evmKit)
         Erc20Kit.addDecorators(evmKit)
@@ -123,7 +134,7 @@ class AddressWatchViewModel : ViewModel() {
         updateTransactionList()
     }
 
-    private fun createKit(wordList: List<String>): EthereumKit {
+    private suspend fun createKit(wordList: List<String>): EthereumKit {
         val rpcSource: RpcSource?
         val transactionSource: TransactionSource?
 

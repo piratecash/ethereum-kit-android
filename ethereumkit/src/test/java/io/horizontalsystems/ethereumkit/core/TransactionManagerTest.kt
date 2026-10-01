@@ -6,7 +6,7 @@ import io.horizontalsystems.ethereumkit.models.InternalTransaction
 import io.horizontalsystems.ethereumkit.models.Transaction
 import io.horizontalsystems.ethereumkit.models.TransactionTag
 import io.mockk.mockk
-import io.reactivex.Single
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -24,7 +24,7 @@ class TransactionManagerTest {
     private fun mined(hash: ByteArray) = Transaction(hash, 1L, false, blockNumber = 100, from = address, nonce = 998)
 
     @Test
-    fun handle_sameTransactionConfirmedBetweenPendingReads_staysSuccessful() {
+    fun handle_sameTransactionConfirmedBetweenPendingReads_staysSuccessful() = runTest {
         // A concurrent handle() confirms the swap after this one listed it as pending.
         storage.beforeNextNonPendingRead = { manager.handle(listOf(mined(swapHash))) }
 
@@ -36,7 +36,7 @@ class TransactionManagerTest {
     }
 
     @Test
-    fun handle_otherTransactionMinedWithSameNonce_marksPendingReplaced() {
+    fun handle_otherTransactionMinedWithSameNonce_marksPendingReplaced() = runTest {
         val replacementHash = ByteArray(32) { 2 }
         manager.handle(listOf(pending(swapHash)))
 
@@ -50,38 +50,38 @@ class TransactionManagerTest {
     /** Mirrors the Room queries TransactionManager relies on; hashes compare by content like SQLite blobs. */
     private class InMemoryTransactionStorage : ITransactionStorage {
         private val rows = linkedMapOf<String, Transaction>()
-        var beforeNextNonPendingRead: (() -> Unit)? = null
+        var beforeNextNonPendingRead: (suspend () -> Unit)? = null
 
-        override fun getTransactions(hashes: List<ByteArray>) = hashes.mapNotNull { rows[it.toHexString()]?.detached() }
-        override fun getTransaction(hash: ByteArray) = rows[hash.toHexString()]?.detached()
-        override fun getTransactionsBeforeAsync(tags: List<List<String>>, hash: ByteArray?, limit: Int?) =
-            Single.just(emptyList<Transaction>())
+        override suspend fun getTransactions(hashes: List<ByteArray>) = hashes.mapNotNull { rows[it.toHexString()]?.detached() }
+        override suspend fun getTransaction(hash: ByteArray) = rows[hash.toHexString()]?.detached()
+        override suspend fun getTransactionsBefore(tags: List<List<String>>, hash: ByteArray?, limit: Int?) =
+            emptyList<Transaction>()
 
         /** Room materializes a fresh blob per read, so no two rows may share a hash array. */
         private fun Transaction.detached() = copy(hash = hash.copyOf())
 
-        override fun save(transactions: List<Transaction>) {
+        override suspend fun save(transactions: List<Transaction>) {
             transactions.forEach { rows[it.hashString] = it.detached() }
         }
 
-        override fun getPendingTransactions() =
+        override suspend fun getPendingTransactions() =
             rows.values.filter { it.blockNumber == null && !it.isFailed }.map { it.detached() }
 
-        override fun getPendingTransactions(tags: List<List<String>>) = getPendingTransactions()
+        override suspend fun getPendingTransactions(tags: List<List<String>>) = getPendingTransactions()
 
-        override fun getNonPendingTransactionsByNonces(from: Address, pendingTransactionNonces: List<Long>): List<Transaction> {
+        override suspend fun getNonPendingTransactionsByNonces(from: Address, pendingTransactionNonces: List<Long>): List<Transaction> {
             beforeNextNonPendingRead?.also { beforeNextNonPendingRead = null }?.invoke()
             return rows.values
                 .filter { it.blockNumber != null && it.nonce in pendingTransactionNonces && it.from == from }
                 .map { it.detached() }
         }
 
-        override fun getLastInternalTransaction(): InternalTransaction? = null
-        override fun getInternalTransactions() = emptyList<InternalTransaction>()
-        override fun getInternalTransactionsByHashes(hashes: List<ByteArray>) = emptyList<InternalTransaction>()
-        override fun saveInternalTransactions(internalTransactions: List<InternalTransaction>) = Unit
-        override fun saveTags(tags: List<TransactionTag>) = Unit
-        override fun getDistinctTokenContractAddresses() = emptyList<String>()
-        override fun getTransactionsAfterSingle(hash: ByteArray?) = Single.just(emptyList<Transaction>())
+        override suspend fun getLastInternalTransaction(): InternalTransaction? = null
+        override suspend fun getInternalTransactions() = emptyList<InternalTransaction>()
+        override suspend fun getInternalTransactionsByHashes(hashes: List<ByteArray>) = emptyList<InternalTransaction>()
+        override suspend fun saveInternalTransactions(internalTransactions: List<InternalTransaction>) = Unit
+        override suspend fun saveTags(tags: List<TransactionTag>) = Unit
+        override suspend fun getDistinctTokenContractAddresses() = emptyList<String>()
+        override suspend fun getTransactionsAfter(hash: ByteArray?) = emptyList<Transaction>()
     }
 }

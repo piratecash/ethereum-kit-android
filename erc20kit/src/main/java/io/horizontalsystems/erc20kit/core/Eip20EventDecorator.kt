@@ -15,7 +15,7 @@ class Eip20EventDecorator(
     private val storage: IEip20Storage
 ) : IEventDecorator {
 
-    override fun contractEventInstancesMap(transactions: List<Transaction>): Map<String, List<ContractEventInstance>> {
+    override suspend fun contractEventInstancesMap(transactions: List<Transaction>): Map<String, List<ContractEventInstance>> {
         val erc20Events = storage.getEvents()
 
         val map: MutableMap<String, List<ContractEventInstance>> = mutableMapOf()

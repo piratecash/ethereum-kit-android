@@ -12,6 +12,7 @@ import io.horizontalsystems.ethereumkit.core.storage.TransactionSyncSourceStorag
 import io.horizontalsystems.ethereumkit.core.storage.TransactionSyncerStateStorage
 import io.horizontalsystems.ethereumkit.fixture.EthereumKitFixture.snapshot
 import io.horizontalsystems.ethereumkit.models.TransactionTag
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -22,7 +23,7 @@ class FixtureDatabasesTest {
     private val context = ApplicationProvider.getApplicationContext<Context>()
 
     @Test
-    fun apiDatabase_fixture_containsAccountStateAndLastBlockHeight() {
+    fun apiDatabase_fixture_containsAccountStateAndLastBlockHeight() = runTest {
         DatabaseFixtureFiles.install(context, EthereumKitFixture.API_DB)
 
         val storage = ApiStorage(ApiDatabase.getInstance(context, EthereumKitFixture.API_DB))
@@ -32,7 +33,7 @@ class FixtureDatabasesTest {
     }
 
     @Test
-    fun transactionDatabase_fixture_containsAllTables() {
+    fun transactionDatabase_fixture_containsAllTables() = runTest {
         DatabaseFixtureFiles.install(context, EthereumKitFixture.TRANSACTIONS_DB)
         val database = TransactionDatabase.getInstance(context, EthereumKitFixture.TRANSACTIONS_DB)
         val storage = TransactionStorage(database)
@@ -56,7 +57,7 @@ class FixtureDatabasesTest {
         )
         assertEquals(
             listOf(EthereumKitFixture.pendingTransaction, EthereumKitFixture.tokenTransferTransaction).map { it.snapshot() },
-            storage.getTransactionsBeforeAsync(listOf(listOf(TransactionTag.OUTGOING)), null, null).blockingGet().map { it.snapshot() }
+            storage.getTransactionsBefore(listOf(listOf(TransactionTag.OUTGOING)), null, null).map { it.snapshot() }
         )
         assertEquals(
             EthereumKitFixture.rawBroadcasts.map { it.snapshot() }.sortedBy { it.toString() },
@@ -71,7 +72,7 @@ class FixtureDatabasesTest {
     }
 
     @Test
-    fun eip20EventsDatabase_fixture_containsEventsAndSyncCursor() {
+    fun eip20EventsDatabase_fixture_containsEventsAndSyncCursor() = runTest {
         DatabaseFixtureFiles.install(context, EthereumKitFixture.EIP20_EVENTS_DB)
 
         val storage = Eip20Storage(Eip20Database.getInstance(context, EthereumKitFixture.EIP20_EVENTS_DB))

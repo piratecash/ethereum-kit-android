@@ -9,11 +9,11 @@ import io.horizontalsystems.ethereumkit.models.TransactionSyncSource
 @Dao
 interface TransactionSyncSourceDao {
     @Query("SELECT * FROM TransactionSyncSource WHERE transactionHash = :hash")
-    fun getSource(hash: ByteArray): TransactionSyncSource?
+    suspend fun getSource(hash: ByteArray): TransactionSyncSource?
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
-    fun insert(source: TransactionSyncSource)
+    suspend fun insert(source: TransactionSyncSource)
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
-    fun insertAll(sources: List<TransactionSyncSource>)
+    suspend fun insertAll(sources: List<TransactionSyncSource>)
 }

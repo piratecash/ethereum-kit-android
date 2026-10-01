@@ -11,6 +11,9 @@ import io.reactivex.BackpressureStrategy
 import io.reactivex.Flowable
 import io.reactivex.Single
 import io.reactivex.subjects.PublishSubject
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.rx2.rxSingle
+import kotlinx.coroutines.withContext
 import java.math.BigInteger
 
 class TransactionManager(
@@ -42,18 +45,17 @@ class TransactionManager(
     }
 
     fun getFullTransactionsAsync(tags: List<List<String>>, fromHash: ByteArray? = null, limit: Int? = null): Single<List<FullTransaction>> =
-        storage.getTransactionsBeforeAsync(tags, fromHash, limit)
-            .map { transactions ->
-                decorationManager.decorateTransactions(transactions)
-            }
+        rxSingle(rxIoDispatcher) {
+            decorationManager.decorateTransactions(storage.getTransactionsBefore(tags, fromHash, limit))
+        }
 
-    fun getPendingFullTransactions(tags: List<List<String>>): List<FullTransaction> =
+    suspend fun getPendingFullTransactions(tags: List<List<String>>): List<FullTransaction> =
         decorationManager.decorateTransactions(storage.getPendingTransactions(tags))
 
-    fun getFullTransactions(hashes: List<ByteArray>): List<FullTransaction> =
+    suspend fun getFullTransactions(hashes: List<ByteArray>): List<FullTransaction> =
         decorationManager.decorateTransactions(storage.getTransactions(hashes))
 
-    fun getDistinctTokenContractAddresses(): List<String> {
+    suspend fun getDistinctTokenContractAddresses(): List<String> {
         return storage.getDistinctTokenContractAddresses().map {
             it
                 .replace("_outgoing", "")
@@ -61,7 +63,7 @@ class TransactionManager(
         }
     }
 
-    private fun save(transactions: List<Transaction>) {
+    private suspend fun save(transactions: List<Transaction>) {
         val existingTransactions = storage.getTransactions(hashes = transactions.map { it.hash }).associateBy { it.hashString }
 
         val mergedTransactions = transactions.map { newTx ->
@@ -96,8 +98,9 @@ class TransactionManager(
         storage.save(mergedTransactions)
     }
 
-    fun handle(transactions: List<Transaction>, initial: Boolean = false): List<FullTransaction> {
-        if (transactions.isEmpty()) return listOf()
+    // Not cancellable: a disposed caller must not leave transactions saved without their tags.
+    suspend fun handle(transactions: List<Transaction>, initial: Boolean = false): List<FullTransaction> = withContext(NonCancellable) {
+        if (transactions.isEmpty()) return@withContext listOf()
 
         save(transactions)
         val failedTransactions = failPendingTransactions()
@@ -126,7 +129,7 @@ class TransactionManager(
         fullTransactionsSubject.onNext(Pair(fullTransactions, initial))
         fullTransactionsWithTagsSubject.onNext(transactionWithTags)
 
-        return fullTransactions
+        fullTransactions
     }
 
     fun etherTransferTransactionData(address: Address, value: BigInteger): TransactionData {
@@ -149,16 +152,17 @@ class TransactionManager(
                 }
             }
 
-        return fullRpcTransactionSingle.map { decorationManager.decorateFullRpcTransaction(it) }
+        return fullRpcTransactionSingle.flatMap { fullRpcTransaction ->
+            rxSingle(rxIoDispatcher) { decorationManager.decorateFullRpcTransaction(fullRpcTransaction) }
+        }
     }
 
     fun getFullTransactionsAfterSingle(fromHash: ByteArray? = null): Single<List<FullTransaction>> =
-        storage.getTransactionsAfterSingle(fromHash)
-            .map { transactions ->
-                decorationManager.decorateTransactions(transactions)
-            }
+        rxSingle(rxIoDispatcher) {
+            decorationManager.decorateTransactions(storage.getTransactionsAfter(fromHash))
+        }
 
-    private fun failPendingTransactions(): List<Transaction> {
+    private suspend fun failPendingTransactions(): List<Transaction> {
         val pendingTransactions = storage.getPendingTransactions()
 
         if (pendingTransactions.isEmpty()) return listOf()

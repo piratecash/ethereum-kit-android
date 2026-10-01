@@ -3,6 +3,7 @@ package io.horizontalsystems.ethereumkit.sample.modules.main
 import android.util.Log
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import io.horizontalsystems.erc20kit.core.Erc20Kit
 import io.horizontalsystems.ethereumkit.core.EthereumKit
 import io.horizontalsystems.ethereumkit.core.EthereumKit.SyncState
@@ -31,7 +32,8 @@ import io.horizontalsystems.uniswapkit.models.TradeOptions
 import io.reactivex.android.schedulers.AndroidSchedulers
 import io.reactivex.disposables.CompositeDisposable
 import io.reactivex.schedulers.Schedulers
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.rx2.rxSingle
 import java.math.BigDecimal
 import java.net.URI
 import java.util.logging.Logger
@@ -83,15 +85,17 @@ class MainViewModel : ViewModel() {
     private val chain: Chain
         get() = ethereumKit.chain
 
-    fun init() {
+    suspend fun init() {
         val words = Configuration.defaultsWords.split(" ")
         val seed = Mnemonic().toSeed(words)
         signer = Signer.getInstance(seed, Configuration.chain)
         ethereumKit = createKit()
         ethereumAdapter = EthereumAdapter(ethereumKit, signer)
         erc20Adapter = Erc20Adapter(
-            App.instance, fromToken ?: toToken
-            ?: Configuration.erc20Tokens.first(), ethereumKit, signer
+            fromToken,
+            ethereumKit,
+            Erc20Kit.getInstance(App.instance, ethereumKit, fromToken.contractAddress),
+            signer
         )
         uniswapKit = UniswapKit.getInstance()
 
@@ -191,7 +195,7 @@ class MainViewModel : ViewModel() {
             }).let { disposables.add(it) }
     }
 
-    private fun createKit(): EthereumKit {
+    private suspend fun createKit(): EthereumKit {
         when (Configuration.chain) {
             Chain.BinanceSmartChain -> {
                 transactionSource = TransactionSource.binance(Configuration.etherscanKey.split(","))
@@ -302,7 +306,7 @@ class MainViewModel : ViewModel() {
     fun clear() {
         EthereumKit.clear(App.instance, Configuration.chain, Configuration.walletId)
         Erc20Kit.clear(App.instance, Configuration.chain, Configuration.walletId)
-        init()
+        viewModelScope.launch { init() }
     }
 
     fun receiveAddress(): String {
@@ -435,8 +439,8 @@ class MainViewModel : ViewModel() {
                 ethereumKit.rawTransaction(transactionData, gasPrice, gasLimit)
             }
             .flatMap { rawTransaction ->
-                val signature = runBlocking { signer.signature(rawTransaction) }
-                ethereumKit.send(rawTransaction, signature)
+                rxSingle { signer.signature(rawTransaction) }
+                    .flatMap { signature -> ethereumKit.send(rawTransaction, signature) }
             }
             .subscribeOn(Schedulers.io())
             .observeOn(AndroidSchedulers.mainThread())
@@ -492,8 +496,8 @@ class MainViewModel : ViewModel() {
                     ethereumKit.rawTransaction(transactionData, gasPrice, gasLimit)
                 }
                 .flatMap { rawTransaction ->
-                    val signature = runBlocking { signer.signature(rawTransaction) }
-                    ethereumKit.send(rawTransaction, signature)
+                    rxSingle { signer.signature(rawTransaction) }
+                        .flatMap { signature -> ethereumKit.send(rawTransaction, signature) }
                 }
                 .subscribeOn(Schedulers.io())
                 .observeOn(AndroidSchedulers.mainThread())

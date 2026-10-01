@@ -5,11 +5,13 @@ import io.horizontalsystems.ethereumkit.api.models.AccountState
 import io.horizontalsystems.ethereumkit.api.models.EthereumKitState
 import io.horizontalsystems.ethereumkit.models.Address
 import io.horizontalsystems.ethereumkit.models.Chain
+import io.horizontalsystems.ethereumkit.models.Eip20Event
 import io.horizontalsystems.ethereumkit.models.FullTransaction
 import io.horizontalsystems.ethereumkit.transactionsyncers.ExplorerSyncScheduler
 import io.horizontalsystems.ethereumkit.transactionsyncers.MutableTestClock
 import io.horizontalsystems.ethereumkit.transactionsyncers.TransactionSyncManager
 import io.mockk.clearMocks
+import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -17,7 +19,10 @@ import io.reactivex.Single
 import io.reactivex.plugins.RxJavaPlugins
 import io.reactivex.processors.PublishProcessor
 import io.reactivex.schedulers.Schedulers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.yield
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -101,7 +106,7 @@ class EthereumKitNetworkPauseTest {
     }
 
     @Test
-    fun attachLocalState_afterStop_restoresFromStorageWithoutNetworkCalls() {
+    fun attachLocalState_afterStop_restoresFromStorageWithoutNetworkCalls() = runTest {
         val kit = ethereumKit()
         kit.start()
         kit.stop()
@@ -210,7 +215,7 @@ class EthereumKitNetworkPauseTest {
 
     @Test
     fun historicalGate_syncedWithoutCursor_defersDecision() {
-        every { eip20Storage.getLastScannedBlock() } returns null
+        coEvery { eip20Storage.getLastScannedBlock() } returns null
         val historicalSyncer = FakeHistoricalSyncer(isEnabled = false)
         historicalKit(historicalSyncer)
 
@@ -219,9 +224,9 @@ class EthereumKitNetworkPauseTest {
         assertFalse("A swallowed explorer error also publishes Synced", historicalSyncer.isEnabled)
         assertEquals(0, historicalSyncer.startCount)
 
-        every { eip20Storage.getLastScannedBlock() } returns storedBlockHeight
-        every { eip20Storage.getHistoricalMinScannedBlock() } returns null
-        every { eip20Storage.getLastEvent() } returns null
+        coEvery { eip20Storage.getLastScannedBlock() } returns storedBlockHeight
+        coEvery { eip20Storage.getHistoricalMinScannedBlock() } returns null
+        coEvery { eip20Storage.getLastEvent() } returns null
         finishSync()
 
         assertEquals(1, historicalSyncer.startCount)
@@ -229,9 +234,9 @@ class EthereumKitNetworkPauseTest {
 
     @Test
     fun historicalGate_syncedWithCursorAndNoEvents_startsHistorical() {
-        every { eip20Storage.getLastScannedBlock() } returns storedBlockHeight
-        every { eip20Storage.getHistoricalMinScannedBlock() } returns null
-        every { eip20Storage.getLastEvent() } returns null
+        coEvery { eip20Storage.getLastScannedBlock() } returns storedBlockHeight
+        coEvery { eip20Storage.getHistoricalMinScannedBlock() } returns null
+        coEvery { eip20Storage.getLastEvent() } returns null
         val historicalSyncer = FakeHistoricalSyncer(isEnabled = false)
         historicalKit(historicalSyncer)
 
@@ -240,6 +245,17 @@ class EthereumKitNetworkPauseTest {
 
         assertTrue(historicalSyncer.isEnabled)
         assertEquals("The gate closes after it decided once", 1, historicalSyncer.startCount)
+    }
+
+    @Test
+    fun historicalGate_storageReadsSuspend_decidesAfterReadsComplete() {
+        val historicalSyncer = FakeHistoricalSyncer(isEnabled = false)
+        historicalKit(historicalSyncer, SuspendingEip20Storage(lastScannedBlock = storedBlockHeight))
+
+        finishSync()
+
+        assertTrue(historicalSyncer.isEnabled)
+        assertEquals(1, historicalSyncer.startCount)
     }
 
     private fun startedKit(): EthereumKit {
@@ -255,10 +271,11 @@ class EthereumKitNetworkPauseTest {
 
     private fun ethereumKit(
         ownChainRpcSource: RpcSource.Http? = null,
-        scanHistoricalEip20Requested: Boolean = false
+        scanHistoricalEip20Requested: Boolean = false,
+        eip20Storage: IEip20Storage = this.eip20Storage
     ): EthereumKit {
-        every { blockchain.lastBlockHeight } returns storedBlockHeight
-        every { blockchain.accountState } returns storedAccountState
+        coEvery { blockchain.storedLastBlockHeight() } returns storedBlockHeight
+        coEvery { blockchain.storedAccountState() } returns storedAccountState
         every { transactionManager.fullTransactionsAsync } returns fullTransactions
         every { transactionSyncManager.syncStateAsync } returns syncStates
         every { rawTransactionBroadcaster.retryQueued() } returns Single.just(Unit)
@@ -281,12 +298,23 @@ class EthereumKitNetworkPauseTest {
             scanHistoricalEip20Requested = scanHistoricalEip20Requested,
             transactionSyncSourceStorage = mockk(relaxed = true),
             rawTransactionBroadcaster = rawTransactionBroadcaster,
-            state = EthereumKitState(),
+            lastScannedBlock = null,
+            state = EthereumKitState().apply {
+                lastBlockHeight = storedBlockHeight
+                accountState = storedAccountState
+            },
         )
     }
 
-    private fun historicalKit(historicalSyncer: FakeHistoricalSyncer): EthereumKit {
-        val kit = ethereumKit(ownChainRpcSource = OWN_CHAIN_RPC, scanHistoricalEip20Requested = true)
+    private fun historicalKit(
+        historicalSyncer: FakeHistoricalSyncer,
+        eip20Storage: IEip20Storage = this.eip20Storage
+    ): EthereumKit {
+        val kit = ethereumKit(
+            ownChainRpcSource = OWN_CHAIN_RPC,
+            scanHistoricalEip20Requested = true,
+            eip20Storage = eip20Storage
+        )
         kit.setHistoricalSyncer(historicalSyncer)
         kit.start()
         return kit
@@ -306,5 +334,25 @@ class EthereumKitNetworkPauseTest {
         }
 
         override fun stop() = Unit
+    }
+
+    /** Every read suspends before it answers, as a Room read on its own executor does. */
+    private class SuspendingEip20Storage(private val lastScannedBlock: Long) : IEip20Storage {
+        override suspend fun getLastScannedBlock(): Long? = suspended(lastScannedBlock)
+        override suspend fun getHistoricalMinScannedBlock(): Long? = suspended(null)
+        override suspend fun getLastEvent(): Eip20Event? = suspended(null)
+        override suspend fun getEarliestEip20Event(): Eip20Event? = suspended(null)
+        override suspend fun getEvents(): List<Eip20Event> = suspended(emptyList())
+        override suspend fun getEventsByHashes(hashes: List<ByteArray>): List<Eip20Event> = suspended(emptyList())
+        override suspend fun save(events: List<Eip20Event>) = Unit
+        override suspend fun deleteZeroValueDuplicate(hash: ByteArray, contractAddress: Address, from: Address, to: Address) = Unit
+        override suspend fun saveSyncBlockInfo(lastScannedBlock: Long?, historicalMinScannedBlock: Long?) = Unit
+        override suspend fun clearForeignSyncState(chainHead: Long, margin: Long) = false
+
+        private suspend fun <T> suspended(value: T): T {
+            yield()
+            delay(1)
+            return value
+        }
     }
 }

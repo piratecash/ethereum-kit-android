@@ -16,23 +16,23 @@ class Eip20Storage(
 
     private val syncDataMutex = Mutex()
 
-    override fun getLastEvent(): Eip20Event? =
+    override suspend fun getLastEvent(): Eip20Event? =
         erc20EventDao.getLastEip20Event()
 
-    override fun getEarliestEip20Event(): Eip20Event? =
+    override suspend fun getEarliestEip20Event(): Eip20Event? =
         erc20EventDao.getEarliestEip20Event()
 
-    override fun save(events: List<Eip20Event>) {
+    override suspend fun save(events: List<Eip20Event>) {
         erc20EventDao.insertEip20Events(events)
     }
 
-    override fun getEvents(): List<Eip20Event> =
+    override suspend fun getEvents(): List<Eip20Event> =
         erc20EventDao.getEip20Events()
 
-    override fun getEventsByHashes(hashes: List<ByteArray>): List<Eip20Event> =
+    override suspend fun getEventsByHashes(hashes: List<ByteArray>): List<Eip20Event> =
         erc20EventDao.getEip20EventsByHashes(hashes)
 
-    override fun deleteZeroValueDuplicate(
+    override suspend fun deleteZeroValueDuplicate(
         hash: ByteArray,
         contractAddress: Address,
         from: Address,
@@ -41,10 +41,10 @@ class Eip20Storage(
         erc20EventDao.deleteZeroValueDuplicate(hash, contractAddress.raw, from.raw, to.raw)
     }
 
-    override fun getLastScannedBlock(): Long? =
+    override suspend fun getLastScannedBlock(): Long? =
         syncStateDao.get(CURSOR_KEY)?.lastScannedBlock
 
-    override fun getHistoricalMinScannedBlock(): Long? =
+    override suspend fun getHistoricalMinScannedBlock(): Long? =
         syncStateDao.get(CURSOR_KEY)?.historicalMinScannedBlock
 
     override suspend fun saveSyncBlockInfo(

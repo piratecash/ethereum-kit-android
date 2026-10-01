@@ -348,19 +348,19 @@ internal class FakeEip20Storage(
     var saveSyncBlockInfoCallCount = 0
         private set
 
-    override fun getLastEvent(): Eip20Event? = null
-    override fun getEarliestEip20Event(): Eip20Event? = null
-    override fun save(events: List<Eip20Event>) {
+    override suspend fun getLastEvent(): Eip20Event? = null
+    override suspend fun getEarliestEip20Event(): Eip20Event? = null
+    override suspend fun save(events: List<Eip20Event>) {
         savedEvents = events
     }
-    override fun getEvents(): List<Eip20Event> = savedEvents
-    override fun getEventsByHashes(hashes: List<ByteArray>): List<Eip20Event> = emptyList()
-    override fun deleteZeroValueDuplicate(
+    override suspend fun getEvents(): List<Eip20Event> = savedEvents
+    override suspend fun getEventsByHashes(hashes: List<ByteArray>): List<Eip20Event> = emptyList()
+    override suspend fun deleteZeroValueDuplicate(
         hash: ByteArray, contractAddress: Address, from: Address, to: Address
     ) {}
 
-    override fun getLastScannedBlock(): Long? = lastScannedBlock
-    override fun getHistoricalMinScannedBlock(): Long? = historicalMinScannedBlock
+    override suspend fun getLastScannedBlock(): Long? = lastScannedBlock
+    override suspend fun getHistoricalMinScannedBlock(): Long? = historicalMinScannedBlock
 
     override suspend fun saveSyncBlockInfo(
         lastScannedBlock: Long?,

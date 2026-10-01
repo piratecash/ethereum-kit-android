@@ -17,8 +17,8 @@ interface IBalanceManager {
 }
 
 interface ITokenBalanceStorage {
-    fun getBalance(): BigInteger?
-    fun save(balance: BigInteger)
+    suspend fun getBalance(): BigInteger?
+    suspend fun save(balance: BigInteger)
 }
 
 interface IDataProvider {

@@ -14,6 +14,7 @@ import io.horizontalsystems.ethereumkit.models.TransactionTag
 import io.reactivex.Single
 import io.reactivex.plugins.RxJavaPlugins
 import io.reactivex.schedulers.Schedulers
+import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -39,7 +40,7 @@ class TransactionSyncManagerTest {
     }
 
     @Test
-    fun sync_nativeAndTokenTransactionsWithSameHash_preservesNativeValue() {
+    fun sync_nativeAndTokenTransactionsWithSameHash_preservesNativeValue() = runTest {
         val hash = ByteArray(32) { it.toByte() }
         val nativeValue = BigInteger("1759231567651249")
         val storage = FakeTransactionStorage()
@@ -64,7 +65,7 @@ class TransactionSyncManagerTest {
     }
 
     @Test
-    fun sync_nativeAndTokenSyncersWithSameHash_keepsNativeInput() {
+    fun sync_nativeAndTokenSyncersWithSameHash_keepsNativeInput() = runTest {
         val hash = ByteArray(32) { it.toByte() }
         val nativeInput = byteArrayOf(1, 2, 3, 4)
         val storage = FakeTransactionStorage()
@@ -89,7 +90,7 @@ class TransactionSyncManagerTest {
     }
 
     @Test
-    fun handle_authoritativeNativeTransactionAfterResync_replacesCorruptedValue() {
+    fun handle_authoritativeNativeTransactionAfterResync_replacesCorruptedValue() = runTest {
         val hash = ByteArray(32) { it.toByte() }
         val corruptedValue = BigInteger.ONE
         val nativeValue = BigInteger("1759231567651249")
@@ -104,7 +105,7 @@ class TransactionSyncManagerTest {
     }
 
     @Test
-    fun syncRpcOnly_runsOnlyRpcSyncers_andKeepsSyncState() {
+    fun syncRpcOnly_runsOnlyRpcSyncers_andKeepsSyncState() = runTest {
         val hash = ByteArray(32) { it.toByte() }
         val storage = FakeTransactionStorage()
         val syncManager = TransactionSyncManager(transactionManager(storage))
@@ -193,46 +194,46 @@ class TransactionSyncManagerTest {
     private class FakeTransactionStorage : ITransactionStorage {
         private val transactions = mutableListOf<Transaction>()
 
-        override fun getTransactions(hashes: List<ByteArray>): List<Transaction> =
+        override suspend fun getTransactions(hashes: List<ByteArray>): List<Transaction> =
             transactions.filter { transaction ->
                 hashes.any { it.contentEquals(transaction.hash) }
             }
 
-        override fun getTransaction(hash: ByteArray): Transaction? =
+        override suspend fun getTransaction(hash: ByteArray): Transaction? =
             transactions.firstOrNull { it.hash.contentEquals(hash) }
 
-        override fun getTransactionsBeforeAsync(
+        override suspend fun getTransactionsBefore(
             tags: List<List<String>>,
             hash: ByteArray?,
             limit: Int?
-        ): Single<List<Transaction>> = Single.just(emptyList())
+        ): List<Transaction> = emptyList()
 
-        override fun save(transactions: List<Transaction>) {
+        override suspend fun save(transactions: List<Transaction>) {
             transactions.forEach { transaction ->
                 this.transactions.removeAll { it.hash.contentEquals(transaction.hash) }
                 this.transactions.add(transaction)
             }
         }
 
-        override fun getPendingTransactions(): List<Transaction> = emptyList()
-        override fun getPendingTransactions(tags: List<List<String>>): List<Transaction> =
+        override suspend fun getPendingTransactions(): List<Transaction> = emptyList()
+        override suspend fun getPendingTransactions(tags: List<List<String>>): List<Transaction> =
             emptyList()
 
-        override fun getNonPendingTransactionsByNonces(
+        override suspend fun getNonPendingTransactionsByNonces(
             from: Address,
             pendingTransactionNonces: List<Long>
         ): List<Transaction> = emptyList()
 
-        override fun getLastInternalTransaction(): InternalTransaction? = null
-        override fun getInternalTransactions(): List<InternalTransaction> = emptyList()
-        override fun getInternalTransactionsByHashes(
+        override suspend fun getLastInternalTransaction(): InternalTransaction? = null
+        override suspend fun getInternalTransactions(): List<InternalTransaction> = emptyList()
+        override suspend fun getInternalTransactionsByHashes(
             hashes: List<ByteArray>
         ): List<InternalTransaction> = emptyList()
 
-        override fun saveInternalTransactions(internalTransactions: List<InternalTransaction>) {}
-        override fun saveTags(tags: List<TransactionTag>) {}
-        override fun getDistinctTokenContractAddresses(): List<String> = emptyList()
-        override fun getTransactionsAfterSingle(hash: ByteArray?): Single<List<Transaction>> =
-            Single.just(emptyList())
+        override suspend fun saveInternalTransactions(internalTransactions: List<InternalTransaction>) {}
+        override suspend fun saveTags(tags: List<TransactionTag>) {}
+        override suspend fun getDistinctTokenContractAddresses(): List<String> = emptyList()
+        override suspend fun getTransactionsAfter(hash: ByteArray?): List<Transaction> =
+            emptyList()
     }
 }

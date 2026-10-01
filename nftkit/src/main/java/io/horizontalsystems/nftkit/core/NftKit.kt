@@ -56,7 +56,7 @@ class NftKit(
         }
     }
 
-    fun nftBalance(contractAddress: Address, tokenId: BigInteger): NftBalance? =
+    suspend fun nftBalance(contractAddress: Address, tokenId: BigInteger): NftBalance? =
         balanceManager.nftBalance(contractAddress, tokenId)
 
     fun transferEip721TransactionData(contractAddress: Address, to: Address, tokenId: BigInteger): TransactionData =
@@ -112,7 +112,7 @@ class NftKit(
     }
 
     companion object {
-        fun getInstance(
+        suspend fun getInstance(
             context: Context,
             evmKit: EthereumKit
         ): NftKit {
@@ -120,7 +120,7 @@ class NftKit(
             val storage = Storage(nftKitDatabase)
             val dataProvider = DataProvider(evmKit)
             val balanceSyncManager = BalanceSyncManager(evmKit.receiveAddress, storage, dataProvider)
-            val balanceManager = BalanceManager(balanceSyncManager, storage)
+            val balanceManager = BalanceManager(balanceSyncManager, storage, storage.existingNftBalances())
             val transactionManager = TransactionManager(evmKit)
 
             balanceSyncManager.listener = balanceManager

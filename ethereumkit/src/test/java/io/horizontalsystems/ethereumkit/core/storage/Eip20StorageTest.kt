@@ -1,9 +1,9 @@
 package io.horizontalsystems.ethereumkit.core.storage
 
 import io.horizontalsystems.ethereumkit.models.Eip20SyncState
-import io.mockk.every
+import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.mockk
-import io.mockk.verify
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -20,7 +20,7 @@ class Eip20StorageTest {
 
         assertTrue(storage.clearForeignSyncState(CHAIN_HEAD, MARGIN))
 
-        verify(exactly = 1) { syncStateDao.delete(CURSOR_KEY) }
+        coVerify(exactly = 1) { syncStateDao.delete(CURSOR_KEY) }
     }
 
     @Test
@@ -29,7 +29,7 @@ class Eip20StorageTest {
 
         assertTrue(storage.clearForeignSyncState(CHAIN_HEAD, MARGIN))
 
-        verify(exactly = 1) { syncStateDao.delete(CURSOR_KEY) }
+        coVerify(exactly = 1) { syncStateDao.delete(CURSOR_KEY) }
     }
 
     @Test
@@ -41,20 +41,20 @@ class Eip20StorageTest {
 
         assertFalse(storage.clearForeignSyncState(CHAIN_HEAD, MARGIN))
 
-        verify(exactly = 0) { syncStateDao.delete(any()) }
+        coVerify(exactly = 0) { syncStateDao.delete(any()) }
     }
 
     @Test
     fun clearForeignSyncState_noRow_keepsRow() = runBlocking {
-        every { syncStateDao.get(CURSOR_KEY) } returns null
+        coEvery { syncStateDao.get(CURSOR_KEY) } returns null
 
         assertFalse(storage.clearForeignSyncState(CHAIN_HEAD, MARGIN))
 
-        verify(exactly = 0) { syncStateDao.delete(any()) }
+        coVerify(exactly = 0) { syncStateDao.delete(any()) }
     }
 
     private fun givenSyncState(lastScannedBlock: Long?, historicalMinScannedBlock: Long?) {
-        every { syncStateDao.get(CURSOR_KEY) } returns Eip20SyncState(
+        coEvery { syncStateDao.get(CURSOR_KEY) } returns Eip20SyncState(
             contractAddress = CURSOR_KEY,
             lastScannedBlock = lastScannedBlock,
             historicalMinScannedBlock = historicalMinScannedBlock

@@ -25,6 +25,7 @@ import io.horizontalsystems.ethereumkit.core.IBlockchainListener
 import io.horizontalsystems.ethereumkit.core.INonceProvider
 import io.horizontalsystems.ethereumkit.core.RpcApiProviderFactory
 import io.horizontalsystems.ethereumkit.core.TransactionBuilder
+import io.horizontalsystems.ethereumkit.core.rxIoDispatcher
 import io.horizontalsystems.ethereumkit.models.Address
 import io.horizontalsystems.ethereumkit.models.DefaultBlockParameter
 import io.horizontalsystems.ethereumkit.models.GasPrice
@@ -36,6 +37,9 @@ import io.horizontalsystems.ethereumkit.models.TransactionLog
 import io.reactivex.Single
 import io.reactivex.disposables.CompositeDisposable
 import io.reactivex.schedulers.Schedulers
+import io.reactivex.subjects.PublishSubject
+import kotlinx.coroutines.rx2.rxMaybe
+import kotlinx.coroutines.rx2.rxSingle
 import java.math.BigInteger
 
 class RpcBlockchain(
@@ -47,14 +51,19 @@ class RpcBlockchain(
 
     private val disposables = CompositeDisposable()
 
-    private fun onUpdateLastBlockHeight(lastBlockHeight: Long) {
-        storage.saveLastBlockHeight(lastBlockHeight)
-        listener?.onUpdateLastBlockHeight(lastBlockHeight)
-    }
+    // Heads arrive from the syncer callback and from polling; one queue saves each before it is
+    // published, in arrival order. A failed save drops that head, as the blocking save did.
+    private val lastBlockHeights = PublishSubject.create<Long>().toSerialized()
 
-    private fun onUpdateAccountState(state: AccountState) {
-        storage.saveAccountState(state)
-        listener?.onUpdateAccountState(state)
+    init {
+        lastBlockHeights
+            .concatMapMaybe { lastBlockHeight ->
+                rxMaybe(rxIoDispatcher) {
+                    storage.saveLastBlockHeight(lastBlockHeight)
+                    lastBlockHeight
+                }.onErrorComplete()
+            }
+            .subscribe { listener?.onUpdateLastBlockHeight(it) }
     }
 
     private fun syncLastBlockHeight() {
@@ -62,7 +71,7 @@ class RpcBlockchain(
             .subscribeOn(Schedulers.io())
             .observeOn(Schedulers.io())
             .subscribe({ lastBlockNumber ->
-                onUpdateLastBlockHeight(lastBlockNumber)
+                lastBlockHeights.onNext(lastBlockNumber)
             }, {
                 syncState = SyncState.NotSynced(it)
             }).let {
@@ -74,10 +83,16 @@ class RpcBlockchain(
         Single.zip(
             syncer.single(GetBalanceJsonRpc(address, DefaultBlockParameter.Latest)),
             syncer.single(GetTransactionCountJsonRpc(address, DefaultBlockParameter.Latest))
-        ) { t1, t2 -> Pair(t1, t2) }
+        ) { balance, nonce -> AccountState(balance, nonce) }
+            .flatMap { state ->
+                rxSingle(rxIoDispatcher) {
+                    storage.saveAccountState(state)
+                    state
+                }
+            }
             .subscribeOn(Schedulers.io())
-            .subscribe({ (balance, nonce) ->
-                onUpdateAccountState(AccountState(balance, nonce))
+            .subscribe({ state ->
+                listener?.onUpdateAccountState(state)
                 syncState = SyncState.Synced()
             }, {
                 it?.printStackTrace()
@@ -102,11 +117,9 @@ class RpcBlockchain(
     override val source: String
         get() = "RPC ${syncer.source}"
 
-    override val lastBlockHeight: Long?
-        get() = storage.getLastBlockHeight()
+    override suspend fun storedLastBlockHeight(): Long? = storage.getLastBlockHeight()
 
-    override val accountState: AccountState?
-        get() = storage.getAccountState()
+    override suspend fun storedAccountState(): AccountState? = storage.getAccountState()
 
     override fun start() {
         syncState = SyncState.Syncing()
@@ -236,7 +249,7 @@ class RpcBlockchain(
 
     //region IRpcSyncerListener
     override fun didUpdateLastBlockHeight(lastBlockHeight: Long) {
-        onUpdateLastBlockHeight(lastBlockHeight)
+        lastBlockHeights.onNext(lastBlockHeight)
     }
 
     override fun didUpdateSyncerState(state: SyncerState) {

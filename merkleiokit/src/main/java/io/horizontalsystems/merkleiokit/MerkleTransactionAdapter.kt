@@ -14,6 +14,8 @@ import io.horizontalsystems.ethereumkit.models.RawTransaction
 import io.horizontalsystems.ethereumkit.models.Signature
 import io.horizontalsystems.ethereumkit.network.ConnectionManager
 import io.reactivex.Single
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.rx2.rxSingle
 import okhttp3.EventListener
 import java.net.URI
 
@@ -25,7 +27,9 @@ class MerkleTransactionAdapter(
 ) {
     fun send(rawTransaction: RawTransaction, signature: Signature): Single<FullTransaction> {
         return blockchain.send(rawTransaction, signature, sourceTag)
-            .map { transactionManager.handle(listOf(it)).first() }
+            .flatMap { transaction ->
+                rxSingle(Dispatchers.IO) { transactionManager.handle(listOf(transaction)).first() }
+            }
     }
 
     fun registerInKit(ethereumKit: EthereumKit) {
@@ -47,7 +51,7 @@ class MerkleTransactionAdapter(
             return transaction.extra[protectedKey] == true
         }
 
-        fun getInstance(
+        suspend fun getInstance(
             merkleIoPubKey: String,
             address: Address,
             chain: Chain,

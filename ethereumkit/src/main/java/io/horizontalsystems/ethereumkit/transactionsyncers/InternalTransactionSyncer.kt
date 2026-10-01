@@ -3,18 +3,20 @@ package io.horizontalsystems.ethereumkit.transactionsyncers
 import io.horizontalsystems.ethereumkit.core.ITransactionProvider
 import io.horizontalsystems.ethereumkit.core.ITransactionStorage
 import io.horizontalsystems.ethereumkit.core.ITransactionSyncer
+import io.horizontalsystems.ethereumkit.core.rxIoDispatcher
 import io.horizontalsystems.ethereumkit.core.toHexString
 import io.horizontalsystems.ethereumkit.models.InternalTransaction
 import io.horizontalsystems.ethereumkit.models.ProviderInternalTransaction
 import io.horizontalsystems.ethereumkit.models.Transaction
 import io.reactivex.Single
+import kotlinx.coroutines.rx2.rxSingle
 
 class InternalTransactionSyncer(
         private val transactionProvider: ITransactionProvider,
         private val storage: ITransactionStorage
 ) : ITransactionSyncer {
 
-    private fun handle(transactions: List<ProviderInternalTransaction>) {
+    private suspend fun handle(transactions: List<ProviderInternalTransaction>) {
         if (transactions.isEmpty()) return
 
         val internalTransactions = transactions.map { tx ->
@@ -33,7 +35,7 @@ class InternalTransactionSyncer(
 
     // Only the checkpoint block can overlap with storage: the request starts at it (inclusive),
     // so everything above it is new by construction.
-    private fun unseen(
+    private suspend fun unseen(
         transactions: List<ProviderInternalTransaction>,
         checkpointBlockNumber: Long
     ): List<ProviderInternalTransaction> {
@@ -49,13 +51,19 @@ class InternalTransactionSyncer(
         return transactions.filterNot { (it.hash.toHexString() to it.traceId) in stored }
     }
 
-    override fun getTransactionsSingle(): Single<Pair<List<Transaction>, Boolean>> {
-        val lastTransactionBlockNumber = storage.getLastInternalTransaction()?.blockNumber ?: 0
+    override fun getTransactionsSingle(): Single<Pair<List<Transaction>, Boolean>> =
+        rxSingle(rxIoDispatcher) { storage.getLastInternalTransaction()?.blockNumber ?: 0 }
+            .flatMap(::syncFrom)
+
+    private fun syncFrom(lastTransactionBlockNumber: Long): Single<Pair<List<Transaction>, Boolean>> {
         val initial = lastTransactionBlockNumber == 0L
 
         return transactionProvider.getInternalTransactions(lastTransactionBlockNumber)
-                .map { providerInternalTransactions -> unseen(providerInternalTransactions, lastTransactionBlockNumber) }
-                .doOnSuccess { unseenTransactions -> handle(unseenTransactions) }
+                .flatMap { providerInternalTransactions ->
+                    rxSingle(rxIoDispatcher) {
+                        unseen(providerInternalTransactions, lastTransactionBlockNumber).also { handle(it) }
+                    }
+                }
                 .map { unseenTransactions ->
                     val array = unseenTransactions.map { transaction ->
                         Transaction(

@@ -7,7 +7,7 @@ import io.horizontalsystems.ethereumkit.models.ProviderTokenTransaction
 class TransactionSaver(
     private val storage: IEip20Storage
 ) {
-    fun handle(transactions: List<ProviderTokenTransaction>) {
+    suspend fun handle(transactions: List<ProviderTokenTransaction>) {
         if (transactions.isEmpty()) return
 
         val events = transactions.map { tx ->

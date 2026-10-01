@@ -114,7 +114,7 @@ class Erc20Kit(
         return transactionManager.getTransactionsAsync(fromHash, limit)
     }
 
-    fun getPendingTransactions(): List<FullTransaction> {
+    suspend fun getPendingTransactions(): List<FullTransaction> {
         return transactionManager.getPendingTransactions()
     }
 
@@ -149,7 +149,7 @@ class Erc20Kit(
 
     companion object {
 
-        fun getInstance(
+        suspend fun getInstance(
             context: Context,
             ethereumKit: EthereumKit,
             contractAddress: Address
@@ -169,7 +169,7 @@ class Erc20Kit(
             val dataProvider: IDataProvider = DataProvider(ethereumKit)
             val transactionManager = TransactionManager(contractAddress, ethereumKit)
             val balanceManager: IBalanceManager =
-                BalanceManager(contractAddress, address, balanceStorage, dataProvider)
+                BalanceManager(contractAddress, address, balanceStorage, dataProvider, balanceStorage.getBalance())
             val allowanceManager = AllowanceManager(ethereumKit, contractAddress, address)
 
             val erc20Kit =

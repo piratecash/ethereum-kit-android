@@ -89,8 +89,10 @@ dependencies {
 
     // Room
     implementation libs.room.runtime
-    implementation libs.room.rxjava2
     ksp libs.room.compiler
+
+    implementation libs.kotlinx.coroutines.core
+    implementation libs.kotlinx.coroutines.rx2
 
     //Eip712
     implementation('org.web3j:crypto:4.9.4') {
@@ -108,6 +110,7 @@ dependencies {
     testImplementation 'com.nhaarman:mockito-kotlin-kt1.1:1.6.0'
     // Mockito 3.3.3 cannot read Java 17 bytecode; new tests use mockk, as :erc20kit already does.
     testImplementation 'io.mockk:mockk:1.13.12'
+    testImplementation 'org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.1'
     testImplementation 'com.squareup.okhttp3:mockwebserver:4.9.0'
     testRuntimeOnly libs.secp256k1.jni.jvm
 

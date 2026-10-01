@@ -29,11 +29,11 @@ import java.math.BigInteger
 
 
 interface IApiStorage {
-    fun getLastBlockHeight(): Long?
-    fun saveLastBlockHeight(lastBlockHeight: Long)
+    suspend fun getLastBlockHeight(): Long?
+    suspend fun saveLastBlockHeight(lastBlockHeight: Long)
 
-    fun getAccountState(): AccountState?
-    fun saveAccountState(state: AccountState)
+    suspend fun getAccountState(): AccountState?
+    suspend fun saveAccountState(state: AccountState)
 }
 
 interface IBlockchain {
@@ -46,8 +46,8 @@ interface IBlockchain {
     fun syncAccountState()
 
     val syncState: EthereumKit.SyncState
-    val lastBlockHeight: Long?
-    val accountState: AccountState?
+    suspend fun storedLastBlockHeight(): Long?
+    suspend fun storedAccountState(): AccountState?
 
     fun send(rawTransaction: RawTransaction, signature: Signature): Single<Transaction>
     fun sendRawTransaction(rawTransaction: ByteArray): Single<ByteArray>
@@ -71,43 +71,43 @@ interface IBlockchainListener {
 }
 
 interface ITransactionStorage {
-    fun getTransactions(hashes: List<ByteArray>): List<Transaction>
-    fun getTransaction(hash: ByteArray): Transaction?
-    fun getTransactionsBeforeAsync(tags: List<List<String>>, hash: ByteArray?, limit: Int?): Single<List<Transaction>>
-    fun save(transactions: List<Transaction>)
+    suspend fun getTransactions(hashes: List<ByteArray>): List<Transaction>
+    suspend fun getTransaction(hash: ByteArray): Transaction?
+    suspend fun getTransactionsBefore(tags: List<List<String>>, hash: ByteArray?, limit: Int?): List<Transaction>
+    suspend fun save(transactions: List<Transaction>)
 
-    fun getPendingTransactions(): List<Transaction>
-    fun getPendingTransactions(tags: List<List<String>>): List<Transaction>
-    fun getNonPendingTransactionsByNonces(from: Address, pendingTransactionNonces: List<Long>): List<Transaction>
+    suspend fun getPendingTransactions(): List<Transaction>
+    suspend fun getPendingTransactions(tags: List<List<String>>): List<Transaction>
+    suspend fun getNonPendingTransactionsByNonces(from: Address, pendingTransactionNonces: List<Long>): List<Transaction>
 
-    fun getLastInternalTransaction(): InternalTransaction?
-    fun getInternalTransactions(): List<InternalTransaction>
-    fun getInternalTransactionsByHashes(hashes: List<ByteArray>): List<InternalTransaction>
-    fun saveInternalTransactions(internalTransactions: List<InternalTransaction>)
+    suspend fun getLastInternalTransaction(): InternalTransaction?
+    suspend fun getInternalTransactions(): List<InternalTransaction>
+    suspend fun getInternalTransactionsByHashes(hashes: List<ByteArray>): List<InternalTransaction>
+    suspend fun saveInternalTransactions(internalTransactions: List<InternalTransaction>)
 
-    fun saveTags(tags: List<TransactionTag>)
-    fun getDistinctTokenContractAddresses(): List<String>
+    suspend fun saveTags(tags: List<TransactionTag>)
+    suspend fun getDistinctTokenContractAddresses(): List<String>
 
-    fun getTransactionsAfterSingle(hash: ByteArray?): Single<List<Transaction>>
+    suspend fun getTransactionsAfter(hash: ByteArray?): List<Transaction>
 }
 
 interface IRawTransactionBroadcastStorage {
-    fun getRawTransactionBroadcast(hash: ByteArray): RawTransactionBroadcastRecord?
-    fun getRawTransactionBroadcasts(): List<RawTransactionBroadcastRecord>
-    fun addRawTransactionBroadcast(record: RawTransactionBroadcastRecord)
-    fun updateRawTransactionBroadcast(record: RawTransactionBroadcastRecord)
-    fun deleteRawTransactionBroadcast(record: RawTransactionBroadcastRecord)
+    suspend fun getRawTransactionBroadcast(hash: ByteArray): RawTransactionBroadcastRecord?
+    suspend fun getRawTransactionBroadcasts(): List<RawTransactionBroadcastRecord>
+    suspend fun addRawTransactionBroadcast(record: RawTransactionBroadcastRecord)
+    suspend fun updateRawTransactionBroadcast(record: RawTransactionBroadcastRecord)
+    suspend fun deleteRawTransactionBroadcast(record: RawTransactionBroadcastRecord)
 }
 
 interface IEip20Storage {
-    fun getLastEvent(): Eip20Event?
-    fun getEarliestEip20Event(): Eip20Event?
-    fun save(events: List<Eip20Event>)
-    fun getEvents(): List<Eip20Event>
-    fun getEventsByHashes(hashes: List<ByteArray>): List<Eip20Event>
-    fun deleteZeroValueDuplicate(hash: ByteArray, contractAddress: Address, from: Address, to: Address)
-    fun getLastScannedBlock(): Long?
-    fun getHistoricalMinScannedBlock(): Long?
+    suspend fun getLastEvent(): Eip20Event?
+    suspend fun getEarliestEip20Event(): Eip20Event?
+    suspend fun save(events: List<Eip20Event>)
+    suspend fun getEvents(): List<Eip20Event>
+    suspend fun getEventsByHashes(hashes: List<ByteArray>): List<Eip20Event>
+    suspend fun deleteZeroValueDuplicate(hash: ByteArray, contractAddress: Address, from: Address, to: Address)
+    suspend fun getLastScannedBlock(): Long?
+    suspend fun getHistoricalMinScannedBlock(): Long?
     suspend fun saveSyncBlockInfo(lastScannedBlock: Long?, historicalMinScannedBlock: Long?)
 
     /**
@@ -134,12 +134,12 @@ interface IMethodDecorator {
 }
 
 interface IEventDecorator {
-    fun contractEventInstancesMap(transactions: List<Transaction>): Map<String, List<ContractEventInstance>>
+    suspend fun contractEventInstancesMap(transactions: List<Transaction>): Map<String, List<ContractEventInstance>>
     fun contractEventInstances(logs: List<TransactionLog>): List<ContractEventInstance>
 }
 
 interface IExtraDecorator {
-    fun extra(hash: ByteArray) : Map<String, Any>
+    suspend fun extra(hash: ByteArray) : Map<String, Any>
 }
 
 interface ITransactionDecorator {

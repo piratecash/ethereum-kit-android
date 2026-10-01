@@ -5,6 +5,7 @@ import androidx.test.core.app.ApplicationProvider
 import io.horizontalsystems.erc20kit.core.Erc20Storage
 import io.horizontalsystems.erc20kit.core.room.Erc20KitDatabase
 import io.horizontalsystems.ethereumkit.fixture.DatabaseFixtureFiles
+import kotlinx.coroutines.test.runTest
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -19,7 +20,7 @@ class DatabaseFixtureGenerator {
     fun setUp() = DatabaseFixtureFiles.assumeRegenerating()
 
     @Test
-    fun generateTokenDatabases() {
+    fun generateTokenDatabases() = runTest {
         Erc20KitFixture.balances.forEach { (name, balance) ->
             val database = Erc20KitDatabase.getInstance(context, name)
             Erc20Storage(database).save(balance)

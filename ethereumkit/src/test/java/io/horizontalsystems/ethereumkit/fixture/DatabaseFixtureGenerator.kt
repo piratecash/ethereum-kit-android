@@ -10,6 +10,7 @@ import io.horizontalsystems.ethereumkit.fixture.EthereumKitFixture.API_DB
 import io.horizontalsystems.ethereumkit.fixture.EthereumKitFixture.EIP20_EVENTS_DB
 import io.horizontalsystems.ethereumkit.fixture.EthereumKitFixture.TRANSACTIONS_DB
 import io.horizontalsystems.ethereumkit.models.TransactionSyncSource
+import kotlinx.coroutines.test.runTest
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -24,7 +25,7 @@ class DatabaseFixtureGenerator {
     fun setUp() = DatabaseFixtureFiles.assumeRegenerating()
 
     @Test
-    fun generateApiDatabase() {
+    fun generateApiDatabase() = runTest {
         val database = ApiDatabase.getInstance(context, API_DB)
         database.balanceDao().insert(EthereumKitFixture.accountState)
         database.lastBlockHeightDao().insert(LastBlockHeight(EthereumKitFixture.LAST_BLOCK_HEIGHT))
@@ -32,21 +33,21 @@ class DatabaseFixtureGenerator {
     }
 
     @Test
-    fun generateTransactionDatabase() {
+    fun generateTransactionDatabase() = runTest {
         val database = TransactionDatabase.getInstance(context, TRANSACTIONS_DB)
         database.transactionDao().insert(EthereumKitFixture.transactions)
         database.transactionDao().insertInternalTransactions(listOf(EthereumKitFixture.internalTransaction))
         database.transactionTagDao().insert(EthereumKitFixture.tags)
-        EthereumKitFixture.syncerStates.forEach(database.transactionSyncerStateDao()::save)
+        EthereumKitFixture.syncerStates.forEach { database.transactionSyncerStateDao().save(it) }
         database.transactionSyncSourceDao().insertAll(
             EthereumKitFixture.syncSources.map { (hash, source) -> TransactionSyncSource(hash, source) }
         )
-        EthereumKitFixture.rawBroadcasts.forEach(database.rawTransactionBroadcastDao()::insert)
+        EthereumKitFixture.rawBroadcasts.forEach { database.rawTransactionBroadcastDao().insert(it) }
         DatabaseFixtureFiles.export(context, database, TRANSACTIONS_DB)
     }
 
     @Test
-    fun generateEip20EventsDatabase() {
+    fun generateEip20EventsDatabase() = runTest {
         val database = Eip20Database.getInstance(context, EIP20_EVENTS_DB)
         database.eip20EventDao().insertEip20Events(EthereumKitFixture.eip20Events)
         database.eip20SyncStateDao().insert(EthereumKitFixture.eip20SyncState)

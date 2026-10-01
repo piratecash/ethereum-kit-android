@@ -7,6 +7,7 @@ import io.horizontalsystems.ethereumkit.models.RawTransactionBroadcastResult
 import io.horizontalsystems.ethereumkit.models.RawTransactionBroadcastStatus
 import io.reactivex.Observable
 import io.reactivex.Single
+import kotlinx.coroutines.rx2.rxSingle
 import timber.log.Timber
 import java.util.Locale
 import java.util.concurrent.TimeUnit
@@ -27,15 +28,17 @@ class RawTransactionBroadcaster(
 
         val hash = CryptoUtils.sha3(rawTransaction)
         if (!markInFlight(hash)) {
-            return@defer Single.just(queueForRetry(hash, rawTransaction))
+            return@defer rxSingle(rxIoDispatcher) { queueForRetry(hash, rawTransaction) }
         }
 
         blockchain.sendRawTransaction(rawTransaction)
             .withNetworkTimeout()
-            .map { rpcHash ->
-                validateRpcHash(hash, rpcHash)
-                storage.getRawTransactionBroadcast(hash)?.let(storage::deleteRawTransactionBroadcast)
-                RawTransactionBroadcastResult(hash, RawTransactionBroadcastStatus.Submitted)
+            .flatMap { rpcHash ->
+                rxSingle(rxIoDispatcher) {
+                    validateRpcHash(hash, rpcHash)
+                    deleteQueuedBroadcast(hash)
+                    RawTransactionBroadcastResult(hash, RawTransactionBroadcastStatus.Submitted)
+                }
             }
             .onErrorResumeNext { error: Throwable ->
                 handleInitialBroadcastError(hash, rawTransaction, error)
@@ -48,7 +51,7 @@ class RawTransactionBroadcaster(
     fun retryQueued(): Single<Unit> = Single.defer {
         if (!beginRetry()) return@defer Single.just(Unit)
 
-        Single.fromCallable { storage.getRawTransactionBroadcasts() }
+        rxSingle(rxIoDispatcher) { storage.getRawTransactionBroadcasts() }
             .flatMapObservable { Observable.fromIterable(it) }
             .concatMapSingle { record ->
                 retry(record).onErrorReturn { error ->
@@ -66,9 +69,10 @@ class RawTransactionBroadcaster(
     private fun retry(record: RawTransactionBroadcastRecord): Single<Unit> = Single.defer {
         val now = currentTime()
         if (record.expiresAt <= now || record.retriesCount >= maxRetriesCount) {
-            storage.deleteRawTransactionBroadcast(record)
-            Timber.w("Dropping raw transaction broadcast after retries=${record.retriesCount}.")
-            return@defer Single.just(Unit)
+            return@defer rxSingle(rxIoDispatcher) {
+                storage.deleteRawTransactionBroadcast(record)
+                Timber.w("Dropping raw transaction broadcast after retries=${record.retriesCount}.")
+            }
         }
 
         if (record.lastSendTime > now - retriesPeriod) {
@@ -82,8 +86,7 @@ class RawTransactionBroadcaster(
         transactionExists(record.hash)
             .flatMap { exists ->
                 if (exists) {
-                    storage.deleteRawTransactionBroadcast(record)
-                    Single.just(Unit)
+                    rxSingle(rxIoDispatcher) { storage.deleteRawTransactionBroadcast(record) }
                 } else {
                     retryBroadcast(record, now)
                 }
@@ -96,10 +99,11 @@ class RawTransactionBroadcaster(
     private fun retryBroadcast(record: RawTransactionBroadcastRecord, now: Long): Single<Unit> {
         return blockchain.sendRawTransaction(record.rawTransaction)
             .withNetworkTimeout()
-            .map { rpcHash ->
-                validateRpcHash(record.hash, rpcHash)
-                storage.deleteRawTransactionBroadcast(record)
-                Unit
+            .flatMap { rpcHash ->
+                rxSingle(rxIoDispatcher) {
+                    validateRpcHash(record.hash, rpcHash)
+                    storage.deleteRawTransactionBroadcast(record)
+                }
             }
             .onErrorResumeNext { error: Throwable ->
                 handleRetryBroadcastError(record, error, now)
@@ -112,28 +116,30 @@ class RawTransactionBroadcaster(
         error: Throwable
     ): Single<RawTransactionBroadcastResult> {
         if (error is UnsupportedOperationException) {
-            storage.getRawTransactionBroadcast(hash)?.let(storage::deleteRawTransactionBroadcast)
-            return Single.error(error)
+            return rxSingle(rxIoDispatcher) {
+                deleteQueuedBroadcast(hash)
+                throw error
+            }
         }
 
         if (isKnownTransactionError(error)) {
-            storage.getRawTransactionBroadcast(hash)?.let(storage::deleteRawTransactionBroadcast)
-            return Single.just(RawTransactionBroadcastResult(hash, RawTransactionBroadcastStatus.AlreadyKnown))
+            return rxSingle(rxIoDispatcher) {
+                deleteQueuedBroadcast(hash)
+                RawTransactionBroadcastResult(hash, RawTransactionBroadcastStatus.AlreadyKnown)
+            }
         }
 
         if (isPermanentError(error)) {
             return transactionExists(hash).flatMap { exists ->
-                if (exists) {
-                    storage.getRawTransactionBroadcast(hash)?.let(storage::deleteRawTransactionBroadcast)
-                    Single.just(RawTransactionBroadcastResult(hash, RawTransactionBroadcastStatus.AlreadyKnown))
-                } else {
-                    storage.getRawTransactionBroadcast(hash)?.let(storage::deleteRawTransactionBroadcast)
-                    Single.error(error)
+                rxSingle(rxIoDispatcher) {
+                    deleteQueuedBroadcast(hash)
+                    if (!exists) throw error
+                    RawTransactionBroadcastResult(hash, RawTransactionBroadcastStatus.AlreadyKnown)
                 }
             }
         }
 
-        return Single.just(queueForRetry(hash, rawTransaction))
+        return rxSingle(rxIoDispatcher) { queueForRetry(hash, rawTransaction) }
     }
 
     private fun handleRetryBroadcastError(
@@ -142,35 +148,39 @@ class RawTransactionBroadcaster(
         now: Long
     ): Single<Unit> {
         if (error is UnsupportedOperationException) {
-            storage.deleteRawTransactionBroadcast(record)
-            return Single.just(Unit)
+            return rxSingle(rxIoDispatcher) { storage.deleteRawTransactionBroadcast(record) }
         }
 
         if (isKnownTransactionError(error)) {
-            storage.deleteRawTransactionBroadcast(record)
-            return Single.just(Unit)
+            return rxSingle(rxIoDispatcher) { storage.deleteRawTransactionBroadcast(record) }
         }
 
         if (isPermanentError(error)) {
-            return transactionExists(record.hash).map { exists ->
-                storage.deleteRawTransactionBroadcast(record)
-                if (!exists) {
-                    Timber.w(error, "Dropping raw transaction broadcast after permanent error.")
+            return transactionExists(record.hash).flatMap { exists ->
+                rxSingle(rxIoDispatcher) {
+                    storage.deleteRawTransactionBroadcast(record)
+                    if (!exists) {
+                        Timber.w(error, "Dropping raw transaction broadcast after permanent error.")
+                    }
                 }
-                Unit
             }
         }
 
-        storage.updateRawTransactionBroadcast(
-            record.copy(
-                lastSendTime = now,
-                retriesCount = record.retriesCount + 1,
+        return rxSingle(rxIoDispatcher) {
+            storage.updateRawTransactionBroadcast(
+                record.copy(
+                    lastSendTime = now,
+                    retriesCount = record.retriesCount + 1,
+                )
             )
-        )
-        return Single.just(Unit)
+        }
     }
 
-    private fun queueForRetry(hash: ByteArray, rawTransaction: ByteArray): RawTransactionBroadcastResult {
+    private suspend fun deleteQueuedBroadcast(hash: ByteArray) {
+        storage.getRawTransactionBroadcast(hash)?.let { storage.deleteRawTransactionBroadcast(it) }
+    }
+
+    private suspend fun queueForRetry(hash: ByteArray, rawTransaction: ByteArray): RawTransactionBroadcastResult {
         val now = currentTime()
         val existingRecord = storage.getRawTransactionBroadcast(hash)
 

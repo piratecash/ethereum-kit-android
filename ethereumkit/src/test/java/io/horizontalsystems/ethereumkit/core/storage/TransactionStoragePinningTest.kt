@@ -8,6 +8,7 @@ import io.horizontalsystems.ethereumkit.fixture.EthereumKitFixture.snapshot
 import io.horizontalsystems.ethereumkit.models.RawTransactionBroadcastRecord
 import io.horizontalsystems.ethereumkit.models.Transaction
 import io.horizontalsystems.ethereumkit.models.TransactionTag
+import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -39,7 +40,7 @@ class TransactionStoragePinningTest {
     private fun pending(seed: Int, timestamp: Long, isFailed: Boolean = false) =
         Transaction(hash(seed), timestamp, isFailed = isFailed)
 
-    private fun givenHistory() {
+    private suspend fun givenHistory() {
         storage.save(listOf(a, b, c, d, e))
         tag(a, TransactionTag.INCOMING, TransactionTag.EVM_COIN_INCOMING)
         tag(b, TransactionTag.OUTGOING, TransactionTag.tokenOutgoing("0xabc"))
@@ -48,27 +49,27 @@ class TransactionStoragePinningTest {
         tag(e, TransactionTag.OUTGOING, TransactionTag.EIP20_TRANSFER)
     }
 
-    private fun tag(transaction: Transaction, vararg names: String) =
+    private suspend fun tag(transaction: Transaction, vararg names: String) =
         storage.saveTags(names.map { TransactionTag(it, transaction.hash) })
 
-    private fun before(tags: List<List<String>> = emptyList(), from: Transaction? = null, limit: Int? = null) =
-        storage.getTransactionsBeforeAsync(tags, from?.hash, limit).blockingGet().hashes()
+    private suspend fun before(tags: List<List<String>> = emptyList(), from: Transaction? = null, limit: Int? = null) =
+        storage.getTransactionsBefore(tags, from?.hash, limit).hashes()
 
-    private fun after(from: Transaction? = null) = storage.getTransactionsAfterSingle(from?.hash).blockingGet().hashes()
+    private suspend fun after(from: Transaction? = null) = storage.getTransactionsAfter(from?.hash).hashes()
 
     private fun List<Transaction>.hashes() = map { it.snapshot()[0] }
 
     private fun expected(vararg transactions: Transaction) = transactions.map { it.snapshot()[0] }
 
     @Test
-    fun getTransactionsBefore_noFilters_ordersByTimestampIndexThenHashDescending() {
+    fun getTransactionsBefore_noFilters_ordersByTimestampIndexThenHashDescending() = runTest {
         givenHistory()
 
         assertEquals(expected(e, c, d, b, a), before())
     }
 
     @Test
-    fun getTransactionsBefore_fromHash_returnsOnlyStrictlyOlder() {
+    fun getTransactionsBefore_fromHash_returnsOnlyStrictlyOlder() = runTest {
         givenHistory()
 
         assertEquals(expected(e, c, d, b, a), before(from = null))
@@ -79,14 +80,14 @@ class TransactionStoragePinningTest {
     }
 
     @Test
-    fun getTransactionsBefore_unknownFromHash_ignoresFromFilter() {
+    fun getTransactionsBefore_unknownFromHash_ignoresFromFilter() = runTest {
         givenHistory()
 
-        assertEquals(expected(e, c, d, b, a), storage.getTransactionsBeforeAsync(emptyList(), hash(0x99), null).blockingGet().hashes())
+        assertEquals(expected(e, c, d, b, a), storage.getTransactionsBefore(emptyList(), hash(0x99), null).hashes())
     }
 
     @Test
-    fun getTransactionsBefore_limit_keepsNewestRows() {
+    fun getTransactionsBefore_limit_keepsNewestRows() = runTest {
         givenHistory()
 
         assertEquals(expected(e, c), before(limit = 2))
@@ -95,7 +96,7 @@ class TransactionStoragePinningTest {
     }
 
     @Test
-    fun getTransactionsBefore_singleTagGroup_matchesAnyTagInGroup() {
+    fun getTransactionsBefore_singleTagGroup_matchesAnyTagInGroup() = runTest {
         givenHistory()
 
         assertEquals(expected(e, c, b), before(tags = listOf(listOf(TransactionTag.OUTGOING))))
@@ -103,7 +104,7 @@ class TransactionStoragePinningTest {
     }
 
     @Test
-    fun getTransactionsBefore_severalTagGroups_requiresEveryGroup() {
+    fun getTransactionsBefore_severalTagGroups_requiresEveryGroup() = runTest {
         givenHistory()
 
         assertEquals(expected(c), before(tags = listOf(listOf(TransactionTag.OUTGOING), listOf(TransactionTag.SWAP))))
@@ -112,7 +113,7 @@ class TransactionStoragePinningTest {
     }
 
     @Test
-    fun getTransactionsBefore_tagsFromHashAndLimit_combine() {
+    fun getTransactionsBefore_tagsFromHashAndLimit_combine() = runTest {
         givenHistory()
 
         assertEquals(expected(b), before(tags = listOf(listOf(TransactionTag.OUTGOING)), from = c, limit = 1))
@@ -120,14 +121,14 @@ class TransactionStoragePinningTest {
     }
 
     @Test
-    fun getTransactionsAfter_noHash_ordersAscending() {
+    fun getTransactionsAfter_noHash_ordersAscending() = runTest {
         givenHistory()
 
         assertEquals(expected(a, b, d, c, e), after())
     }
 
     @Test
-    fun getTransactionsAfter_fromHash_returnsOnlyStrictlyNewer() {
+    fun getTransactionsAfter_fromHash_returnsOnlyStrictlyNewer() = runTest {
         givenHistory()
 
         assertEquals(expected(d, c, e), after(from = b))
@@ -136,14 +137,14 @@ class TransactionStoragePinningTest {
     }
 
     @Test
-    fun getTransactionsAfter_unknownHash_ignoresFilter() {
+    fun getTransactionsAfter_unknownHash_ignoresFilter() = runTest {
         givenHistory()
 
-        assertEquals(expected(a, b, d, c, e), storage.getTransactionsAfterSingle(hash(0x99)).blockingGet().hashes())
+        assertEquals(expected(a, b, d, c, e), storage.getTransactionsAfter(hash(0x99)).hashes())
     }
 
     @Test
-    fun getPendingTransactions_noTags_returnsUnconfirmedNonFailed() {
+    fun getPendingTransactions_noTags_returnsUnconfirmedNonFailed() = runTest {
         val pendingA = pending(seed = 0x01, timestamp = 400)
         val failed = pending(seed = 0x02, timestamp = 410, isFailed = true)
         storage.save(listOf(a, pendingA, failed))
@@ -152,7 +153,7 @@ class TransactionStoragePinningTest {
     }
 
     @Test
-    fun getPendingTransactions_tags_filtersUnconfirmedByTagGroups() {
+    fun getPendingTransactions_tags_filtersUnconfirmedByTagGroups() = runTest {
         val outgoing = pending(seed = 0x01, timestamp = 400)
         val incoming = pending(seed = 0x02, timestamp = 410)
         val swap = pending(seed = 0x03, timestamp = 420)
@@ -173,10 +174,10 @@ class TransactionStoragePinningTest {
         assertEquals(emptySet<String>(), pendingHashes(listOf(listOf(TransactionTag.OUTGOING), listOf(TransactionTag.INCOMING))))
     }
 
-    private fun pendingHashes(tags: List<List<String>>) = storage.getPendingTransactions(tags).hashes().toSet()
+    private suspend fun pendingHashes(tags: List<List<String>>) = storage.getPendingTransactions(tags).hashes().toSet()
 
     @Test
-    fun getDistinctTokenContractAddresses_returnsDistinctDirectionalTagNames() {
+    fun getDistinctTokenContractAddresses_returnsDistinctDirectionalTagNames() = runTest {
         storage.save(listOf(a, b))
         tag(a, "0xabc_incoming", "0xabc_outgoing", "ETH_incoming", TransactionTag.SWAP, TransactionTag.INCOMING, "from_0x1")
         tag(b, "0xabc_outgoing", TransactionTag.OUTGOING, TransactionTag.EIP20_TRANSFER)
@@ -188,7 +189,7 @@ class TransactionStoragePinningTest {
     }
 
     @Test
-    fun rawTransactionBroadcast_crud_roundTrips() {
+    fun rawTransactionBroadcast_crud_roundTrips() = runTest {
         val first = record(seed = 0x01, retries = 0)
         val second = record(seed = 0x02, retries = 3)
 
@@ -211,7 +212,7 @@ class TransactionStoragePinningTest {
     }
 
     @Test
-    fun rawTransactionBroadcast_addExistingHash_keepsOriginalRecord() {
+    fun rawTransactionBroadcast_addExistingHash_keepsOriginalRecord() = runTest {
         val original = record(seed = 0x01, retries = 0)
         storage.addRawTransactionBroadcast(original)
 

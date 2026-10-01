@@ -62,12 +62,12 @@ class Erc20TransactionSyncer(
         return requestTokenTransactionsEtherscan(startBlock)
             .onErrorResumeNext { error -> requestTokenTransactionsRpcLogs(startBlock, error) }
             .flatMap { result ->
-                transactionSaver.handle(result.transactions)
-                syncSourceStorage.saveAll(
-                    result.transactions.map { it.hash },
-                    SyncSource.ERC20_SYNCER
-                )
                 rxSingle(Dispatchers.IO) {
+                    transactionSaver.handle(result.transactions)
+                    syncSourceStorage.saveAll(
+                        result.transactions.map { it.hash },
+                        SyncSource.ERC20_SYNCER
+                    )
                     if (result.persistCursor) {
                         storage.saveSyncBlockInfo(
                             lastScannedBlock = result.lastScannedBlock,

@@ -13,7 +13,7 @@ class Eip1155EventDecorator(
     private val storage: Storage
 ) : IEventDecorator {
 
-    override fun contractEventInstancesMap(transactions: List<Transaction>): Map<String, List<ContractEventInstance>> {
+    override suspend fun contractEventInstancesMap(transactions: List<Transaction>): Map<String, List<ContractEventInstance>> {
         val events = if (transactions.size > 100) {
             storage.eip1155Events()
         } else {

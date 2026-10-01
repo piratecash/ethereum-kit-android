@@ -5,8 +5,10 @@ import io.horizontalsystems.ethereumkit.core.IBlockchain
 import io.horizontalsystems.ethereumkit.core.ITransactionStorage
 import io.horizontalsystems.ethereumkit.core.ITransactionSyncer
 import io.horizontalsystems.ethereumkit.core.TransactionManager
+import io.horizontalsystems.ethereumkit.core.rxIoDispatcher
 import io.horizontalsystems.ethereumkit.models.Transaction
 import io.reactivex.Single
+import kotlinx.coroutines.rx2.rxSingle
 import timber.log.Timber
 
 /**
@@ -24,9 +26,11 @@ class PendingTransactionSyncer(
 
     override val requiresExplorer = false
 
-    override fun getTransactionsSingle(): Single<Pair<List<Transaction>, Boolean>> {
-        val pendingTransactions = storage.getPendingTransactions()
+    override fun getTransactionsSingle(): Single<Pair<List<Transaction>, Boolean>> =
+        rxSingle(rxIoDispatcher) { storage.getPendingTransactions() }
+            .flatMap(::confirm)
 
+    private fun confirm(pendingTransactions: List<Transaction>): Single<Pair<List<Transaction>, Boolean>> {
         if (pendingTransactions.isEmpty()) {
             return Single.just(Pair(listOf(), false))
         }
@@ -63,18 +67,20 @@ class PendingTransactionSyncer(
 
         return Single.zip(singles) { results ->
             @Suppress("UNCHECKED_CAST")
-            val confirmedTransactions = results
+            results
                 .mapNotNull { it as? Transaction }
                 .filter { it.blockNumber != null }
+        }.flatMap { confirmedTransactions ->
+            rxSingle(rxIoDispatcher) {
+                if (confirmedTransactions.isNotEmpty()) {
+                    // Single call to handle() with all confirmed transactions - avoids race condition
+                    transactionManager.handle(confirmedTransactions)
+                    Timber.i("Persisted ${confirmedTransactions.size} confirmed transaction(s)")
+                }
 
-            if (confirmedTransactions.isNotEmpty()) {
-                // Single call to handle() with all confirmed transactions - avoids race condition
-                transactionManager.handle(confirmedTransactions)
-                Timber.i("Persisted ${confirmedTransactions.size} confirmed transaction(s)")
+                // Return empty list since we've already handled via transactionManager
+                Pair(listOf<Transaction>(), false)
             }
-
-            // Return empty list since we've already handled via transactionManager
-            Pair(listOf<Transaction>(), false)
         }
     }
 

@@ -6,6 +6,7 @@ import io.horizontalsystems.ethereumkit.fixture.DatabaseFixtureFiles
 import io.horizontalsystems.nftkit.core.db.NftKitDatabase
 import io.horizontalsystems.nftkit.fixture.NftKitFixture.snapshot
 import io.horizontalsystems.nftkit.models.NftBalanceRecord
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -16,7 +17,7 @@ class FixtureDatabasesTest {
     private val context = ApplicationProvider.getApplicationContext<Context>()
 
     @Test
-    fun nftDatabase_fixture_containsBalancesAndEvents() {
+    fun nftDatabase_fixture_containsBalancesAndEvents() = runTest {
         DatabaseFixtureFiles.install(context, NftKitFixture.DB)
 
         val database = NftKitDatabase.getInstance(context, NftKitFixture.DB)

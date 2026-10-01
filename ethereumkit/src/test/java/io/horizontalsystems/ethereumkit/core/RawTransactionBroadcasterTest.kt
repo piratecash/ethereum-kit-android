@@ -17,6 +17,10 @@ import io.horizontalsystems.ethereumkit.models.Signature
 import io.horizontalsystems.ethereumkit.models.Transaction
 import io.horizontalsystems.ethereumkit.models.TransactionLog
 import io.reactivex.Single
+import io.reactivex.plugins.RxJavaPlugins
+import io.reactivex.schedulers.Schedulers
+import kotlinx.coroutines.test.runTest
+import org.junit.After
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -46,12 +50,19 @@ class RawTransactionBroadcasterTest {
 
     @Before
     fun setup() {
+        // Storage calls are bridged onto the io scheduler; keep them on the test thread as before.
+        RxJavaPlugins.setIoSchedulerHandler { Schedulers.trampoline() }
         storage = InMemoryBroadcastStorage()
         broadcaster = RawTransactionBroadcaster(
             blockchain = blockchain,
             storage = storage,
             currentTime = { now },
         )
+    }
+
+    @After
+    fun tearDown() {
+        RxJavaPlugins.reset()
     }
 
     @Test
@@ -66,7 +77,7 @@ class RawTransactionBroadcasterTest {
     }
 
     @Test
-    fun broadcast_transientError_queuesFreshRecordWithTtl() {
+    fun broadcast_transientError_queuesFreshRecordWithTtl() = runTest {
         blockchain.sendRawTransactionResult = Single.error(IOException("offline"))
 
         val result = broadcaster.broadcast(rawTransaction).blockingGet()
@@ -93,7 +104,7 @@ class RawTransactionBroadcasterTest {
     }
 
     @Test
-    fun retry_transientError_updatesExistingRecordPreservingFirstSendTimeAndExpiresAt() {
+    fun retry_transientError_updatesExistingRecordPreservingFirstSendTimeAndExpiresAt() = runTest {
         val firstSendTime = 100L
         val expiresAt = now + RawTransactionBroadcaster.retryTtl
         storage.records[hash.toRawHexString()] = RawTransactionBroadcastRecord(
@@ -187,7 +198,7 @@ class RawTransactionBroadcasterTest {
     }
 
     @Test
-    fun retry_hangingBroadcast_timesOutAndAllowsNextRetry() {
+    fun retry_hangingBroadcast_timesOutAndAllowsNextRetry() = runTest {
         broadcaster = RawTransactionBroadcaster(
             blockchain = blockchain,
             storage = storage,
@@ -294,8 +305,8 @@ class RawTransactionBroadcasterTest {
         override val source = "fake"
         override var listener: IBlockchainListener? = null
         override val syncState: EthereumKit.SyncState = EthereumKit.SyncState.Synced()
-        override val lastBlockHeight: Long? = null
-        override val accountState: AccountState? = null
+        override suspend fun storedLastBlockHeight(): Long? = null
+        override suspend fun storedAccountState(): AccountState? = null
 
         override fun start() = Unit
         override fun refresh() = Unit
@@ -346,25 +357,25 @@ class RawTransactionBroadcasterTest {
         var insertCount = 0
         var updateCount = 0
 
-        override fun getRawTransactionBroadcast(hash: ByteArray): RawTransactionBroadcastRecord? {
+        override suspend fun getRawTransactionBroadcast(hash: ByteArray): RawTransactionBroadcastRecord? {
             return records[hash.toRawHexString()]
         }
 
-        override fun getRawTransactionBroadcasts(): List<RawTransactionBroadcastRecord> {
+        override suspend fun getRawTransactionBroadcasts(): List<RawTransactionBroadcastRecord> {
             return records.values.toList()
         }
 
-        override fun addRawTransactionBroadcast(record: RawTransactionBroadcastRecord) {
+        override suspend fun addRawTransactionBroadcast(record: RawTransactionBroadcastRecord) {
             insertCount++
             records.putIfAbsent(record.hash.toRawHexString(), record)
         }
 
-        override fun updateRawTransactionBroadcast(record: RawTransactionBroadcastRecord) {
+        override suspend fun updateRawTransactionBroadcast(record: RawTransactionBroadcastRecord) {
             updateCount++
             records[record.hash.toRawHexString()] = record
         }
 
-        override fun deleteRawTransactionBroadcast(record: RawTransactionBroadcastRecord) {
+        override suspend fun deleteRawTransactionBroadcast(record: RawTransactionBroadcastRecord) {
             records.remove(record.hash.toRawHexString())
         }
     }

@@ -44,7 +44,7 @@ class TransactionManager(
         return ethereumKit.getFullTransactionsAsync(tags, fromHash, limit)
     }
 
-    fun getPendingTransactions(): List<FullTransaction> {
+    suspend fun getPendingTransactions(): List<FullTransaction> {
         return ethereumKit.getPendingFullTransactions(tags)
     }
 

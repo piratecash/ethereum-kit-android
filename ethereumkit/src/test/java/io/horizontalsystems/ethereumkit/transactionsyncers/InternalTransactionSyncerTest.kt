@@ -9,13 +9,14 @@ import io.horizontalsystems.ethereumkit.models.ProviderInternalTransaction
 import io.horizontalsystems.ethereumkit.models.Transaction
 import io.horizontalsystems.ethereumkit.models.TransactionTag
 import io.mockk.Runs
-import io.mockk.every
+import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.just
 import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.spyk
-import io.mockk.verify
 import io.reactivex.Single
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -40,15 +41,15 @@ class InternalTransactionSyncerTest {
     @Test
     fun getTransactionsSingle_storedCheckpoint_requestsFromThatBlockInclusive() {
         val storage = mockk<ITransactionStorage>()
-        every { storage.getLastInternalTransaction() } returns InternalTransaction(
+        coEvery { storage.getLastInternalTransaction() } returns InternalTransaction(
             hash = ByteArray(32) { 1 }, traceId = "0", blockNumber = 50L, from = address, to = address, value = BigInteger.ONE
         )
-        every { storage.getInternalTransactionsByHashes(any()) } returns emptyList()
-        every { storage.saveInternalTransactions(any()) } just Runs
+        coEvery { storage.getInternalTransactionsByHashes(any()) } returns emptyList()
+        coEvery { storage.saveInternalTransactions(any()) } just Runs
 
         val requestedBlock = slot<Long>()
         val provider = mockk<ITransactionProvider>()
-        every { provider.getInternalTransactions(capture(requestedBlock)) } returns Single.just(emptyList())
+        coEvery { provider.getInternalTransactions(capture(requestedBlock)) } returns Single.just(emptyList())
 
         InternalTransactionSyncer(provider, storage).getTransactionsSingle().blockingGet()
 
@@ -60,21 +61,21 @@ class InternalTransactionSyncerTest {
         val hash = ByteArray(32) { 1 }
         val stored = InternalTransaction(hash = hash, traceId = "0", blockNumber = 10L, from = address, to = address, value = BigInteger.ONE)
         val storage = mockk<ITransactionStorage>()
-        every { storage.getLastInternalTransaction() } returns stored
-        every { storage.getInternalTransactionsByHashes(any()) } returns listOf(stored)
-        every { storage.saveInternalTransactions(any()) } just Runs
+        coEvery { storage.getLastInternalTransaction() } returns stored
+        coEvery { storage.getInternalTransactionsByHashes(any()) } returns listOf(stored)
+        coEvery { storage.saveInternalTransactions(any()) } just Runs
 
         val provider = mockk<ITransactionProvider>()
-        every { provider.getInternalTransactions(10L) } returns Single.just(listOf(internalTx(hash, 10L, "0")))
+        coEvery { provider.getInternalTransactions(10L) } returns Single.just(listOf(internalTx(hash, 10L, "0")))
 
         val (transactions, _) = InternalTransactionSyncer(provider, storage).getTransactionsSingle().blockingGet()
 
         assertEquals(emptyList<Transaction>(), transactions)
-        verify(exactly = 0) { storage.saveInternalTransactions(any()) }
+        coVerify(exactly = 0) { storage.saveInternalTransactions(any()) }
     }
 
     @Test
-    fun getTransactionsSingle_capSplitsBlock_nextRoundCompletesTheBlock() {
+    fun getTransactionsSingle_capSplitsBlock_nextRoundCompletesTheBlock() = runTest {
         val cap = 3
         val hashA = ByteArray(32) { 1 }
         val hashX = ByteArray(32) { 2 }
@@ -89,7 +90,7 @@ class InternalTransactionSyncerTest {
         val allTransactions = listOf(a, x, b1, b2, c)
 
         val provider = mockk<ITransactionProvider>()
-        every { provider.getInternalTransactions(any()) } answers {
+        coEvery { provider.getInternalTransactions(any()) } answers {
             val startBlock = firstArg<Long>()
             Single.just(allTransactions.filter { it.blockNumber >= startBlock }.take(cap))
         }
@@ -101,7 +102,7 @@ class InternalTransactionSyncerTest {
 
         val (round2Transactions, _) = syncer.getTransactionsSingle().blockingGet()
         assertEquals(listOf(hashB2, c.hash).map { it.toHexString() }, round2Transactions.map { it.hash.toHexString() })
-        verify(exactly = 1) {
+        coVerify(exactly = 1) {
             storage.getInternalTransactionsByHashes(match { it.size == 1 && it[0].contentEquals(hashB) })
         }
 
@@ -125,45 +126,45 @@ class InternalTransactionSyncerTest {
     @Test
     fun getTransactionsSingle_providerFails_returnsEmptyAndDoesNotAdvanceState() {
         val storage = mockk<ITransactionStorage>()
-        every { storage.getLastInternalTransaction() } returns null
+        coEvery { storage.getLastInternalTransaction() } returns null
         val provider = mockk<ITransactionProvider>()
-        every { provider.getInternalTransactions(any()) } returns Single.error(IOException("HTTP 402"))
+        coEvery { provider.getInternalTransactions(any()) } returns Single.error(IOException("HTTP 402"))
 
         val (transactions, initial) =
             InternalTransactionSyncer(provider, storage).getTransactionsSingle().blockingGet()
 
         assertEquals(emptyList<Transaction>(), transactions)
         assertTrue(initial)
-        verify(exactly = 0) { storage.saveInternalTransactions(any()) }
+        coVerify(exactly = 0) { storage.saveInternalTransactions(any()) }
     }
 
     private class FakeInternalTransactionStorage : ITransactionStorage {
         private val internalTransactions = mutableListOf<InternalTransaction>()
 
-        override fun getLastInternalTransaction(): InternalTransaction? =
+        override suspend fun getLastInternalTransaction(): InternalTransaction? =
             internalTransactions.maxByOrNull { it.blockNumber }
 
-        override fun getInternalTransactions(): List<InternalTransaction> = internalTransactions.toList()
+        override suspend fun getInternalTransactions(): List<InternalTransaction> = internalTransactions.toList()
 
-        override fun getInternalTransactionsByHashes(hashes: List<ByteArray>): List<InternalTransaction> =
+        override suspend fun getInternalTransactionsByHashes(hashes: List<ByteArray>): List<InternalTransaction> =
             internalTransactions.filter { tx -> hashes.any { it.contentEquals(tx.hash) } }
 
-        override fun saveInternalTransactions(internalTransactions: List<InternalTransaction>) {
+        override suspend fun saveInternalTransactions(internalTransactions: List<InternalTransaction>) {
             internalTransactions.forEach { tx ->
                 this.internalTransactions.removeAll { it.hash.contentEquals(tx.hash) && it.traceId == tx.traceId }
                 this.internalTransactions.add(tx)
             }
         }
 
-        override fun getTransactions(hashes: List<ByteArray>) = error("unused")
-        override fun getTransaction(hash: ByteArray) = error("unused")
-        override fun getTransactionsBeforeAsync(tags: List<List<String>>, hash: ByteArray?, limit: Int?) = error("unused")
-        override fun save(transactions: List<Transaction>) = error("unused")
-        override fun getPendingTransactions() = error("unused")
-        override fun getPendingTransactions(tags: List<List<String>>) = error("unused")
-        override fun getNonPendingTransactionsByNonces(from: Address, pendingTransactionNonces: List<Long>) = error("unused")
-        override fun saveTags(tags: List<TransactionTag>) = error("unused")
-        override fun getDistinctTokenContractAddresses() = error("unused")
-        override fun getTransactionsAfterSingle(hash: ByteArray?) = error("unused")
+        override suspend fun getTransactions(hashes: List<ByteArray>) = error("unused")
+        override suspend fun getTransaction(hash: ByteArray) = error("unused")
+        override suspend fun getTransactionsBefore(tags: List<List<String>>, hash: ByteArray?, limit: Int?) = error("unused")
+        override suspend fun save(transactions: List<Transaction>) = error("unused")
+        override suspend fun getPendingTransactions() = error("unused")
+        override suspend fun getPendingTransactions(tags: List<List<String>>) = error("unused")
+        override suspend fun getNonPendingTransactionsByNonces(from: Address, pendingTransactionNonces: List<Long>) = error("unused")
+        override suspend fun saveTags(tags: List<TransactionTag>) = error("unused")
+        override suspend fun getDistinctTokenContractAddresses() = error("unused")
+        override suspend fun getTransactionsAfter(hash: ByteArray?) = error("unused")
     }
 }

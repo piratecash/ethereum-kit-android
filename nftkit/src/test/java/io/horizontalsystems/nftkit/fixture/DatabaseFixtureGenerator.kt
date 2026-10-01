@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import io.horizontalsystems.ethereumkit.fixture.DatabaseFixtureFiles
 import io.horizontalsystems.nftkit.core.db.NftKitDatabase
+import kotlinx.coroutines.test.runTest
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -18,7 +19,7 @@ class DatabaseFixtureGenerator {
     fun setUp() = DatabaseFixtureFiles.assumeRegenerating()
 
     @Test
-    fun generateNftDatabase() {
+    fun generateNftDatabase() = runTest {
         val database = NftKitDatabase.getInstance(context, NftKitFixture.DB)
         database.nftBalanceDao().insertAll(NftKitFixture.balances)
         database.eip721EventDao().insertAll(NftKitFixture.eip721Events)

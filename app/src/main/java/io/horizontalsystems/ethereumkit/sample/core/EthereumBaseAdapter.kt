@@ -1,6 +1,7 @@
 package io.horizontalsystems.ethereumkit.sample.core
 
 import io.horizontalsystems.ethereumkit.core.EthereumKit
+import io.horizontalsystems.ethereumkit.core.storage.TransactionSyncSourceStorage
 import io.horizontalsystems.ethereumkit.core.toHexString
 import io.horizontalsystems.ethereumkit.decorations.TransactionDecoration
 import io.horizontalsystems.ethereumkit.models.Address
@@ -102,7 +103,7 @@ open class EthereumBaseAdapter(private val ethereumKit: EthereumKit) : IAdapter 
             amount = it.movePointLeft(decimal)
         }
 
-        val syncSource = ethereumKit.transactionSyncSourceStorage.getSource(transaction.hash)?.displayName
+        val syncSource = TransactionSyncSourceStorage.syncSource(fullTransaction)?.displayName
 
         return TransactionRecord(
             transactionHash = transaction.hash.toHexString(),

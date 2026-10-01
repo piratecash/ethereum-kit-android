@@ -5,6 +5,7 @@ import androidx.test.core.app.ApplicationProvider
 import io.horizontalsystems.ethereumkit.fixture.DatabaseFixtureFiles
 import io.horizontalsystems.merkleiokit.MerkleDatabase
 import io.horizontalsystems.merkleiokit.fixture.MerkleIoFixture.snapshot
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -15,7 +16,7 @@ class FixtureDatabasesTest {
     private val context = ApplicationProvider.getApplicationContext<Context>()
 
     @Test
-    fun merkleDatabase_fixture_containsTransactionHashes() {
+    fun merkleDatabase_fixture_containsTransactionHashes() = runTest {
         DatabaseFixtureFiles.install(context, MerkleIoFixture.DB)
 
         val dao = MerkleDatabase.getInstance(context, MerkleIoFixture.DB).merkleTransactionDao()

@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import io.horizontalsystems.ethereumkit.fixture.DatabaseFixtureFiles
 import io.horizontalsystems.merkleiokit.MerkleDatabase
+import kotlinx.coroutines.test.runTest
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -18,9 +19,9 @@ class DatabaseFixtureGenerator {
     fun setUp() = DatabaseFixtureFiles.assumeRegenerating()
 
     @Test
-    fun generateMerkleDatabase() {
+    fun generateMerkleDatabase() = runTest {
         val database = MerkleDatabase.getInstance(context, MerkleIoFixture.DB)
-        MerkleIoFixture.hashes.forEach(database.merkleTransactionDao()::save)
+        MerkleIoFixture.hashes.forEach { database.merkleTransactionDao().save(it) }
         DatabaseFixtureFiles.export(context, database, MerkleIoFixture.DB)
     }
 }

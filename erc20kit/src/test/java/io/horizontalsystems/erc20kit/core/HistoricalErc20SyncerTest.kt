@@ -5,6 +5,7 @@ import io.horizontalsystems.ethereumkit.core.TransactionManager
 import io.horizontalsystems.ethereumkit.models.Transaction
 import io.horizontalsystems.ethereumkit.network.ConnectionManager
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
@@ -41,7 +42,7 @@ class HistoricalErc20SyncerTest {
         try {
             syncer.start()
 
-            verify(timeout = 3_000) {
+            coVerify(timeout = 3_000) {
                 transactionManager.handle(capture(transactions), initial = false)
             }
         } finally {

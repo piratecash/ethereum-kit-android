@@ -11,17 +11,17 @@ import io.horizontalsystems.ethereumkit.models.RawTransactionBroadcastRecord
 @Dao
 interface RawTransactionBroadcastDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
-    fun insert(record: RawTransactionBroadcastRecord)
+    suspend fun insert(record: RawTransactionBroadcastRecord)
 
     @Update
-    fun update(record: RawTransactionBroadcastRecord)
+    suspend fun update(record: RawTransactionBroadcastRecord)
 
     @Query("select * from RawTransactionBroadcastRecord where hash = :hash limit 1")
-    fun get(hash: ByteArray): RawTransactionBroadcastRecord?
+    suspend fun get(hash: ByteArray): RawTransactionBroadcastRecord?
 
     @Query("select * from RawTransactionBroadcastRecord")
-    fun getAll(): List<RawTransactionBroadcastRecord>
+    suspend fun getAll(): List<RawTransactionBroadcastRecord>
 
     @Delete
-    fun delete(record: RawTransactionBroadcastRecord)
+    suspend fun delete(record: RawTransactionBroadcastRecord)
 }

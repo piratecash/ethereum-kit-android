@@ -7,11 +7,13 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.Toolbar
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.lifecycleScope
 import com.google.android.material.bottomnavigation.BottomNavigationView
 import io.horizontalsystems.ethereumkit.sample.R
 import io.horizontalsystems.ethereumkit.sample.databinding.ActivityMainBinding
 import io.horizontalsystems.ethereumkit.sample.modules.addresswatch.AddressWatchActivity
 import io.horizontalsystems.ethereumkit.sample.modules.uniswapV3.UniswapV3Fragment
+import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity(), BottomNavigationView.OnNavigationItemSelectedListener {
 
@@ -47,17 +49,21 @@ class MainActivity : AppCompatActivity(), BottomNavigationView.OnNavigationItemS
         val navigation = findViewById<BottomNavigationView>(R.id.navigation)
         navigation.setOnNavigationItemSelectedListener(this)
 
-        fm.beginTransaction().add(R.id.fragment_container, uniswapV3Fragment, "6").hide(uniswapV3Fragment).commit()
-        fm.beginTransaction().add(R.id.fragment_container, nftsFragment, "5").hide(nftsFragment).commit()
-        fm.beginTransaction().add(R.id.fragment_container, swapFragment, "4").hide(swapFragment).commit()
-        fm.beginTransaction().add(R.id.fragment_container, sendReceiveFragment, "3").hide(sendReceiveFragment).commit()
-        fm.beginTransaction().add(R.id.fragment_container, transactionsFragment, "2").hide(transactionsFragment).commit()
-        fm.beginTransaction().add(R.id.fragment_container, balanceFragment, "1").commit()
-
-        navigation.selectedItemId = R.id.navigation_nfts
-
         viewModel = ViewModelProvider(this).get(MainViewModel::class.java)
-        viewModel.init()
+
+        // The fragments read the kits, so they are added once init() has created them.
+        lifecycleScope.launch {
+            viewModel.init()
+
+            fm.beginTransaction().add(R.id.fragment_container, uniswapV3Fragment, "6").hide(uniswapV3Fragment).commit()
+            fm.beginTransaction().add(R.id.fragment_container, nftsFragment, "5").hide(nftsFragment).commit()
+            fm.beginTransaction().add(R.id.fragment_container, swapFragment, "4").hide(swapFragment).commit()
+            fm.beginTransaction().add(R.id.fragment_container, sendReceiveFragment, "3").hide(sendReceiveFragment).commit()
+            fm.beginTransaction().add(R.id.fragment_container, transactionsFragment, "2").hide(transactionsFragment).commit()
+            fm.beginTransaction().add(R.id.fragment_container, balanceFragment, "1").commit()
+
+            navigation.selectedItemId = R.id.navigation_nfts
+        }
     }
 
     fun setToolbarTitle(title: String) {
