@@ -1,12 +1,12 @@
 package io.horizontalsystems.ethereumkit.core.storage
 
-import android.content.Context
 import androidx.room.Database
-import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverter
 import androidx.room.TypeConverters
+import io.horizontalsystems.ethereumkit.PlatformContext
 import io.horizontalsystems.ethereumkit.api.storage.RoomTypeConverters
+import io.horizontalsystems.ethereumkit.database.kitDatabaseBuilder
 import io.horizontalsystems.ethereumkit.models.InternalTransaction
 import io.horizontalsystems.ethereumkit.models.RawTransactionBroadcastRecord
 import io.horizontalsystems.ethereumkit.models.Transaction
@@ -37,11 +37,10 @@ abstract class TransactionDatabase : RoomDatabase() {
 
     companion object {
 
-        fun getInstance(context: Context, databaseName: String): TransactionDatabase {
-            return Room.databaseBuilder(context, TransactionDatabase::class.java, databaseName)
+        fun getInstance(context: PlatformContext, databaseName: String): TransactionDatabase {
+            return kitDatabaseBuilder<TransactionDatabase>(context, databaseName)
                     .addMigrations(migration13_14, migration14_15, migration15_16, migration16_17)
-                    .fallbackToDestructiveMigration()
-                    .allowMainThreadQueries()
+                    .fallbackToDestructiveMigration(dropAllTables = false)
                     .build()
         }
 

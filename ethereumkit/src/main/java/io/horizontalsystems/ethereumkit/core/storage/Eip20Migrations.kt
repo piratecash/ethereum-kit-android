@@ -1,11 +1,12 @@
 package io.horizontalsystems.ethereumkit.core.storage
 
 import androidx.room.migration.Migration
-import androidx.sqlite.db.SupportSQLiteDatabase
+import androidx.sqlite.SQLiteConnection
+import androidx.sqlite.execSQL
 
 val migration2_3 = object : Migration(2, 3) {
-    override fun migrate(database: SupportSQLiteDatabase) {
-        database.execSQL("""
+    override fun migrate(connection: SQLiteConnection) {
+        connection.execSQL("""
             CREATE TABLE IF NOT EXISTS `Eip20Event_new` (
                 `hash` BLOB NOT NULL,
                 `blockNumber` INTEGER NOT NULL,
@@ -20,7 +21,7 @@ val migration2_3 = object : Migration(2, 3) {
             )
         """.trimIndent())
 
-        database.execSQL("""
+        connection.execSQL("""
             INSERT INTO `Eip20Event_new` (
                 `hash`, `blockNumber`, `contractAddress`, `from`, `to`, `value`,
                 `tokenName`, `tokenSymbol`, `tokenDecimal`
@@ -35,14 +36,14 @@ val migration2_3 = object : Migration(2, 3) {
             ) grouped ON e.`id` = grouped.`id`
         """.trimIndent())
 
-        database.execSQL("DROP TABLE `Eip20Event`")
-        database.execSQL("ALTER TABLE `Eip20Event_new` RENAME TO `Eip20Event`")
+        connection.execSQL("DROP TABLE `Eip20Event`")
+        connection.execSQL("ALTER TABLE `Eip20Event_new` RENAME TO `Eip20Event`")
     }
 }
 
 val migration3_4 = object : Migration(3, 4) {
-    override fun migrate(database: SupportSQLiteDatabase) {
-        database.execSQL("""
+    override fun migrate(connection: SQLiteConnection) {
+        connection.execSQL("""
             CREATE TABLE IF NOT EXISTS `Eip20SyncState` (
                 `contractAddress` TEXT NOT NULL,
                 `lastScannedBlock` INTEGER NOT NULL,
@@ -53,8 +54,8 @@ val migration3_4 = object : Migration(3, 4) {
 }
 
 val migration4_5 = object : Migration(4, 5) {
-    override fun migrate(database: SupportSQLiteDatabase) {
-        database.execSQL("""
+    override fun migrate(connection: SQLiteConnection) {
+        connection.execSQL("""
             ALTER TABLE `Eip20SyncState`
             ADD COLUMN `historicalMinScannedBlock` INTEGER
         """.trimIndent())
@@ -62,9 +63,9 @@ val migration4_5 = object : Migration(4, 5) {
 }
 
 val migration5_6 = object : Migration(5, 6) {
-    override fun migrate(database: SupportSQLiteDatabase) {
+    override fun migrate(connection: SQLiteConnection) {
         // SQLite doesn't support ALTER COLUMN, so we need to recreate the table
-        database.execSQL("""
+        connection.execSQL("""
             CREATE TABLE IF NOT EXISTS `Eip20SyncState_new` (
                 `contractAddress` TEXT NOT NULL,
                 `lastScannedBlock` INTEGER,
@@ -73,13 +74,13 @@ val migration5_6 = object : Migration(5, 6) {
             )
         """.trimIndent())
 
-        database.execSQL("""
+        connection.execSQL("""
             INSERT INTO `Eip20SyncState_new` (`contractAddress`, `lastScannedBlock`, `historicalMinScannedBlock`)
             SELECT `contractAddress`, `lastScannedBlock`, `historicalMinScannedBlock`
             FROM `Eip20SyncState`
         """.trimIndent())
 
-        database.execSQL("DROP TABLE `Eip20SyncState`")
-        database.execSQL("ALTER TABLE `Eip20SyncState_new` RENAME TO `Eip20SyncState`")
+        connection.execSQL("DROP TABLE `Eip20SyncState`")
+        connection.execSQL("ALTER TABLE `Eip20SyncState_new` RENAME TO `Eip20SyncState`")
     }
 }

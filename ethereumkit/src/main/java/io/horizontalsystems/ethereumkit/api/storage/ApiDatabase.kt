@@ -1,12 +1,12 @@
 package io.horizontalsystems.ethereumkit.api.storage
 
 import androidx.room.Database
-import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
-import android.content.Context
+import io.horizontalsystems.ethereumkit.PlatformContext
 import io.horizontalsystems.ethereumkit.api.models.AccountState
 import io.horizontalsystems.ethereumkit.api.models.LastBlockHeight
+import io.horizontalsystems.ethereumkit.database.kitDatabaseBuilder
 
 
 @Database(entities = [AccountState::class, LastBlockHeight::class], version = 3, exportSchema = true)
@@ -18,10 +18,9 @@ abstract class ApiDatabase : RoomDatabase() {
 
     companion object {
 
-        fun getInstance(context: Context, databaseName: String): ApiDatabase {
-            return Room.databaseBuilder(context, ApiDatabase::class.java, databaseName)
-                    .fallbackToDestructiveMigration()
-                    .allowMainThreadQueries()
+        fun getInstance(context: PlatformContext, databaseName: String): ApiDatabase {
+            return kitDatabaseBuilder<ApiDatabase>(context, databaseName)
+                    .fallbackToDestructiveMigration(dropAllTables = false)
                     .build()
         }
 

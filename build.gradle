@@ -1,4 +1,5 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmDefaultMode
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 // Top-level build file where you can add configuration options common to all sub-projects/modules.
@@ -66,8 +67,8 @@ def addLibraryModuleDependencies = { pom ->
             def dependencyNode = dependenciesNode.appendNode('dependency')
             dependencyNode.appendNode('groupId', 'com.github.piratecash.ethereum-kit-android')
             dependencyNode.appendNode('artifactId', artifactNames[mod])
+            // Gradle module metadata of the KMP root publication picks the platform artifact.
             dependencyNode.appendNode('version', rootProject.ext.libraryVersion)
-            dependencyNode.appendNode('type', 'aar')
         }
     }
 }
@@ -91,15 +92,70 @@ subprojects { sub ->
     }
 
     if (libraryModules.contains(sub.name)) {
+        sub.plugins.withId('org.jetbrains.kotlin.multiplatform') { configureKitModule(sub, artifactNames[sub.name]) }
+        sub.plugins.withId('androidx.room') { configureRoom(sub) }
+
         sub.afterEvaluate {
             sub.publishing {
                 publications.withType(MavenPublication).configureEach {
                     groupId = "com.github.piratecash.ethereum-kit-android"
-                    artifactId = artifactNames[sub.name]
                     version = rootProject.ext.libraryVersion
                 }
+                publications.named('kotlinMultiplatform') { artifactId = artifactNames[sub.name] }
             }
         }
+        // AGP's "test" lifecycle task only aggregates Android unit tests; wire in the desktop target too.
+        sub.tasks.matching { it.name == 'test' }.configureEach { dependsOn('desktopTest') }
+    }
+}
+
+// Shared by every kit module: Android + desktop JVM targets over the pre-KMP `src/main/java` layout.
+def configureKitModule(Project sub, String artifactName) {
+    sub.kotlin {
+        // KMP publishes a root artifact plus one per target; equal ids would collide.
+        androidTarget {
+            publishLibraryVariants('release')
+            mavenPublication { artifactId = "$artifactName-android" }
+            compilerOptions { jvmTarget.set(JvmTarget.JVM_17) }
+        }
+        // 21, not 17: hd-wallet-kit-kmp and secp256k1-kmp-jni-jvm publish Java 21 bytecode only.
+        jvm('desktop') {
+            mavenPublication { artifactId = "$artifactName-desktop" }
+            compilerOptions { jvmTarget.set(JvmTarget.JVM_21) }
+        }
+        compilerOptions {
+            freeCompilerArgs.add('-Xexpect-actual-classes')
+        }
+        sourceSets {
+            // Not commonMain: the kit is JVM code shared by the two JVM-backed targets only.
+            def jvmCommonMain = create('jvmCommonMain') { dependsOn(commonMain) }
+            // Android sources come from AGP's own `main` source set; adding them here too would
+            // list the same file in two fragments.
+            androidMain { dependsOn(jvmCommonMain) }
+            desktopMain {
+                kotlin.srcDir('src/main/java')
+                dependsOn(jvmCommonMain)
+            }
+        }
+    }
+    sub.android {
+        compileSdk 34
+        defaultConfig {
+            minSdk 26
+            testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
+        }
+        compileOptions {
+            sourceCompatibility JavaVersion.VERSION_17
+            targetCompatibility JavaVersion.VERSION_17
+        }
+    }
+}
+
+def configureRoom(Project sub) {
+    sub.room { schemaDirectory("${sub.projectDir}/schemas") }
+    // KMP naming trap: kspAndroidTest is the JVM unit-test source set.
+    sub.configurations.matching { it.name in ['kspAndroid', 'kspDesktop', 'kspAndroidTest'] }.configureEach {
+        sub.dependencies.add(it.name, libs.room.compiler)
     }
 }
 

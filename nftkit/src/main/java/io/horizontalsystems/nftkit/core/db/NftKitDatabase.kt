@@ -1,11 +1,11 @@
 package io.horizontalsystems.nftkit.core.db
 
-import android.content.Context
 import androidx.room.Database
-import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
+import io.horizontalsystems.ethereumkit.PlatformContext
 import io.horizontalsystems.ethereumkit.api.storage.RoomTypeConverters
+import io.horizontalsystems.ethereumkit.database.kitDatabaseBuilder
 import io.horizontalsystems.nftkit.models.Eip1155Event
 import io.horizontalsystems.nftkit.models.Eip721Event
 import io.horizontalsystems.nftkit.models.NftBalanceRecord
@@ -19,10 +19,9 @@ abstract class NftKitDatabase : RoomDatabase() {
     abstract fun eip1155EventDao(): Eip1155EventDao
 
     companion object {
-        fun getInstance(context: Context, databaseName: String): NftKitDatabase {
-            return Room.databaseBuilder(context, NftKitDatabase::class.java, databaseName)
-                .fallbackToDestructiveMigration()
-                .allowMainThreadQueries()
+        fun getInstance(context: PlatformContext, databaseName: String): NftKitDatabase {
+            return kitDatabaseBuilder<NftKitDatabase>(context, databaseName)
+                .fallbackToDestructiveMigration(dropAllTables = false)
                 .build()
         }
     }

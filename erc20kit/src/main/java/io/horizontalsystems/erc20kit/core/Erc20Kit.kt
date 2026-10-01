@@ -1,7 +1,7 @@
 package io.horizontalsystems.erc20kit.core
 
-import android.content.Context
 import io.horizontalsystems.erc20kit.contract.Eip20ContractMethodFactories
+import io.horizontalsystems.ethereumkit.PlatformContext
 import io.horizontalsystems.ethereumkit.core.EthereumKit
 import io.horizontalsystems.ethereumkit.core.EthereumKit.SyncState
 import io.horizontalsystems.ethereumkit.core.RpcLogsTokenTransactionProvider
@@ -150,7 +150,7 @@ class Erc20Kit(
     companion object {
 
         suspend fun getInstance(
-            context: Context,
+            context: PlatformContext,
             ethereumKit: EthereumKit,
             contractAddress: Address
         ): Erc20Kit {
@@ -232,7 +232,7 @@ class Erc20Kit(
             ethereumKit.addTransactionDecorator(Eip20TransactionDecorator(ethereumKit.receiveAddress))
         }
 
-        fun clear(context: Context, chain: Chain, walletId: String) {
+        fun clear(context: PlatformContext, chain: Chain, walletId: String) {
             Erc20DatabaseManager.clear(context, chain, walletId)
         }
     }

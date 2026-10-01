@@ -5,19 +5,20 @@ import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
+import io.horizontalsystems.ethereumkit.PlatformContext
 import java.util.concurrent.CopyOnWriteArraySet
 
-class ConnectionManager private constructor(context: Context) {
+actual class ConnectionManager private constructor(context: Context) {
 
-    interface Listener {
-        fun onConnectionChange()
+    actual interface Listener {
+        actual fun onConnectionChange()
     }
 
-    companion object {
+    actual companion object {
         @Volatile
         private var instance: ConnectionManager? = null
 
-        fun getInstance(context: Context): ConnectionManager =
+        actual fun getInstance(context: PlatformContext): ConnectionManager =
             instance ?: synchronized(this) {
                 instance ?: ConnectionManager(context.applicationContext).also { instance = it }
             }
@@ -27,7 +28,7 @@ class ConnectionManager private constructor(context: Context) {
 
     private val listeners = CopyOnWriteArraySet<Listener>()
 
-    var isConnected = getInitialConnectionStatus()
+    actual var isConnected = getInitialConnectionStatus()
     private var hasValidInternet = false
     private var hasConnection = false
     private var callback = ConnectionStatusCallback()
@@ -76,11 +77,11 @@ class ConnectionManager private constructor(context: Context) {
         }
     }
 
-    fun addListener(listener: Listener) {
+    actual fun addListener(listener: Listener) {
         listeners.add(listener)
     }
 
-    fun removeListener(listener: Listener) {
+    actual fun removeListener(listener: Listener) {
         listeners.remove(listener)
     }
 

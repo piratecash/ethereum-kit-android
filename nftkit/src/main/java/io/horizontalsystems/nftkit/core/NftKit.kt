@@ -1,6 +1,6 @@
 package io.horizontalsystems.nftkit.core
 
-import android.content.Context
+import io.horizontalsystems.ethereumkit.PlatformContext
 import io.horizontalsystems.ethereumkit.core.EthereumKit
 import io.horizontalsystems.ethereumkit.core.kitLogger
 import io.horizontalsystems.ethereumkit.models.Address
@@ -114,7 +114,7 @@ class NftKit(
 
     companion object {
         suspend fun getInstance(
-            context: Context,
+            context: PlatformContext,
             evmKit: EthereumKit
         ): NftKit {
             val nftKitDatabase = NftKitDatabaseManager.getNftKitDatabase(context, evmKit.chain, evmKit.walletId)

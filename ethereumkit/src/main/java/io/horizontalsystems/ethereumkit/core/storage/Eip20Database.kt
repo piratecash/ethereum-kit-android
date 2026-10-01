@@ -1,8 +1,9 @@
 package io.horizontalsystems.ethereumkit.core.storage
 
-import android.content.Context
 import androidx.room.*
+import io.horizontalsystems.ethereumkit.PlatformContext
 import io.horizontalsystems.ethereumkit.api.storage.RoomTypeConverters
+import io.horizontalsystems.ethereumkit.database.kitDatabaseBuilder
 import io.horizontalsystems.ethereumkit.models.Eip20Event
 import io.horizontalsystems.ethereumkit.models.Eip20SyncState
 
@@ -22,11 +23,10 @@ abstract class Eip20Database : RoomDatabase() {
 
     companion object {
 
-        fun getInstance(context: Context, databaseName: String): Eip20Database {
-            return Room.databaseBuilder(context, Eip20Database::class.java, databaseName)
+        fun getInstance(context: PlatformContext, databaseName: String): Eip20Database {
+            return kitDatabaseBuilder<Eip20Database>(context, databaseName)
                 .addMigrations(migration2_3, migration3_4, migration4_5, migration5_6)
-                .fallbackToDestructiveMigration()
-                .allowMainThreadQueries()
+                .fallbackToDestructiveMigration(dropAllTables = false)
                 .build()
         }
     }

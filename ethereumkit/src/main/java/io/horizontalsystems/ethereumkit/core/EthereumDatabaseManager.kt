@@ -1,31 +1,32 @@
 package io.horizontalsystems.ethereumkit.core
 
-import android.content.Context
+import io.horizontalsystems.ethereumkit.PlatformContext
 import io.horizontalsystems.ethereumkit.api.storage.ApiDatabase
 import io.horizontalsystems.ethereumkit.core.storage.Eip20Database
 import io.horizontalsystems.ethereumkit.core.storage.TransactionDatabase
+import io.horizontalsystems.ethereumkit.database.deleteDatabase
 import io.horizontalsystems.ethereumkit.models.Chain
 
 internal object EthereumDatabaseManager {
 
-    fun getEthereumApiDatabase(context: Context, walletId: String, chain: Chain): ApiDatabase {
+    fun getEthereumApiDatabase(context: PlatformContext, walletId: String, chain: Chain): ApiDatabase {
         return ApiDatabase.getInstance(context, getDbNameApi(walletId, chain))
     }
 
-    fun getTransactionDatabase(context: Context, walletId: String, chain: Chain): TransactionDatabase {
+    fun getTransactionDatabase(context: PlatformContext, walletId: String, chain: Chain): TransactionDatabase {
         return TransactionDatabase.getInstance(context, getDbNameTransactions(walletId, chain))
     }
 
-    fun getErc20Database(context: Context, walletId: String, chain: Chain): Eip20Database {
+    fun getErc20Database(context: PlatformContext, walletId: String, chain: Chain): Eip20Database {
         return Eip20Database.getInstance(context, getDbNameErc20Events(walletId, chain))
     }
 
-    fun clear(context: Context, chain: Chain, walletId: String) {
+    fun clear(context: PlatformContext, chain: Chain, walletId: String) {
         synchronized(this) {
-            context.deleteDatabase(getDbNameApi(walletId, chain))
-            context.deleteDatabase(getDbNameSpv(walletId, chain))
-            context.deleteDatabase(getDbNameTransactions(walletId, chain))
-            context.deleteDatabase(getDbNameErc20Events(walletId, chain))
+            deleteDatabase(context, getDbNameApi(walletId, chain))
+            deleteDatabase(context, getDbNameSpv(walletId, chain))
+            deleteDatabase(context, getDbNameTransactions(walletId, chain))
+            deleteDatabase(context, getDbNameErc20Events(walletId, chain))
         }
     }
 

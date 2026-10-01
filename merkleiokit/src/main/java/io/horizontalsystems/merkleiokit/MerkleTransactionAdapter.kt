@@ -1,6 +1,6 @@
 package io.horizontalsystems.merkleiokit
 
-import android.content.Context
+import io.horizontalsystems.ethereumkit.PlatformContext
 import io.horizontalsystems.ethereumkit.api.core.ApiRpcSyncer
 import io.horizontalsystems.ethereumkit.api.core.NodeApiProvider
 import io.horizontalsystems.ethereumkit.core.EthereumKit
@@ -56,7 +56,7 @@ class MerkleTransactionAdapter(
             merkleIoPubKey: String,
             address: Address,
             chain: Chain,
-            context: Context,
+            context: PlatformContext,
             walletId: String,
             transactionManager: TransactionManager,
             sourceTag: String,

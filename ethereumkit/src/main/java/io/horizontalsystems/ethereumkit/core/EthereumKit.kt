@@ -1,9 +1,8 @@
 package io.horizontalsystems.ethereumkit.core
 
-import android.app.Application
-import android.content.Context
 import com.google.gson.GsonBuilder
 import com.google.gson.reflect.TypeToken
+import io.horizontalsystems.ethereumkit.PlatformContext
 import io.horizontalsystems.ethereumkit.api.core.ApiRpcSyncer
 import io.horizontalsystems.ethereumkit.api.core.IRpcSyncer
 import io.horizontalsystems.ethereumkit.api.core.NodeWebSocket
@@ -832,7 +831,7 @@ class EthereumKit(
         }
 
         suspend fun getInstance(
-            application: Application,
+            application: PlatformContext,
             words: List<String>,
             passphrase: String = "",
             chain: Chain,
@@ -860,7 +859,7 @@ class EthereumKit(
         }
 
         suspend fun getInstance(
-            application: Application,
+            application: PlatformContext,
             address: Address,
             chain: Chain,
             rpcSource: RpcSource,
@@ -975,7 +974,7 @@ class EthereumKit(
             return ethereumKit
         }
 
-        fun clear(context: Context, chain: Chain, walletId: String) {
+        fun clear(context: PlatformContext, chain: Chain, walletId: String) {
             EthereumDatabaseManager.clear(context, chain, walletId)
         }
 

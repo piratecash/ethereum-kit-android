@@ -1,21 +1,23 @@
 package io.horizontalsystems.nftkit.core.db
 
-import android.content.Context
+import io.horizontalsystems.ethereumkit.PlatformContext
+import io.horizontalsystems.ethereumkit.database.databaseNames
+import io.horizontalsystems.ethereumkit.database.deleteDatabase
 import io.horizontalsystems.ethereumkit.models.Chain
 
 internal object NftKitDatabaseManager {
 
-    fun getNftKitDatabase(context: Context, chain: Chain, walletId: String): NftKitDatabase {
+    fun getNftKitDatabase(context: PlatformContext, chain: Chain, walletId: String): NftKitDatabase {
         return NftKitDatabase.getInstance(context, getDbNameBase(chain, walletId))
     }
 
-    fun clear(context: Context, chain: Chain, walletId: String) {
+    fun clear(context: PlatformContext, chain: Chain, walletId: String) {
         synchronized(this) {
             val dbNameBase = getDbNameBase(chain, walletId)
 
-            context.databaseList().forEach {
+            databaseNames(context).forEach {
                 if (it.contains(dbNameBase)) {
-                    context.deleteDatabase(it)
+                    deleteDatabase(context, it)
                 }
             }
         }
