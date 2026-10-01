@@ -11,7 +11,13 @@ import io.horizontalsystems.sqlcipher.room.DatabaseMigrationResult
 
 internal object EthereumDatabaseManager {
 
-    class Databases(val api: ApiDatabase, val transactions: TransactionDatabase, val erc20: Eip20Database)
+    class Databases(val api: ApiDatabase, val transactions: TransactionDatabase, val erc20: Eip20Database) {
+        fun close() {
+            api.close()
+            transactions.close()
+            erc20.close()
+        }
+    }
 
     /** Opens all three databases or, if one fails, closes those already open. */
     suspend fun open(context: PlatformContext, chain: Chain, walletId: String, databaseKey: ByteArray): Databases {

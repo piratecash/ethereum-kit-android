@@ -891,6 +891,18 @@ class EthereumKit(
             EthereumKitDatabases.requireValidDatabaseKey(databaseKey)
             EthereumKitDatabases.requireValidWalletId(walletId)
             val databases = EthereumDatabaseManager.open(application, chain, walletId, databaseKey)
+            val storage = ApiStorage(databases.api)
+            val erc20Storage = Eip20Storage(databases.erc20)
+            // All reads happen before any listener is registered; nothing below suspends, so cancellation cannot leak.
+            val state = EthereumKitState()
+            val lastScannedBlock = try {
+                state.lastBlockHeight = storage.getLastBlockHeight()
+                state.accountState = storage.getAccountState()
+                erc20Storage.getLastScannedBlock()
+            } catch (error: Throwable) {
+                databases.close()
+                throw error
+            }
 
             val connectionManager = ConnectionManager.getInstance(application)
             val log = kitLogger(chain.id)
@@ -918,16 +930,12 @@ class EthereumKit(
             // heights into the ERC-20 sync cursor. A WebSocket source has no HTTP endpoint to scan.
             val ownChainRpcSource = rpcSource as? RpcSource.Http
 
-            val storage = ApiStorage(databases.api)
-
             val blockchain = RpcBlockchain.instance(address, storage, syncer, transactionBuilder, log)
 
             val transactionDatabase = databases.transactions
             val transactionStorage = TransactionStorage(transactionDatabase)
             val transactionSyncerStateStorage = TransactionSyncerStateStorage(transactionDatabase)
             val transactionSyncSourceStorage = TransactionSyncSourceStorage(transactionDatabase.transactionSyncSourceDao())
-
-            val erc20Storage = Eip20Storage(databases.erc20)
 
             val ethereumTransactionSyncer =
                 EthereumTransactionSyncer(transactionProvider, transactionSyncerStateStorage, transactionSyncSourceStorage)
@@ -956,11 +964,6 @@ class EthereumKit(
             val nonceProvider = NonceProvider()
             nonceProvider.addProvider(blockchain)
 
-            val state = EthereumKitState().apply {
-                lastBlockHeight = blockchain.storedLastBlockHeight()
-                accountState = blockchain.storedAccountState()
-            }
-
             val ethereumKit = EthereumKit(
                 blockchain,
                 nonceProvider,
@@ -979,7 +982,7 @@ class EthereumKit(
                 scanHistoricalEip20,
                 transactionSyncSourceStorage,
                 rawTransactionBroadcaster,
-                erc20Storage.getLastScannedBlock(),
+                lastScannedBlock,
                 state,
                 eventListenerFactory
             )

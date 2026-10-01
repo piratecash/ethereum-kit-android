@@ -263,6 +263,32 @@ class EthereumKitDatabaseMigrationDesktopTest {
         assertThrows(IllegalStateException::class.java) { runBlocking { database.useReaderConnection { } } }
     }
 
+    @Test
+    fun getInstance_callerCancelledAtAnyStep_closesDatabases() = runBlocking {
+        copyFixtures()
+        migrate(databaseKey)
+        var cancelledWithOpenDatabases = 0
+
+        for (steps in 1..MAX_STEPS) {
+            val caller = QueueDispatcher()
+            val job = CoroutineScope(caller).launch { kit(databaseKey) }
+            repeat(steps) { if (!job.isCompleted) caller.runNext() }
+            if (job.isCompleted) break
+            if (openDatabaseFiles().isNotEmpty()) cancelledWithOpenDatabases++
+
+            job.cancel()
+            while (!job.isCompleted) caller.runNext()
+
+            assertTrue("step $steps", job.isCancelled)
+            // SQLite deletes a database's -wal file when its last connection closes.
+            assertEquals("step $steps", emptyList<String>(), openDatabaseFiles())
+        }
+
+        assertTrue(cancelledWithOpenDatabases > 0)
+    }
+
+    private fun openDatabaseFiles(): List<String> = directory.list().orEmpty().filter { it.endsWith("-wal") }
+
     private fun copyFixtures() {
         fixtureNames.forEach { copyFixture(it, File(directory, it)) }
     }
@@ -300,5 +326,6 @@ class EthereumKitDatabaseMigrationDesktopTest {
 
     private companion object {
         const val WALLET_ID = "fixturewallet"
+        const val MAX_STEPS = 100
     }
 }
