@@ -32,6 +32,8 @@ import io.horizontalsystems.uniswapkit.models.TradeOptions
 import io.reactivex.android.schedulers.AndroidSchedulers
 import io.reactivex.disposables.CompositeDisposable
 import io.reactivex.schedulers.Schedulers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.rx2.rxSingle
 import java.math.BigDecimal
@@ -85,7 +87,16 @@ class MainViewModel : ViewModel() {
     private val chain: Chain
         get() = ethereumKit.chain
 
-    suspend fun init() {
+    private val _kitsReady = MutableStateFlow(false)
+
+    // The kits are created asynchronously: read the lateinit kit fields only once this is true.
+    val kitsReady: StateFlow<Boolean> = _kitsReady
+
+    init {
+        viewModelScope.launch { initKits() }
+    }
+
+    private suspend fun initKits() {
         val words = Configuration.defaultsWords.split(" ")
         val seed = Mnemonic().toSeed(words)
         signer = Signer.getInstance(seed, Configuration.chain)
@@ -183,6 +194,7 @@ class MainViewModel : ViewModel() {
         erc20Adapter.start()
 
         gasPriceHelper = GasPriceHelper(Eip1559GasPriceProvider(ethereumKit))
+        _kitsReady.value = true
         gasPriceHelper.gasPriceFlowable()
             .subscribe({
                 gasPrice = it
@@ -304,9 +316,10 @@ class MainViewModel : ViewModel() {
     }
 
     fun clear() {
+        _kitsReady.value = false
         EthereumKit.clear(App.instance, Configuration.chain, Configuration.walletId)
         Erc20Kit.clear(App.instance, Configuration.chain, Configuration.walletId)
-        viewModelScope.launch { init() }
+        viewModelScope.launch { initKits() }
     }
 
     fun receiveAddress(): String {

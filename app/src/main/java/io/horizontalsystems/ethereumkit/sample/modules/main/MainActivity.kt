@@ -3,6 +3,7 @@ package io.horizontalsystems.ethereumkit.sample.modules.main
 import android.content.Intent
 import android.os.Bundle
 import android.view.MenuItem
+import android.view.View
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.Toolbar
 import androidx.fragment.app.Fragment
@@ -49,20 +50,22 @@ class MainActivity : AppCompatActivity(), BottomNavigationView.OnNavigationItemS
         val navigation = findViewById<BottomNavigationView>(R.id.navigation)
         navigation.setOnNavigationItemSelectedListener(this)
 
+        fm.beginTransaction().add(R.id.fragment_container, uniswapV3Fragment, "6").hide(uniswapV3Fragment).commit()
+        fm.beginTransaction().add(R.id.fragment_container, nftsFragment, "5").hide(nftsFragment).commit()
+        fm.beginTransaction().add(R.id.fragment_container, swapFragment, "4").hide(swapFragment).commit()
+        fm.beginTransaction().add(R.id.fragment_container, sendReceiveFragment, "3").hide(sendReceiveFragment).commit()
+        fm.beginTransaction().add(R.id.fragment_container, transactionsFragment, "2").hide(transactionsFragment).commit()
+        fm.beginTransaction().add(R.id.fragment_container, balanceFragment, "1").commit()
+
+        navigation.selectedItemId = R.id.navigation_nfts
+
         viewModel = ViewModelProvider(this).get(MainViewModel::class.java)
 
-        // The fragments read the kits, so they are added once init() has created them.
+        // The fragments' click handlers read the kits, so they stay unreachable until the kits exist.
         lifecycleScope.launch {
-            viewModel.init()
-
-            fm.beginTransaction().add(R.id.fragment_container, uniswapV3Fragment, "6").hide(uniswapV3Fragment).commit()
-            fm.beginTransaction().add(R.id.fragment_container, nftsFragment, "5").hide(nftsFragment).commit()
-            fm.beginTransaction().add(R.id.fragment_container, swapFragment, "4").hide(swapFragment).commit()
-            fm.beginTransaction().add(R.id.fragment_container, sendReceiveFragment, "3").hide(sendReceiveFragment).commit()
-            fm.beginTransaction().add(R.id.fragment_container, transactionsFragment, "2").hide(transactionsFragment).commit()
-            fm.beginTransaction().add(R.id.fragment_container, balanceFragment, "1").commit()
-
-            navigation.selectedItemId = R.id.navigation_nfts
+            viewModel.kitsReady.collect { ready ->
+                binding.fragmentContainer.visibility = if (ready) View.VISIBLE else View.GONE
+            }
         }
     }
 

@@ -36,6 +36,7 @@ import io.horizontalsystems.ethereumkit.models.Transaction
 import io.horizontalsystems.ethereumkit.models.TransactionLog
 import io.reactivex.Single
 import io.reactivex.disposables.CompositeDisposable
+import io.reactivex.disposables.Disposable
 import io.reactivex.schedulers.Schedulers
 import io.reactivex.subjects.PublishSubject
 import kotlinx.coroutines.rx2.rxMaybe
@@ -55,16 +56,17 @@ class RpcBlockchain(
     // published, in arrival order. A failed save drops that head, as the blocking save did.
     private val lastBlockHeights = PublishSubject.create<Long>().toSerialized()
 
-    init {
-        lastBlockHeights
-            .concatMapMaybe { lastBlockHeight ->
-                rxMaybe(rxIoDispatcher) {
-                    storage.saveLastBlockHeight(lastBlockHeight)
-                    lastBlockHeight
-                }.onErrorComplete()
-            }
-            .subscribe { listener?.onUpdateLastBlockHeight(it) }
-    }
+    // Lives from start() to stop(): a save still pending at stop() must not publish to a stopped kit.
+    private var lastBlockHeightQueue: Disposable? = null
+
+    private fun subscribeLastBlockHeightQueue(): Disposable = lastBlockHeights
+        .concatMapMaybe { lastBlockHeight ->
+            rxMaybe(rxIoDispatcher) {
+                storage.saveLastBlockHeight(lastBlockHeight)
+                lastBlockHeight
+            }.onErrorComplete()
+        }
+        .subscribe { listener?.onUpdateLastBlockHeight(it) }
 
     private fun syncLastBlockHeight() {
         syncer.single(BlockNumberJsonRpc())
@@ -122,6 +124,8 @@ class RpcBlockchain(
     override suspend fun storedAccountState(): AccountState? = storage.getAccountState()
 
     override fun start() {
+        lastBlockHeightQueue?.dispose()
+        lastBlockHeightQueue = subscribeLastBlockHeightQueue()
         syncState = SyncState.Syncing()
         syncer.start()
     }
@@ -143,6 +147,8 @@ class RpcBlockchain(
     }
 
     override fun stop() {
+        lastBlockHeightQueue?.dispose()
+        lastBlockHeightQueue = null
         syncer.stop()
     }
 
