@@ -74,15 +74,15 @@ object EthereumKitDatabases {
 
     /** Builds and opens the database, so key and open failures surface here rather than on a later query. */
     suspend fun <T : RoomDatabase> open(build: () -> T): T = mutex.withLock {
-        withContext(Dispatchers.IO) {
-            val database = build()
-            try {
-                database.useReaderConnection { }
-                database
-            } catch (error: Throwable) {
-                database.close()
-                throw error
+        var database: T? = null
+        try {
+            withContext(Dispatchers.IO) {
+                build().also { database = it }.apply { useReaderConnection { } }
             }
+        } catch (error: Throwable) {
+            // Also covers a cancellation on the way back to the caller, which drops the opened database.
+            database?.close()
+            throw error
         }
     }
 

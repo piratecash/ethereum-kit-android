@@ -1,8 +1,11 @@
 package io.horizontalsystems.ethereumkit
 
+import androidx.room.useReaderConnection
 import io.horizontalsystems.ethereumkit.core.EthereumKit
+import io.horizontalsystems.ethereumkit.core.storage.Eip20Database
 import io.horizontalsystems.ethereumkit.core.storage.TransactionDatabase
 import io.horizontalsystems.ethereumkit.core.storage.TransactionStorage
+import io.horizontalsystems.ethereumkit.database.EthereumKitDatabases
 import io.horizontalsystems.ethereumkit.fixture.EthereumKitFixture
 import io.horizontalsystems.ethereumkit.fixture.EthereumKitFixture.snapshot
 import io.horizontalsystems.ethereumkit.fixture.BACKUP_SUFFIX
@@ -27,8 +30,11 @@ import io.horizontalsystems.sqlcipher.room.DatabaseKeyMismatchException
 import io.horizontalsystems.sqlcipher.room.DatabaseMigrationInProgressException
 import io.horizontalsystems.sqlcipher.room.DatabaseMigrationRequiredException
 import io.horizontalsystems.sqlcipher.room.DatabaseMigrationResult
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -39,6 +45,9 @@ import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import org.junit.rules.Timeout
 import java.io.File
+import java.util.concurrent.LinkedBlockingQueue
+import java.util.concurrent.TimeUnit
+import kotlin.coroutines.CoroutineContext
 
 /** How EthereumKit wires sqlcipher-room for its databases; engine internals are covered by that module. */
 class EthereumKitDatabaseMigrationDesktopTest {
@@ -233,6 +242,27 @@ class EthereumKitDatabaseMigrationDesktopTest {
         assertEquals(emptyList<String>(), migrationArtifacts(directory))
     }
 
+    @Test
+    fun open_callerCancelledWhileResultReturns_closesDatabase() {
+        val caller = QueueDispatcher()
+        var built: Eip20Database? = null
+        val job = CoroutineScope(caller).launch {
+            EthereumKitDatabases.open {
+                Eip20Database.getInstance(context, EthereumKitFixture.EIP20_EVENTS_DB, databaseKey).also { built = it }
+            }
+        }
+        caller.runNext()
+        // The IO block has opened the database and dispatched its result back to the caller.
+        val resume = caller.next()
+
+        job.cancel()
+        resume.run()
+
+        assertTrue(job.isCompleted)
+        val database = checkNotNull(built)
+        assertThrows(IllegalStateException::class.java) { runBlocking { database.useReaderConnection { } } }
+    }
+
     private fun copyFixtures() {
         fixtureNames.forEach { copyFixture(it, File(directory, it)) }
     }
@@ -256,6 +286,17 @@ class EthereumKitDatabaseMigrationDesktopTest {
         "wallet.plaintext-backup" to databaseKey,
         "wallet.sqlcipher-migrating" to databaseKey,
     )
+
+    /** Runs the caller's continuations only when the test says so. */
+    private class QueueDispatcher : CoroutineDispatcher() {
+        private val tasks = LinkedBlockingQueue<Runnable>()
+
+        override fun dispatch(context: CoroutineContext, block: Runnable) = tasks.put(block)
+
+        fun next(): Runnable = checkNotNull(tasks.poll(30, TimeUnit.SECONDS)) { "No continuation was dispatched" }
+
+        fun runNext() = next().run()
+    }
 
     private companion object {
         const val WALLET_ID = "fixturewallet"
