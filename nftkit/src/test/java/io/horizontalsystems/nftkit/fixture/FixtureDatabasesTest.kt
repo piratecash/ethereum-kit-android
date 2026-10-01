@@ -20,7 +20,7 @@ class FixtureDatabasesTest {
     fun nftDatabase_fixture_containsBalancesAndEvents() = runTest {
         DatabaseFixtureFiles.install(context, NftKitFixture.DB)
 
-        val database = NftKitDatabase.getInstance(context, NftKitFixture.DB)
+        val database = NftKitDatabase.build(DatabaseFixtureFiles.plaintextBuilder(context, NftKitFixture.DB))
 
         assertEquals(
             NftKitFixture.balances.filter { it.balance > 0 }.map { it.snapshot() },

@@ -19,7 +19,7 @@ class FixtureDatabasesTest {
     fun merkleDatabase_fixture_containsTransactionHashes() = runTest {
         DatabaseFixtureFiles.install(context, MerkleIoFixture.DB)
 
-        val dao = MerkleDatabase.getInstance(context, MerkleIoFixture.DB).merkleTransactionDao()
+        val dao = MerkleDatabase.build(DatabaseFixtureFiles.plaintextBuilder(context, MerkleIoFixture.DB)).merkleTransactionDao()
 
         assertEquals(
             MerkleIoFixture.hashes.map { it.snapshot() }.sortedBy { it.toString() },

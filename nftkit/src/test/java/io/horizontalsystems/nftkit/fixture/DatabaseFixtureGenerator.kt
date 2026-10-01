@@ -20,7 +20,7 @@ class DatabaseFixtureGenerator {
 
     @Test
     fun generateNftDatabase() = runTest {
-        val database = NftKitDatabase.getInstance(context, NftKitFixture.DB)
+        val database = NftKitDatabase.build(DatabaseFixtureFiles.plaintextBuilder(context, NftKitFixture.DB))
         database.nftBalanceDao().insertAll(NftKitFixture.balances)
         database.eip721EventDao().insertAll(NftKitFixture.eip721Events)
         database.eip1155EventDao().insertAll(NftKitFixture.eip1155Events)

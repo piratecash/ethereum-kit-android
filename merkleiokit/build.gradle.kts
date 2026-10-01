@@ -40,9 +40,14 @@ kotlin {
         }
         named("desktopTest") {
             kotlin.srcDir("src/test/sharedFixture/kotlin")
+            kotlin.srcDir("$rootDir/ethereumkit/src/test/kitSupport/kotlin")
+            kotlin.srcDir("$rootDir/ethereumkit/src/test/migrationSupport/kotlin")
+            resources.srcDir("src/test/resources")
             dependencies {
                 implementation(libs.junit)
                 implementation(libs.kotlinx.coroutines.test)
+                implementation(libs.sqlite.bundled)
+                implementation(libs.sqlcipher.driver)
             }
         }
     }

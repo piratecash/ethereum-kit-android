@@ -8,6 +8,7 @@ kotlinxCoroutinesCore = "1.10.1"
 kermit = "2.1.0"
 robolectric = "4.16"
 androidxTestCore = "1.7.0"
+piratecashBitcoin = "v0.1.0-pcash.36"
 
 [libraries]
 hd-wallet-kit = { module = "com.github.piratecash.hd-wallet-kit-android:hd-wallet-kit-kmp", version.ref = "hdWalletKit" }
@@ -17,6 +18,8 @@ room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "
 room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
 room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
 sqlite-bundled = { group = "androidx.sqlite", name = "sqlite-bundled", version.ref = "sqlite" }
+sqlcipher-room = { module = "com.github.piratecash.bitcoin-kit-android:sqlcipher-room", version.ref = "piratecashBitcoin" }
+sqlcipher-driver = { module = "com.github.piratecash.bitcoin-kit-android:sqlcipher-driver", version.ref = "piratecashBitcoin" }
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "kotlinxCoroutinesCore" }
 kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "kotlinxCoroutinesCore" }
 kotlinx-coroutines-rx2 = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-rx2", version.ref = "kotlinxCoroutinesCore" }

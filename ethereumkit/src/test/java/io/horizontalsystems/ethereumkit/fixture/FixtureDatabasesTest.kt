@@ -26,7 +26,7 @@ class FixtureDatabasesTest {
     fun apiDatabase_fixture_containsAccountStateAndLastBlockHeight() = runTest {
         DatabaseFixtureFiles.install(context, EthereumKitFixture.API_DB)
 
-        val storage = ApiStorage(ApiDatabase.getInstance(context, EthereumKitFixture.API_DB))
+        val storage = ApiStorage(ApiDatabase.build(DatabaseFixtureFiles.plaintextBuilder(context, EthereumKitFixture.API_DB)))
 
         assertEquals(EthereumKitFixture.accountState, storage.getAccountState())
         assertEquals(EthereumKitFixture.LAST_BLOCK_HEIGHT, storage.getLastBlockHeight())
@@ -35,7 +35,7 @@ class FixtureDatabasesTest {
     @Test
     fun transactionDatabase_fixture_containsAllTables() = runTest {
         DatabaseFixtureFiles.install(context, EthereumKitFixture.TRANSACTIONS_DB)
-        val database = TransactionDatabase.getInstance(context, EthereumKitFixture.TRANSACTIONS_DB)
+        val database = TransactionDatabase.build(DatabaseFixtureFiles.plaintextBuilder(context, EthereumKitFixture.TRANSACTIONS_DB))
         val storage = TransactionStorage(database)
 
         val hashes = EthereumKitFixture.transactions.map { it.hash }
@@ -75,7 +75,7 @@ class FixtureDatabasesTest {
     fun eip20EventsDatabase_fixture_containsEventsAndSyncCursor() = runTest {
         DatabaseFixtureFiles.install(context, EthereumKitFixture.EIP20_EVENTS_DB)
 
-        val storage = Eip20Storage(Eip20Database.getInstance(context, EthereumKitFixture.EIP20_EVENTS_DB))
+        val storage = Eip20Storage(Eip20Database.build(DatabaseFixtureFiles.plaintextBuilder(context, EthereumKitFixture.EIP20_EVENTS_DB)))
 
         assertEquals(
             EthereumKitFixture.eip20Events.map { it.snapshot() }.sortedBy { it.toString() },

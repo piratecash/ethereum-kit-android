@@ -1,6 +1,7 @@
 package io.horizontalsystems.nftkit
 
 import io.horizontalsystems.ethereumkit.PlatformContext
+import io.horizontalsystems.ethereumkit.fixture.databaseKey
 import io.horizontalsystems.nftkit.core.db.NftKitDatabase
 import io.horizontalsystems.nftkit.fixture.NftKitFixture
 import io.horizontalsystems.nftkit.fixture.NftKitFixture.snapshot
@@ -17,7 +18,7 @@ class NftKitDatabaseDesktopTest {
 
     @Test
     fun nftKitDatabase_desktop_writesAndReadsThroughDao() = runTest {
-        val database = NftKitDatabase.getInstance(PlatformContext(tempFolder.newFolder("databases")), NftKitFixture.DB)
+        val database = NftKitDatabase.getInstance(PlatformContext(tempFolder.newFolder("databases")), NftKitFixture.DB, databaseKey)
 
         database.nftBalanceDao().insertAll(NftKitFixture.balances)
         database.eip721EventDao().insertAll(NftKitFixture.eip721Events)

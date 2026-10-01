@@ -22,6 +22,7 @@ import io.horizontalsystems.ethereumkit.core.storage.TransactionSyncSourceStorag
 import io.horizontalsystems.ethereumkit.core.storage.TransactionSyncerStateStorage
 import io.horizontalsystems.ethereumkit.crypto.CryptoUtils
 import io.horizontalsystems.ethereumkit.crypto.InternalBouncyCastleProvider
+import io.horizontalsystems.ethereumkit.database.EthereumKitDatabases
 import io.horizontalsystems.ethereumkit.decorations.DecorationManager
 import io.horizontalsystems.ethereumkit.decorations.EthereumDecorator
 import io.horizontalsystems.ethereumkit.decorations.TransactionDecoration
@@ -54,6 +55,12 @@ import io.horizontalsystems.ethereumkit.transactionsyncers.InternalTransactionSy
 import io.horizontalsystems.ethereumkit.transactionsyncers.PendingTransactionSyncer
 import io.horizontalsystems.ethereumkit.transactionsyncers.TransactionSyncManager
 import io.horizontalsystems.hdwalletkit.Mnemonic
+import io.horizontalsystems.sqlcipher.room.DatabaseKeyMismatchException
+import io.horizontalsystems.sqlcipher.room.DatabaseMigrationConflictException
+import io.horizontalsystems.sqlcipher.room.DatabaseMigrationInProgressException
+import io.horizontalsystems.sqlcipher.room.DatabaseMigrationRequiredException
+import io.horizontalsystems.sqlcipher.room.DatabaseMigrationResult
+import io.horizontalsystems.sqlcipher.room.InsufficientDatabaseMigrationSpaceException
 import io.reactivex.BackpressureStrategy
 import io.reactivex.Flowable
 import io.reactivex.Single
@@ -830,6 +837,7 @@ class EthereumKit(
             Security.addProvider(InternalBouncyCastleProvider.getInstance())
         }
 
+        /** Same as the address overload; [databaseKey] and the failures are documented there. */
         suspend fun getInstance(
             application: PlatformContext,
             words: List<String>,
@@ -838,6 +846,7 @@ class EthereumKit(
             rpcSource: RpcSource,
             transactionSource: TransactionSource,
             walletId: String,
+            databaseKey: ByteArray,
             fallbackHistoryBlockWindow: Long = DEFAULT_FALLBACK_HISTORY_BLOCK_WINDOW,
             scanHistoricalEip20: Boolean = true,
             eventListenerFactory: EventListener.Factory? = null
@@ -852,12 +861,21 @@ class EthereumKit(
                 rpcSource,
                 transactionSource,
                 walletId,
+                databaseKey,
                 fallbackHistoryBlockWindow,
                 scanHistoricalEip20,
                 eventListenerFactory
             )
         }
 
+        /**
+         * Opens the wallet's encrypted databases with [databaseKey] (exactly 32 bytes); call [migrateDatabase]
+         * with the same key first. An invalid key or [walletId] throws [IllegalArgumentException] before any I/O.
+         *
+         * Recovery: [DatabaseMigrationRequiredException] or [DatabaseMigrationInProgressException] mean
+         * [migrateDatabase] has to run; [DatabaseKeyMismatchException] keeps the files unchanged and only
+         * [clear] plus a new key recovers, losing the stored wallet data.
+         */
         suspend fun getInstance(
             application: PlatformContext,
             address: Address,
@@ -865,10 +883,14 @@ class EthereumKit(
             rpcSource: RpcSource,
             transactionSource: TransactionSource,
             walletId: String,
+            databaseKey: ByteArray,
             fallbackHistoryBlockWindow: Long = DEFAULT_FALLBACK_HISTORY_BLOCK_WINDOW,
             scanHistoricalEip20: Boolean = true,
             eventListenerFactory: EventListener.Factory? = null
         ): EthereumKit {
+            EthereumKitDatabases.requireValidDatabaseKey(databaseKey)
+            EthereumKitDatabases.requireValidWalletId(walletId)
+            val databases = EthereumDatabaseManager.open(application, chain, walletId, databaseKey)
 
             val connectionManager = ConnectionManager.getInstance(application)
             val log = kitLogger(chain.id)
@@ -896,21 +918,16 @@ class EthereumKit(
             // heights into the ERC-20 sync cursor. A WebSocket source has no HTTP endpoint to scan.
             val ownChainRpcSource = rpcSource as? RpcSource.Http
 
-            val apiDatabase =
-                EthereumDatabaseManager.getEthereumApiDatabase(application, walletId, chain)
-            val storage = ApiStorage(apiDatabase)
+            val storage = ApiStorage(databases.api)
 
             val blockchain = RpcBlockchain.instance(address, storage, syncer, transactionBuilder, log)
 
-            val transactionDatabase =
-                EthereumDatabaseManager.getTransactionDatabase(application, walletId, chain)
+            val transactionDatabase = databases.transactions
             val transactionStorage = TransactionStorage(transactionDatabase)
             val transactionSyncerStateStorage = TransactionSyncerStateStorage(transactionDatabase)
             val transactionSyncSourceStorage = TransactionSyncSourceStorage(transactionDatabase.transactionSyncSourceDao())
 
-            val erc20Database =
-                EthereumDatabaseManager.getErc20Database(application, walletId, chain)
-            val erc20Storage = Eip20Storage(erc20Database)
+            val erc20Storage = Eip20Storage(databases.erc20)
 
             val ethereumTransactionSyncer =
                 EthereumTransactionSyncer(transactionProvider, transactionSyncerStateStorage, transactionSyncSourceStorage)
@@ -974,7 +991,33 @@ class EthereumKit(
             return ethereumKit
         }
 
-        fun clear(context: PlatformContext, chain: Chain, walletId: String) {
+        /**
+         * Encrypts the wallet's existing plaintext databases on [chain] with [databaseKey] (exactly 32 bytes),
+         * keeping their data, and recovers an interrupted migration. Idempotent; call it before [getInstance]
+         * with the same key. Arguments are checked like in [getInstance], before any I/O.
+         *
+         * Failures: [DatabaseKeyMismatchException] keeps the files unchanged, only [clear] plus a new key
+         * recovers; [DatabaseMigrationConflictException] means another process migrates or clears, retry
+         * later; [InsufficientDatabaseMigrationSpaceException] keeps the plaintext files, free space and retry.
+         */
+        suspend fun migrateDatabase(
+            context: PlatformContext,
+            chain: Chain,
+            walletId: String,
+            databaseKey: ByteArray
+        ): DatabaseMigrationResult {
+            EthereumKitDatabases.requireValidDatabaseKey(databaseKey)
+            EthereumKitDatabases.requireValidWalletId(walletId)
+            return EthereumDatabaseManager.migrate(context, chain, walletId, databaseKey)
+        }
+
+        /**
+         * Deletes the wallet's databases on [chain] with any leftovers of an interrupted migration or clear.
+         * Stop the kit first. Throws [IllegalArgumentException] for an invalid [walletId] before any I/O, and
+         * [DatabaseMigrationConflictException] while another process migrates or clears; retry later.
+         */
+        suspend fun clear(context: PlatformContext, chain: Chain, walletId: String) {
+            EthereumKitDatabases.requireValidWalletId(walletId)
             EthereumDatabaseManager.clear(context, chain, walletId)
         }
 

@@ -11,6 +11,7 @@ import io.horizontalsystems.ethereumkit.core.toHexString
 import io.horizontalsystems.ethereumkit.crypto.CryptoUtils
 import io.horizontalsystems.ethereumkit.fixture.EthereumKitFixture
 import io.horizontalsystems.ethereumkit.fixture.EthereumKitFixture.snapshot
+import io.horizontalsystems.ethereumkit.fixture.databaseKey
 import io.horizontalsystems.ethereumkit.models.Chain
 import io.horizontalsystems.ethereumkit.models.RpcSource
 import io.horizontalsystems.ethereumkit.models.TransactionSource
@@ -32,7 +33,7 @@ class EthereumKitDesktopTest {
 
     @Test
     fun apiDatabase_desktop_writesAndReadsThroughDao() = runTest {
-        val storage = ApiStorage(ApiDatabase.getInstance(context, EthereumKitFixture.API_DB))
+        val storage = ApiStorage(ApiDatabase.getInstance(context, EthereumKitFixture.API_DB, databaseKey))
 
         storage.saveAccountState(EthereumKitFixture.accountState)
         storage.saveLastBlockHeight(EthereumKitFixture.LAST_BLOCK_HEIGHT)
@@ -43,7 +44,7 @@ class EthereumKitDesktopTest {
 
     @Test
     fun transactionDatabase_desktop_writesAndReadsThroughDaoAndRawQuery() = runTest {
-        val storage = TransactionStorage(TransactionDatabase.getInstance(context, EthereumKitFixture.TRANSACTIONS_DB))
+        val storage = TransactionStorage(TransactionDatabase.getInstance(context, EthereumKitFixture.TRANSACTIONS_DB, databaseKey))
 
         storage.save(EthereumKitFixture.transactions)
         storage.saveTags(EthereumKitFixture.tags)
@@ -61,7 +62,7 @@ class EthereumKitDesktopTest {
 
     @Test
     fun eip20Database_desktop_writesAndReadsThroughDao() = runTest {
-        val storage = Eip20Storage(Eip20Database.getInstance(context, EthereumKitFixture.EIP20_EVENTS_DB))
+        val storage = Eip20Storage(Eip20Database.getInstance(context, EthereumKitFixture.EIP20_EVENTS_DB, databaseKey))
 
         storage.save(EthereumKitFixture.eip20Events)
 
@@ -79,7 +80,8 @@ class EthereumKitDesktopTest {
             chain = Chain.Ethereum,
             rpcSource = RpcSource.Http(listOf(URI("http://127.0.0.1:1")), null),
             transactionSource = TransactionSource.ethereum(listOf("key")),
-            walletId = "desktopwallet"
+            walletId = "desktopwallet",
+            databaseKey = databaseKey
         )
 
         assertEquals(EthereumKitFixture.account, kit.receiveAddress)

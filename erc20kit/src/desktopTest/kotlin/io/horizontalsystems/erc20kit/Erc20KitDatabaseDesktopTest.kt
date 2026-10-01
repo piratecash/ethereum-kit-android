@@ -4,6 +4,7 @@ import io.horizontalsystems.erc20kit.core.Erc20Storage
 import io.horizontalsystems.erc20kit.core.room.Erc20KitDatabase
 import io.horizontalsystems.erc20kit.fixture.Erc20KitFixture
 import io.horizontalsystems.ethereumkit.PlatformContext
+import io.horizontalsystems.ethereumkit.fixture.databaseKey
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -19,7 +20,7 @@ class Erc20KitDatabaseDesktopTest {
         val context = PlatformContext(tempFolder.newFolder("databases"))
 
         Erc20KitFixture.balances.forEach { (name, balance) ->
-            val storage = Erc20Storage(Erc20KitDatabase.getInstance(context, name))
+            val storage = Erc20Storage(Erc20KitDatabase.getInstance(context, name, databaseKey))
             storage.save(balance)
 
             assertEquals(name, balance, storage.getBalance())

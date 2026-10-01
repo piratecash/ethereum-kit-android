@@ -37,12 +37,13 @@ abstract class TransactionDatabase : RoomDatabase() {
 
     companion object {
 
-        fun getInstance(context: PlatformContext, databaseName: String): TransactionDatabase {
-            return kitDatabaseBuilder<TransactionDatabase>(context, databaseName)
-                    .addMigrations(migration13_14, migration14_15, migration15_16, migration16_17)
-                    .fallbackToDestructiveMigration(dropAllTables = false)
-                    .build()
-        }
+        fun getInstance(context: PlatformContext, databaseName: String, databaseKey: ByteArray): TransactionDatabase =
+            build(kitDatabaseBuilder(context, databaseName, databaseKey))
+
+        internal fun build(builder: RoomDatabase.Builder<TransactionDatabase>): TransactionDatabase =
+            builder.addMigrations(migration13_14, migration14_15, migration15_16, migration16_17)
+                .fallbackToDestructiveMigration(dropAllTables = false)
+                .build()
 
     }
 

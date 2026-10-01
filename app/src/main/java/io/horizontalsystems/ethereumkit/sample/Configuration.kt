@@ -8,6 +8,8 @@ object Configuration {
     const val webSocket: Boolean = false
     val chain: Chain = Chain.BinanceSmartChain
     const val walletId = "walletId"
+    // Fixed test key, demo only: a real wallet keeps a random per-account key in secure storage.
+    val databaseKey = ByteArray(32)
     val watchAddress: String? = null
     val defaultsWords = BuildConfig.WORDS
 

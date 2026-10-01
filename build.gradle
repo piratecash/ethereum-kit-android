@@ -140,6 +140,9 @@ def configureKitModule(Project sub, String artifactName) {
     }
     sub.android {
         compileSdk 34
+        // The KMP plugin points AGP at src/androidMain/AndroidManifest.xml; without this the library
+        // ships no manifest permissions (ACCESS_NETWORK_STATE for ConnectionManager).
+        sourceSets.main.manifest.srcFile 'src/main/AndroidManifest.xml'
         defaultConfig {
             minSdk 26
             testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'

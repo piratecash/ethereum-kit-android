@@ -19,10 +19,10 @@ abstract class NftKitDatabase : RoomDatabase() {
     abstract fun eip1155EventDao(): Eip1155EventDao
 
     companion object {
-        fun getInstance(context: PlatformContext, databaseName: String): NftKitDatabase {
-            return kitDatabaseBuilder<NftKitDatabase>(context, databaseName)
-                .fallbackToDestructiveMigration(dropAllTables = false)
-                .build()
-        }
+        fun getInstance(context: PlatformContext, databaseName: String, databaseKey: ByteArray): NftKitDatabase =
+            build(kitDatabaseBuilder(context, databaseName, databaseKey))
+
+        internal fun build(builder: RoomDatabase.Builder<NftKitDatabase>): NftKitDatabase =
+            builder.fallbackToDestructiveMigration(dropAllTables = false).build()
     }
 }

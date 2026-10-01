@@ -3,7 +3,9 @@ package io.horizontalsystems.nftkit.core
 import io.horizontalsystems.ethereumkit.PlatformContext
 import io.horizontalsystems.ethereumkit.core.EthereumKit
 import io.horizontalsystems.ethereumkit.core.kitLogger
+import io.horizontalsystems.ethereumkit.database.EthereumKitDatabases
 import io.horizontalsystems.ethereumkit.models.Address
+import io.horizontalsystems.ethereumkit.models.Chain
 import io.horizontalsystems.ethereumkit.models.TransactionData
 import io.horizontalsystems.nftkit.contracts.Eip1155ContractMethodFactories
 import io.horizontalsystems.nftkit.contracts.Eip721ContractMethodFactories
@@ -11,6 +13,7 @@ import io.horizontalsystems.nftkit.core.db.NftKitDatabaseManager
 import io.horizontalsystems.nftkit.models.Nft
 import io.horizontalsystems.nftkit.models.NftBalance
 import io.horizontalsystems.nftkit.models.NftType
+import io.horizontalsystems.sqlcipher.room.DatabaseMigrationResult
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
@@ -113,11 +116,17 @@ class NftKit(
     }
 
     companion object {
+        /**
+         * Opens the NFT database with [databaseKey] (exactly 32 bytes, invalid → [IllegalArgumentException]
+         * before any I/O); run [migrateDatabase] with the same key first. Failures as in [EthereumKit.getInstance].
+         */
         suspend fun getInstance(
             context: PlatformContext,
-            evmKit: EthereumKit
+            evmKit: EthereumKit,
+            databaseKey: ByteArray
         ): NftKit {
-            val nftKitDatabase = NftKitDatabaseManager.getNftKitDatabase(context, evmKit.chain, evmKit.walletId)
+            EthereumKitDatabases.requireValidDatabaseKey(databaseKey)
+            val nftKitDatabase = NftKitDatabaseManager.open(context, evmKit.chain, evmKit.walletId, databaseKey)
             val storage = Storage(nftKitDatabase)
             val dataProvider = DataProvider(evmKit)
             val balanceSyncManager = BalanceSyncManager(evmKit.receiveAddress, storage, dataProvider, kitLogger(evmKit.chain.id))
@@ -127,6 +136,24 @@ class NftKit(
             balanceSyncManager.listener = balanceManager
 
             return NftKit(evmKit, balanceManager, balanceSyncManager, transactionManager, storage)
+        }
+
+        /** Encrypts the wallet's NFT database on [chain]; same contract and failures as [EthereumKit.migrateDatabase]. */
+        suspend fun migrateDatabase(
+            context: PlatformContext,
+            chain: Chain,
+            walletId: String,
+            databaseKey: ByteArray
+        ): DatabaseMigrationResult {
+            EthereumKitDatabases.requireValidDatabaseKey(databaseKey)
+            EthereumKitDatabases.requireValidWalletId(walletId)
+            return NftKitDatabaseManager.migrate(context, chain, walletId, databaseKey)
+        }
+
+        /** Deletes the wallet's NFT database on [chain]; same contract as [EthereumKit.clear]. */
+        suspend fun clear(context: PlatformContext, chain: Chain, walletId: String) {
+            EthereumKitDatabases.requireValidWalletId(walletId)
+            NftKitDatabaseManager.clear(context, chain, walletId)
         }
     }
 }

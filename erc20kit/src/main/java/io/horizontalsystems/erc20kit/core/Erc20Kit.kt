@@ -6,11 +6,13 @@ import io.horizontalsystems.ethereumkit.core.EthereumKit
 import io.horizontalsystems.ethereumkit.core.EthereumKit.SyncState
 import io.horizontalsystems.ethereumkit.core.RpcLogsTokenTransactionProvider
 import io.horizontalsystems.ethereumkit.core.kitLogger
+import io.horizontalsystems.ethereumkit.database.EthereumKitDatabases
 import io.horizontalsystems.ethereumkit.models.Address
 import io.horizontalsystems.ethereumkit.models.Chain
 import io.horizontalsystems.ethereumkit.models.DefaultBlockParameter
 import io.horizontalsystems.ethereumkit.models.FullTransaction
 import io.horizontalsystems.ethereumkit.models.TransactionData
+import io.horizontalsystems.sqlcipher.room.DatabaseMigrationResult
 import io.reactivex.BackpressureStrategy
 import io.reactivex.Flowable
 import io.reactivex.Single
@@ -149,19 +151,26 @@ class Erc20Kit(
 
     companion object {
 
+        /**
+         * Opens the token database with [databaseKey] (exactly 32 bytes, invalid → [IllegalArgumentException]
+         * before any I/O); run [migrateDatabases] with the same key first. Failures as in [EthereumKit.getInstance].
+         */
         suspend fun getInstance(
             context: PlatformContext,
             ethereumKit: EthereumKit,
-            contractAddress: Address
+            contractAddress: Address,
+            databaseKey: ByteArray
         ): Erc20Kit {
+            EthereumKitDatabases.requireValidDatabaseKey(databaseKey)
 
             val address = ethereumKit.receiveAddress
 
-            val erc20KitDatabase = Erc20DatabaseManager.getErc20Database(
+            val erc20KitDatabase = Erc20DatabaseManager.open(
                 context,
                 ethereumKit.chain,
                 ethereumKit.walletId,
-                contractAddress
+                contractAddress,
+                databaseKey
             )
             val roomStorage = Erc20Storage(erc20KitDatabase)
             val balanceStorage: ITokenBalanceStorage = roomStorage
@@ -232,7 +241,24 @@ class Erc20Kit(
             ethereumKit.addTransactionDecorator(Eip20TransactionDecorator(ethereumKit.receiveAddress))
         }
 
-        fun clear(context: PlatformContext, chain: Chain, walletId: String) {
+        /**
+         * Encrypts every token database of [walletId] on [chain] with [databaseKey], keeping the data; same
+         * contract and failures as [EthereumKit.migrateDatabase].
+         */
+        suspend fun migrateDatabases(
+            context: PlatformContext,
+            chain: Chain,
+            walletId: String,
+            databaseKey: ByteArray
+        ): DatabaseMigrationResult {
+            EthereumKitDatabases.requireValidDatabaseKey(databaseKey)
+            EthereumKitDatabases.requireValidWalletId(walletId)
+            return Erc20DatabaseManager.migrate(context, chain, walletId, databaseKey)
+        }
+
+        /** Deletes every token database of [walletId] on [chain]; same contract as [EthereumKit.clear]. */
+        suspend fun clear(context: PlatformContext, chain: Chain, walletId: String) {
+            EthereumKitDatabases.requireValidWalletId(walletId)
             Erc20DatabaseManager.clear(context, chain, walletId)
         }
     }

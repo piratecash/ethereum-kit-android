@@ -20,7 +20,7 @@ class FixtureDatabasesTest {
         Erc20KitFixture.balances.forEach { (name, balance) ->
             DatabaseFixtureFiles.install(context, name)
 
-            val storage = Erc20Storage(Erc20KitDatabase.getInstance(context, name))
+            val storage = Erc20Storage(Erc20KitDatabase.build(DatabaseFixtureFiles.plaintextBuilder(context, name)))
 
             assertEquals(name, balance, storage.getBalance())
         }

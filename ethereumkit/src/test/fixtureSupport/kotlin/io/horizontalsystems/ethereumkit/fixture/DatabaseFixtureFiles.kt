@@ -1,6 +1,7 @@
 package io.horizontalsystems.ethereumkit.fixture
 
 import android.content.Context
+import androidx.room.Room
 import androidx.room.RoomDatabase
 import org.junit.Assume.assumeTrue
 import java.io.File
@@ -28,6 +29,10 @@ object DatabaseFixtureFiles {
         val target = File("src/test/resources/$RESOURCE_DIR/$name").also { it.parentFile?.mkdirs() }
         source.copyTo(target, overwrite = true)
     }
+
+    /** Robolectric cannot load SQLCipher; the fixtures are plaintext, so the host tests open them without it. */
+    inline fun <reified T : RoomDatabase> plaintextBuilder(context: Context, name: String): RoomDatabase.Builder<T> =
+        Room.databaseBuilder(context, T::class.java, name).allowMainThreadQueries()
 
     /** Regenerate with: `REGENERATE_FIXTURES=1 ./gradlew :<module>:cleanTestDebugUnitTest :<module>:testDebugUnitTest --tests '*DatabaseFixtureGenerator'`. */
     fun assumeRegenerating() = assumeTrue(System.getenv(REGENERATE_ENV) == "1")

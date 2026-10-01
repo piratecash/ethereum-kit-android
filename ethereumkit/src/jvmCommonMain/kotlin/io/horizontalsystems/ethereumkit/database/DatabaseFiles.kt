@@ -7,9 +7,3 @@ import java.io.File
 
 /** Path computation only, no I/O: [name] is either a bare file name or an absolute path. */
 expect fun databaseFile(context: PlatformContext, name: String): File
-
-/** Every file in the database directory, SQLite companions (-wal, -shm, -journal) included. */
-expect fun databaseNames(context: PlatformContext): List<String>
-
-/** Deletes the database file [name] together with its SQLite companions. */
-expect fun deleteDatabase(context: PlatformContext, name: String)

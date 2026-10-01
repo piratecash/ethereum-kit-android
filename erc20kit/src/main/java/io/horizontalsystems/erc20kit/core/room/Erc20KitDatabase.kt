@@ -16,11 +16,11 @@ abstract class Erc20KitDatabase : RoomDatabase() {
 
     companion object {
 
-        fun getInstance(context: PlatformContext, databaseName: String): Erc20KitDatabase {
-            return kitDatabaseBuilder<Erc20KitDatabase>(context, databaseName)
-                    .fallbackToDestructiveMigration(dropAllTables = false)
-                    .build()
-        }
+        fun getInstance(context: PlatformContext, databaseName: String, databaseKey: ByteArray): Erc20KitDatabase =
+            build(kitDatabaseBuilder(context, databaseName, databaseKey))
+
+        internal fun build(builder: RoomDatabase.Builder<Erc20KitDatabase>): Erc20KitDatabase =
+            builder.fallbackToDestructiveMigration(dropAllTables = false).build()
     }
 
 }

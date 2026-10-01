@@ -22,7 +22,7 @@ class DatabaseFixtureGenerator {
     @Test
     fun generateTokenDatabases() = runTest {
         Erc20KitFixture.balances.forEach { (name, balance) ->
-            val database = Erc20KitDatabase.getInstance(context, name)
+            val database = Erc20KitDatabase.build(DatabaseFixtureFiles.plaintextBuilder(context, name))
             Erc20Storage(database).save(balance)
             DatabaseFixtureFiles.export(context, database, name)
         }

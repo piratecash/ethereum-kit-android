@@ -18,6 +18,8 @@ import io.horizontalsystems.ethereumkit.sample.modules.main.ShowTxType
 import io.reactivex.android.schedulers.AndroidSchedulers
 import io.reactivex.disposables.CompositeDisposable
 import io.reactivex.schedulers.Schedulers
+import kotlinx.coroutines.DelicateCoroutinesApi
+import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import java.net.URI
 
@@ -51,9 +53,10 @@ class AddressWatchViewModel : ViewModel() {
             return
         }
 
-        clearKits()
-
-        viewModelScope.launch { watch(wordList) }
+        viewModelScope.launch {
+            clearKits()
+            watch(wordList)
+        }
     }
 
     private suspend fun watch(wordList: List<String>) {
@@ -63,7 +66,7 @@ class AddressWatchViewModel : ViewModel() {
         val erc20Adapter = Erc20BaseAdapter(
             token,
             evmKit,
-            Erc20Kit.getInstance(App.instance, evmKit, token.contractAddress)
+            Erc20Kit.getInstance(App.instance, evmKit, token.contractAddress, Configuration.databaseKey)
         )
 
         Erc20Kit.addTransactionSyncer(evmKit)
@@ -106,12 +109,14 @@ class AddressWatchViewModel : ViewModel() {
         erc20Adapter.start()
     }
 
+    @OptIn(DelicateCoroutinesApi::class)
     override fun onCleared() {
-        clearKits()
+        // viewModelScope is already cancelled here.
+        GlobalScope.launch { clearKits() }
         disposables.clear()
     }
 
-    private fun clearKits() {
+    private suspend fun clearKits() {
         EthereumKit.clear(App.instance, Configuration.chain, Configuration.walletId)
         Erc20Kit.clear(App.instance, Configuration.chain, Configuration.walletId)
     }
@@ -164,7 +169,7 @@ class AddressWatchViewModel : ViewModel() {
         return EthereumKit.getInstance(
             App.instance, wordList, "",
             Configuration.chain, rpcSource, transactionSource,
-            Configuration.walletId
+            Configuration.walletId, Configuration.databaseKey
         )
     }
 

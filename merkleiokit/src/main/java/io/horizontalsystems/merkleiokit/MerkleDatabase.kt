@@ -16,10 +16,10 @@ abstract class MerkleDatabase : RoomDatabase() {
     abstract fun merkleTransactionDao(): MerkleTransactionDao
 
     companion object Companion {
-        fun getInstance(context: PlatformContext, databaseName: String): MerkleDatabase {
-            return kitDatabaseBuilder<MerkleDatabase>(context, databaseName)
-                    .fallbackToDestructiveMigration(dropAllTables = false)
-                    .build()
-        }
+        fun getInstance(context: PlatformContext, databaseName: String, databaseKey: ByteArray): MerkleDatabase =
+            build(kitDatabaseBuilder(context, databaseName, databaseKey))
+
+        internal fun build(builder: RoomDatabase.Builder<MerkleDatabase>): MerkleDatabase =
+            builder.fallbackToDestructiveMigration(dropAllTables = false).build()
     }
 }

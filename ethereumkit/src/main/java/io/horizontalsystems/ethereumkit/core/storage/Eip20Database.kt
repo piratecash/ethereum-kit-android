@@ -23,12 +23,13 @@ abstract class Eip20Database : RoomDatabase() {
 
     companion object {
 
-        fun getInstance(context: PlatformContext, databaseName: String): Eip20Database {
-            return kitDatabaseBuilder<Eip20Database>(context, databaseName)
-                .addMigrations(migration2_3, migration3_4, migration4_5, migration5_6)
+        fun getInstance(context: PlatformContext, databaseName: String, databaseKey: ByteArray): Eip20Database =
+            build(kitDatabaseBuilder(context, databaseName, databaseKey))
+
+        internal fun build(builder: RoomDatabase.Builder<Eip20Database>): Eip20Database =
+            builder.addMigrations(migration2_3, migration3_4, migration4_5, migration5_6)
                 .fallbackToDestructiveMigration(dropAllTables = false)
                 .build()
-        }
     }
 
     class TypeConverters {

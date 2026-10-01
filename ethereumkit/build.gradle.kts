@@ -43,14 +43,15 @@ kotlin {
         }
         androidMain {
             dependencies {
+                // Public API exposes its exceptions and DatabaseMigrationResult.
+                api(libs.sqlcipher.room)
                 implementation(libs.kotlinx.coroutines.android)
                 implementation("androidx.annotation:annotation:1.4.0")
             }
         }
         named("desktopMain") {
             dependencies {
-                // Plaintext databases until the SQLCipher driver replaces it.
-                implementation(libs.sqlite.bundled)
+                api(libs.sqlcipher.room)
                 runtimeOnly(libs.secp256k1.jni.jvm)
             }
         }
@@ -79,9 +80,16 @@ kotlin {
         }
         named("desktopTest") {
             kotlin.srcDir("src/test/sharedFixture/kotlin")
+            kotlin.srcDir("src/test/kitSupport/kotlin")
+            kotlin.srcDir("src/test/migrationSupport/kotlin")
+            resources.srcDir("src/test/resources")
             dependencies {
                 implementation(libs.junit)
                 implementation(libs.kotlinx.coroutines.test)
+                // Plaintext fixtures only; the kit itself opens databases through SQLCipher.
+                implementation(libs.sqlite.bundled)
+                // Reads and stages encrypted files directly; aligned with sqlcipher-room.
+                implementation(libs.sqlcipher.driver)
             }
         }
     }

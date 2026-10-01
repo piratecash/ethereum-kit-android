@@ -104,7 +104,7 @@ class MainViewModel : ViewModel() {
         erc20Adapter = Erc20Adapter(
             fromToken,
             ethereumKit,
-            Erc20Kit.getInstance(App.instance, ethereumKit, fromToken.contractAddress),
+            Erc20Kit.getInstance(App.instance, ethereumKit, fromToken.contractAddress, Configuration.databaseKey),
             signer
         )
         uniswapKit = UniswapKit.getInstance()
@@ -229,14 +229,14 @@ class MainViewModel : ViewModel() {
             EthereumKit.getInstance(
                 App.instance, Address(Configuration.watchAddress),
                 Configuration.chain, rpcSource, transactionSource,
-                Configuration.walletId
+                Configuration.walletId, Configuration.databaseKey
             )
         } else {
             val words = Configuration.defaultsWords.split(" ")
             EthereumKit.getInstance(
                 App.instance, words, "",
                 Configuration.chain, rpcSource, transactionSource,
-                Configuration.walletId
+                Configuration.walletId, Configuration.databaseKey
             )
         }
     }
@@ -313,9 +313,11 @@ class MainViewModel : ViewModel() {
 
     fun clear() {
         _kitsReady.value = false
-        EthereumKit.clear(App.instance, Configuration.chain, Configuration.walletId)
-        Erc20Kit.clear(App.instance, Configuration.chain, Configuration.walletId)
-        viewModelScope.launch { initKits() }
+        viewModelScope.launch {
+            EthereumKit.clear(App.instance, Configuration.chain, Configuration.walletId)
+            Erc20Kit.clear(App.instance, Configuration.chain, Configuration.walletId)
+            initKits()
+        }
     }
 
     fun receiveAddress(): String {

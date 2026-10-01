@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import io.horizontalsystems.ethereumkit.core.EthereumKit
 import io.horizontalsystems.ethereumkit.sample.App
+import io.horizontalsystems.ethereumkit.sample.Configuration
 import io.horizontalsystems.nftkit.core.NftKit
 import io.horizontalsystems.nftkit.models.NftBalance
 import kotlinx.coroutines.flow.Flow
@@ -24,7 +25,7 @@ class NftsViewModel(
 
     init {
         viewModelScope.launch {
-            val nftKit = NftKit.getInstance(App.instance, evmKit)
+            val nftKit = NftKit.getInstance(App.instance, evmKit, Configuration.databaseKey)
             nftKit.addEip1155TransactionSyncer()
             nftKit.addEip1155Decorators()
             nftKit.addEip721TransactionSyncer()

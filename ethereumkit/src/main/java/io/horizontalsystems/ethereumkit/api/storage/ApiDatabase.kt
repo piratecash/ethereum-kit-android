@@ -18,11 +18,11 @@ abstract class ApiDatabase : RoomDatabase() {
 
     companion object {
 
-        fun getInstance(context: PlatformContext, databaseName: String): ApiDatabase {
-            return kitDatabaseBuilder<ApiDatabase>(context, databaseName)
-                    .fallbackToDestructiveMigration(dropAllTables = false)
-                    .build()
-        }
+        fun getInstance(context: PlatformContext, databaseName: String, databaseKey: ByteArray): ApiDatabase =
+            build(kitDatabaseBuilder(context, databaseName, databaseKey))
+
+        internal fun build(builder: RoomDatabase.Builder<ApiDatabase>): ApiDatabase =
+            builder.fallbackToDestructiveMigration(dropAllTables = false).build()
 
     }
 

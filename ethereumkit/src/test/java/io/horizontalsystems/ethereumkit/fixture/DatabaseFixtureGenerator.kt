@@ -26,7 +26,7 @@ class DatabaseFixtureGenerator {
 
     @Test
     fun generateApiDatabase() = runTest {
-        val database = ApiDatabase.getInstance(context, API_DB)
+        val database = ApiDatabase.build(DatabaseFixtureFiles.plaintextBuilder(context, API_DB))
         database.balanceDao().insert(EthereumKitFixture.accountState)
         database.lastBlockHeightDao().insert(LastBlockHeight(EthereumKitFixture.LAST_BLOCK_HEIGHT))
         DatabaseFixtureFiles.export(context, database, API_DB)
@@ -34,7 +34,7 @@ class DatabaseFixtureGenerator {
 
     @Test
     fun generateTransactionDatabase() = runTest {
-        val database = TransactionDatabase.getInstance(context, TRANSACTIONS_DB)
+        val database = TransactionDatabase.build(DatabaseFixtureFiles.plaintextBuilder(context, TRANSACTIONS_DB))
         database.transactionDao().insert(EthereumKitFixture.transactions)
         database.transactionDao().insertInternalTransactions(listOf(EthereumKitFixture.internalTransaction))
         database.transactionTagDao().insert(EthereumKitFixture.tags)
@@ -48,7 +48,7 @@ class DatabaseFixtureGenerator {
 
     @Test
     fun generateEip20EventsDatabase() = runTest {
-        val database = Eip20Database.getInstance(context, EIP20_EVENTS_DB)
+        val database = Eip20Database.build(DatabaseFixtureFiles.plaintextBuilder(context, EIP20_EVENTS_DB))
         database.eip20EventDao().insertEip20Events(EthereumKitFixture.eip20Events)
         database.eip20SyncStateDao().insert(EthereumKitFixture.eip20SyncState)
         DatabaseFixtureFiles.export(context, database, EIP20_EVENTS_DB)

@@ -20,7 +20,7 @@ class DatabaseFixtureGenerator {
 
     @Test
     fun generateMerkleDatabase() = runTest {
-        val database = MerkleDatabase.getInstance(context, MerkleIoFixture.DB)
+        val database = MerkleDatabase.build(DatabaseFixtureFiles.plaintextBuilder(context, MerkleIoFixture.DB))
         MerkleIoFixture.hashes.forEach { database.merkleTransactionDao().save(it) }
         DatabaseFixtureFiles.export(context, database, MerkleIoFixture.DB)
     }
