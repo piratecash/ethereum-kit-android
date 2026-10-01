@@ -1,0 +1,111 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 6,
+    "identityHash": "59379eaf43667900b738fa945e9ab8a0",
+    "entities": [
+      {
+        "tableName": "Eip20Event",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`hash` BLOB NOT NULL, `blockNumber` INTEGER NOT NULL, `contractAddress` BLOB NOT NULL, `from` BLOB NOT NULL, `to` BLOB NOT NULL, `value` TEXT NOT NULL, `tokenName` TEXT NOT NULL, `tokenSymbol` TEXT NOT NULL, `tokenDecimal` INTEGER NOT NULL, PRIMARY KEY(`hash`, `contractAddress`, `from`, `to`, `value`))",
+        "fields": [
+          {
+            "fieldPath": "hash",
+            "columnName": "hash",
+            "affinity": "BLOB",
+            "notNull": true
+          },
+          {
+            "fieldPath": "blockNumber",
+            "columnName": "blockNumber",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "contractAddress",
+            "columnName": "contractAddress",
+            "affinity": "BLOB",
+            "notNull": true
+          },
+          {
+            "fieldPath": "from",
+            "columnName": "from",
+            "affinity": "BLOB",
+            "notNull": true
+          },
+          {
+            "fieldPath": "to",
+            "columnName": "to",
+            "affinity": "BLOB",
+            "notNull": true
+          },
+          {
+            "fieldPath": "value",
+            "columnName": "value",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "tokenName",
+            "columnName": "tokenName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "tokenSymbol",
+            "columnName": "tokenSymbol",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "tokenDecimal",
+            "columnName": "tokenDecimal",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "hash",
+            "contractAddress",
+            "from",
+            "to",
+            "value"
+          ]
+        }
+      },
+      {
+        "tableName": "Eip20SyncState",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`contractAddress` TEXT NOT NULL, `lastScannedBlock` INTEGER, `historicalMinScannedBlock` INTEGER, PRIMARY KEY(`contractAddress`))",
+        "fields": [
+          {
+            "fieldPath": "contractAddress",
+            "columnName": "contractAddress",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastScannedBlock",
+            "columnName": "lastScannedBlock",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "historicalMinScannedBlock",
+            "columnName": "historicalMinScannedBlock",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "contractAddress"
+          ]
+        }
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '59379eaf43667900b738fa945e9ab8a0')"
+    ]
+  }
+}

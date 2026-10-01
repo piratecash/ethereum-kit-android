@@ -10,7 +10,7 @@ import io.horizontalsystems.nftkit.models.Eip1155Event
 import io.horizontalsystems.nftkit.models.Eip721Event
 import io.horizontalsystems.nftkit.models.NftBalanceRecord
 
-@Database(entities = [Eip721Event::class, Eip1155Event::class, NftBalanceRecord::class], version = 1, exportSchema = false)
+@Database(entities = [Eip721Event::class, Eip1155Event::class, NftBalanceRecord::class], version = 1, exportSchema = true)
 @TypeConverters(NftTypeConverters::class, RoomTypeConverters::class)
 abstract class NftKitDatabase : RoomDatabase() {
 

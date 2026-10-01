@@ -12,7 +12,7 @@ import io.horizontalsystems.ethereumkit.models.Eip20SyncState
         Eip20SyncState::class
     ],
     version = 6,
-    exportSchema = false
+    exportSchema = true
 )
 @TypeConverters(RoomTypeConverters::class, Eip20Database.TypeConverters::class)
 abstract class Eip20Database : RoomDatabase() {

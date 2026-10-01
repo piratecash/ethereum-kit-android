@@ -24,7 +24,7 @@ import io.horizontalsystems.ethereumkit.models.TransactionTag
             RawTransactionBroadcastRecord::class
         ],
         version = 17,
-        exportSchema = false
+        exportSchema = true
 )
 @TypeConverters(RoomTypeConverters::class, TransactionDatabase.TypeConverters::class)
 abstract class TransactionDatabase : RoomDatabase() {

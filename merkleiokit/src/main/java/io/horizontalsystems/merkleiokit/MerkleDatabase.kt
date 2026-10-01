@@ -10,7 +10,7 @@ import androidx.room.RoomDatabase
         MerkleTransactionHash::class,
     ],
     version = 1,
-    exportSchema = false
+    exportSchema = true
 )
 abstract class MerkleDatabase : RoomDatabase() {
     abstract fun merkleTransactionDao(): MerkleTransactionDao

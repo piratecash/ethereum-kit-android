@@ -40,6 +40,9 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
+    sourceSets {
+        test.java.srcDirs 'src/test/sharedFixture/kotlin', "$rootDir/ethereumkit/src/test/fixtureSupport/kotlin"
+    }
 
 }
 
@@ -64,6 +67,8 @@ dependencies {
     ksp libs.room.compiler
 
     testImplementation 'junit:junit:4.13.2'
+    testImplementation libs.robolectric
+    testImplementation libs.androidx.test.core
     testImplementation 'io.mockk:mockk:1.13.12'
     testImplementation 'org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.1'
     androidTestImplementation 'androidx.test.ext:junit:1.1.3'

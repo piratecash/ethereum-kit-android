@@ -9,7 +9,7 @@ import io.horizontalsystems.ethereumkit.api.models.AccountState
 import io.horizontalsystems.ethereumkit.api.models.LastBlockHeight
 
 
-@Database(entities = [AccountState::class, LastBlockHeight::class], version = 3, exportSchema = false)
+@Database(entities = [AccountState::class, LastBlockHeight::class], version = 3, exportSchema = true)
 @TypeConverters(RoomTypeConverters::class)
 abstract class ApiDatabase : RoomDatabase() {
 

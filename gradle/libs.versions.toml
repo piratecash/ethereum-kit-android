@@ -6,6 +6,8 @@ room = "2.8.4"
 kotlinxCoroutinesCore = "1.10.1"
 timber = "5.0.1"
 kermit = "2.1.0"
+robolectric = "4.16"
+androidxTestCore = "1.7.0"
 
 [libraries]
 hd-wallet-kit-android = { module = "com.github.piratecash.hd-wallet-kit-android:hd-wallet-kit-kmp-android", version.ref = "hdWalletKit" }
@@ -19,3 +21,5 @@ kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-a
 kotlinx-coroutines-rx2 = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-rx2", version.ref = "kotlinxCoroutinesCore" }
 timber = { module = "com.jakewharton.timber:timber", version.ref = "timber" }
 kermit = { module = "co.touchlab:kermit", version.ref = "kermit" }
+robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
+androidx-test-core = { module = "androidx.test:core", version.ref = "androidxTestCore" }
