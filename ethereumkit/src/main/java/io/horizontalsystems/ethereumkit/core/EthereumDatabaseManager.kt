@@ -5,16 +5,11 @@ import io.horizontalsystems.ethereumkit.api.storage.ApiDatabase
 import io.horizontalsystems.ethereumkit.core.storage.Eip20Database
 import io.horizontalsystems.ethereumkit.core.storage.TransactionDatabase
 import io.horizontalsystems.ethereumkit.models.Chain
-import io.horizontalsystems.ethereumkit.spv.core.storage.SpvDatabase
 
 internal object EthereumDatabaseManager {
 
     fun getEthereumApiDatabase(context: Context, walletId: String, chain: Chain): ApiDatabase {
         return ApiDatabase.getInstance(context, getDbNameApi(walletId, chain))
-    }
-
-    fun getEthereumSpvDatabase(context: Context, walletId: String, chain: Chain): SpvDatabase {
-        return SpvDatabase.getInstance(context, getDbNameSpv(walletId, chain))
     }
 
     fun getTransactionDatabase(context: Context, walletId: String, chain: Chain): TransactionDatabase {

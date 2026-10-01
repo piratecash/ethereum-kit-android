@@ -24,8 +24,6 @@ import io.horizontalsystems.ethereumkit.models.Signature
 import io.horizontalsystems.ethereumkit.models.Transaction
 import io.horizontalsystems.ethereumkit.models.TransactionLog
 import io.horizontalsystems.ethereumkit.models.TransactionTag
-import io.horizontalsystems.ethereumkit.spv.models.AccountStateSpv
-import io.horizontalsystems.ethereumkit.spv.models.BlockHeader
 import io.reactivex.Single
 import java.math.BigInteger
 
@@ -36,15 +34,6 @@ interface IApiStorage {
 
     fun getAccountState(): AccountState?
     fun saveAccountState(state: AccountState)
-}
-
-interface ISpvStorage {
-    fun getLastBlockHeader(): BlockHeader?
-    fun saveBlockHeaders(blockHeaders: List<BlockHeader>)
-    fun getBlockHeadersReversed(fromBlockHeight: Long, limit: Int): List<BlockHeader>
-
-    fun getAccountState(): AccountStateSpv?
-    fun saveAccountSate(accountState: AccountStateSpv)
 }
 
 interface IBlockchain {
