@@ -38,6 +38,14 @@ fun String.hexStringToByteArrayOrNull(): ByteArray? {
     }
 }
 
+fun String.strictHexToByteArray(): ByteArray {
+    val rawHex = stripHexPrefix()
+    require(strictHexRegex.matches(rawHex)) { "Invalid raw transaction hex" }
+    return rawHex.chunked(2)
+            .map { it.toInt(16).toByte() }
+            .toByteArray()
+}
+
 private fun String.getByteArray(): ByteArray {
     var hexWithoutPrefix = this.stripHexPrefix()
     if (hexWithoutPrefix.length % 2 == 1) {
@@ -55,6 +63,8 @@ fun String.stripHexPrefix(): String {
         this
     }
 }
+
+private val strictHexRegex = Regex("^([0-9a-fA-F]{2})+$")
 
 fun Long.toHexString(): String {
     return "0x${this.toString(16)}"

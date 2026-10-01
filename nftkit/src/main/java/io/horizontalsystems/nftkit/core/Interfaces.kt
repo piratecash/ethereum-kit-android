@@ -8,5 +8,5 @@ interface ITransactionSyncerListener {
 }
 
 interface IBalanceSyncManagerListener {
-    fun didFinishSyncBalances()
+    suspend fun didFinishSyncBalances()
 }

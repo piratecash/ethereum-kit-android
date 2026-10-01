@@ -23,7 +23,7 @@ class DecorationManager(private val userAddress: Address, private val storage: I
     private val transactionDecorators = mutableListOf<ITransactionDecorator>()
     private val extraDecorators = mutableListOf<IExtraDecorator>()
 
-    private fun extra(hash: ByteArray) = buildMap {
+    private suspend fun extra(hash: ByteArray): Map<String, Any> = buildMap {
         extraDecorators.forEach { extraDecorator ->
             putAll(extraDecorator.extra(hash))
         }
@@ -56,7 +56,7 @@ class DecorationManager(private val userAddress: Address, private val storage: I
         return null
     }
 
-    fun decorateTransactions(transactions: List<Transaction>): List<FullTransaction> {
+    suspend fun decorateTransactions(transactions: List<Transaction>): List<FullTransaction> {
         val internalTransactionsMap: MutableMap<String, List<InternalTransaction>> = getInternalTransactionsMap(transactions).toMutableMap()
         val eventInstancesMap: MutableMap<String, List<ContractEventInstance>> = mutableMapOf()
 
@@ -80,7 +80,7 @@ class DecorationManager(private val userAddress: Address, private val storage: I
         }
     }
 
-    fun decorateFullRpcTransaction(fullRpcTransaction: FullRpcTransaction): FullTransaction {
+    suspend fun decorateFullRpcTransaction(fullRpcTransaction: FullRpcTransaction): FullTransaction {
         val timestamp = if (fullRpcTransaction.rpcBlock != null) {
             fullRpcTransaction.rpcBlock.timestamp
         } else {
@@ -102,7 +102,7 @@ class DecorationManager(private val userAddress: Address, private val storage: I
         return FullTransaction(transaction, decoration, extra(transaction.hash))
     }
 
-    private fun getInternalTransactionsMap(transactions: List<Transaction>): Map<String, List<InternalTransaction>> {
+    private suspend fun getInternalTransactionsMap(transactions: List<Transaction>): Map<String, List<InternalTransaction>> {
         val internalTransactions: List<InternalTransaction> = if (transactions.size > 100) {
             storage.getInternalTransactions()
         } else {

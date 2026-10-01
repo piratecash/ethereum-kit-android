@@ -1,5 +1,6 @@
 package io.horizontalsystems.uniswapkit
 
+import co.touchlab.kermit.Logger
 import io.horizontalsystems.ethereumkit.core.EthereumKit
 import io.horizontalsystems.ethereumkit.models.Address
 import io.horizontalsystems.ethereumkit.models.Chain
@@ -9,14 +10,13 @@ import io.horizontalsystems.uniswapkit.contract.SwapContractMethodFactories
 import io.horizontalsystems.uniswapkit.models.*
 import io.reactivex.Single
 import java.math.BigDecimal
-import java.util.logging.Logger
 
 class UniswapKit(
     private val tradeManager: TradeManager,
     private val pairSelector: PairSelector,
-    private val tokenFactory: TokenFactory
+    private val tokenFactory: TokenFactory,
+    private val logger: Logger
 ) {
-    private val logger = Logger.getLogger(this.javaClass.simpleName)
 
     fun routerAddress(chain: Chain): Address
          = TradeManager.getRouterAddress(chain)
@@ -49,13 +49,13 @@ class UniswapKit(
             swapData.tokenOut
         ).sorted()
 
-        logger.info("bestTradeExactIn trades (${sortedTrades.size}):")
+        logger.d { "bestTradeExactIn trades (${sortedTrades.size}):" }
         sortedTrades.forEachIndexed { index, trade ->
-            logger.info("$index: {in: ${trade.tokenAmountIn}, out: ${trade.tokenAmountOut}, impact: ${trade.priceImpact.toBigDecimal(2)}, pathSize: ${trade.route.path.size}")
+            logger.d { "$index: {in: ${trade.tokenAmountIn}, out: ${trade.tokenAmountOut}, impact: ${trade.priceImpact.toBigDecimal(2)}, pathSize: ${trade.route.path.size}" }
         }
 
         val trade = sortedTrades.firstOrNull() ?: throw TradeError.TradeNotFound()
-        logger.info("bestTradeExactIn path: ${trade.route.path.joinToString(" > ")}")
+        logger.d { "bestTradeExactIn path: ${trade.route.path.joinToString(" > ")}" }
 
         return TradeData(trade, options)
     }
@@ -68,13 +68,13 @@ class UniswapKit(
             tokenAmountOut
         ).sorted()
 
-        logger.info("bestTradeExactOut trades  (${sortedTrades.size}):")
+        logger.d { "bestTradeExactOut trades  (${sortedTrades.size}):" }
         sortedTrades.forEachIndexed { index, trade ->
-            logger.info("$index: {in: ${trade.tokenAmountIn}, out: ${trade.tokenAmountOut}, impact: ${trade.priceImpact}, pathSize: ${trade.route.path.size}")
+            logger.d { "$index: {in: ${trade.tokenAmountIn}, out: ${trade.tokenAmountOut}, impact: ${trade.priceImpact}, pathSize: ${trade.route.path.size}" }
         }
 
         val trade = sortedTrades.firstOrNull() ?: throw TradeError.TradeNotFound()
-        logger.info("bestTradeExactOut path: ${trade.route.path.joinToString(" > ")}")
+        logger.d { "bestTradeExactOut path: ${trade.route.path.joinToString(" > ")}" }
 
         return TradeData(trade, options)
     }
@@ -85,11 +85,12 @@ class UniswapKit(
 
     companion object {
         fun getInstance(): UniswapKit {
-            val tradeManager = TradeManager()
+            val logger = Logger.withTag("EthereumKit:Uniswap")
+            val tradeManager = TradeManager(logger)
             val tokenFactory = TokenFactory()
             val pairSelector = PairSelector(tokenFactory)
 
-            return UniswapKit(tradeManager, pairSelector, tokenFactory)
+            return UniswapKit(tradeManager, pairSelector, tokenFactory, logger)
         }
 
         fun addDecorators(ethereumKit: EthereumKit) {

@@ -1,44 +1,54 @@
 package io.horizontalsystems.ethereumkit.sample.modules.main
 
-import android.util.Log
+import co.touchlab.kermit.Logger
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import io.horizontalsystems.ethereumkit.core.EthereumKit
 import io.horizontalsystems.ethereumkit.sample.App
+import io.horizontalsystems.ethereumkit.sample.Configuration
 import io.horizontalsystems.nftkit.core.NftKit
 import io.horizontalsystems.nftkit.models.NftBalance
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 
 class NftsViewModel(
-    private val nftKit: NftKit
+    private val evmKit: EthereumKit,
+    private val databaseKey: ByteArray
 ) : ViewModel() {
 
+    private val log = Logger.withTag("Sample")
+    private val nftBalances = MutableStateFlow<List<NftBalance>>(listOf())
+
     val nftBalancesFlow: Flow<List<NftBalance>>
-        get() = nftKit.nftBalancesFlow
+        get() = nftBalances
 
     init {
         viewModelScope.launch {
+            NftKit.migrateDatabase(App.instance, evmKit.chain, Configuration.walletId, databaseKey)
+            val nftKit = NftKit.getInstance(App.instance, evmKit, databaseKey)
+            nftKit.addEip1155TransactionSyncer()
+            nftKit.addEip1155Decorators()
+            nftKit.addEip721TransactionSyncer()
+            nftKit.addEip721Decorators()
+
+            nftKit.start()
+
             nftKit.nftBalancesFlow.collect {
-                Log.e("nft", "nftBalances: ${it.size}")
+                log.d { "nftBalances: ${it.size}" }
+                nftBalances.value = it
             }
         }
-
-        nftKit.start()
     }
 }
 
-class NftsViewModelFactory(private val evmKit: EthereumKit) : ViewModelProvider.Factory {
+class NftsViewModelFactory(
+    private val evmKit: EthereumKit,
+    private val databaseKey: ByteArray
+) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
-
-        val nftKit = NftKit.getInstance(App.instance, evmKit)
-        nftKit.addEip1155TransactionSyncer()
-        nftKit.addEip1155Decorators()
-        nftKit.addEip721TransactionSyncer()
-        nftKit.addEip721Decorators()
-
-        return NftsViewModel(nftKit) as T
+        return NftsViewModel(evmKit, databaseKey) as T
     }
 }

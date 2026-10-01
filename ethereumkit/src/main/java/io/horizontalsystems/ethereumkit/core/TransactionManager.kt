@@ -11,6 +11,9 @@ import io.reactivex.BackpressureStrategy
 import io.reactivex.Flowable
 import io.reactivex.Single
 import io.reactivex.subjects.PublishSubject
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.rx2.rxSingle
+import kotlinx.coroutines.withContext
 import java.math.BigInteger
 
 class TransactionManager(
@@ -42,18 +45,17 @@ class TransactionManager(
     }
 
     fun getFullTransactionsAsync(tags: List<List<String>>, fromHash: ByteArray? = null, limit: Int? = null): Single<List<FullTransaction>> =
-        storage.getTransactionsBeforeAsync(tags, fromHash, limit)
-            .map { transactions ->
-                decorationManager.decorateTransactions(transactions)
-            }
+        rxSingle(rxIoDispatcher) {
+            decorationManager.decorateTransactions(storage.getTransactionsBefore(tags, fromHash, limit))
+        }
 
-    fun getPendingFullTransactions(tags: List<List<String>>): List<FullTransaction> =
+    suspend fun getPendingFullTransactions(tags: List<List<String>>): List<FullTransaction> =
         decorationManager.decorateTransactions(storage.getPendingTransactions(tags))
 
-    fun getFullTransactions(hashes: List<ByteArray>): List<FullTransaction> =
+    suspend fun getFullTransactions(hashes: List<ByteArray>): List<FullTransaction> =
         decorationManager.decorateTransactions(storage.getTransactions(hashes))
 
-    fun getDistinctTokenContractAddresses(): List<String> {
+    suspend fun getDistinctTokenContractAddresses(): List<String> {
         return storage.getDistinctTokenContractAddresses().map {
             it
                 .replace("_outgoing", "")
@@ -61,7 +63,7 @@ class TransactionManager(
         }
     }
 
-    private fun save(transactions: List<Transaction>) {
+    private suspend fun save(transactions: List<Transaction>) {
         val existingTransactions = storage.getTransactions(hashes = transactions.map { it.hash }).associateBy { it.hashString }
 
         val mergedTransactions = transactions.map { newTx ->
@@ -78,7 +80,7 @@ class TransactionManager(
                     from = newTx.from ?: existingTx.from,
                     to = newTx.to ?: existingTx.to,
                     value = newTx.value ?: existingTx.value,
-                    input = newTx.input ?: existingTx.input,
+                    input = newTx.input.takeIf { it?.isNotEmpty() == true } ?: existingTx.input,
                     nonce = newTx.nonce ?: existingTx.nonce,
                     gasPrice = newTx.gasPrice ?: existingTx.gasPrice,
                     maxFeePerGas = newTx.maxFeePerGas ?: existingTx.maxFeePerGas,
@@ -96,12 +98,19 @@ class TransactionManager(
         storage.save(mergedTransactions)
     }
 
-    fun handle(transactions: List<Transaction>, initial: Boolean = false): List<FullTransaction> {
-        if (transactions.isEmpty()) return listOf()
+    // Not cancellable: a disposed caller must not leave transactions saved without their tags.
+    suspend fun handle(transactions: List<Transaction>, initial: Boolean = false): List<FullTransaction> = withContext(NonCancellable) {
+        if (transactions.isEmpty()) return@withContext listOf()
 
         save(transactions)
         val failedTransactions = failPendingTransactions()
-        val fullTransactions = decorationManager.decorateTransactions(transactions + failedTransactions)
+
+        // Fetch merged transactions from storage to ensure complete data for decoration.
+        // This fixes an issue where partial transactions (e.g., from Erc20TransactionSyncer with to=null)
+        // would fail decoration even though storage had complete data.
+        val allHashes = (transactions + failedTransactions).map { it.hash }
+        val mergedTransactions = storage.getTransactions(allHashes)
+        val fullTransactions = decorationManager.decorateTransactions(mergedTransactions)
 
         val transactionWithTags = mutableListOf<TransactionWithTags>()
         val allTags = mutableListOf<TransactionTag>()
@@ -120,7 +129,7 @@ class TransactionManager(
         fullTransactionsSubject.onNext(Pair(fullTransactions, initial))
         fullTransactionsWithTagsSubject.onNext(transactionWithTags)
 
-        return fullTransactions
+        fullTransactions
     }
 
     fun etherTransferTransactionData(address: Address, value: BigInteger): TransactionData {
@@ -143,16 +152,17 @@ class TransactionManager(
                 }
             }
 
-        return fullRpcTransactionSingle.map { decorationManager.decorateFullRpcTransaction(it) }
+        return fullRpcTransactionSingle.flatMap { fullRpcTransaction ->
+            rxSingle(rxIoDispatcher) { decorationManager.decorateFullRpcTransaction(fullRpcTransaction) }
+        }
     }
 
     fun getFullTransactionsAfterSingle(fromHash: ByteArray? = null): Single<List<FullTransaction>> =
-        storage.getTransactionsAfterSingle(fromHash)
-            .map { transactions ->
-                decorationManager.decorateTransactions(transactions)
-            }
+        rxSingle(rxIoDispatcher) {
+            decorationManager.decorateTransactions(storage.getTransactionsAfter(fromHash))
+        }
 
-    private fun failPendingTransactions(): List<Transaction> {
+    private suspend fun failPendingTransactions(): List<Transaction> {
         val pendingTransactions = storage.getPendingTransactions()
 
         if (pendingTransactions.isEmpty()) return listOf()
@@ -162,7 +172,10 @@ class TransactionManager(
         val processedTransactions: MutableList<Transaction> = mutableListOf()
 
         for (nonPendingTransaction in nonPendingTransactions) {
-            val duplicateTransactions = pendingTransactions.filter { it.nonce == nonPendingTransaction.nonce }
+            // The pending list may be stale: a concurrent handle() can confirm the same transaction in between.
+            val duplicateTransactions = pendingTransactions.filter {
+                it.nonce == nonPendingTransaction.nonce && !it.hash.contentEquals(nonPendingTransaction.hash)
+            }
             for (transaction in duplicateTransactions) {
                 transaction.isFailed = true
                 transaction.replacedWith = nonPendingTransaction.hash
