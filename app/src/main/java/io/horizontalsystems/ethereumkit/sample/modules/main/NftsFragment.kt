@@ -38,7 +38,9 @@ class NftsFragment : Fragment() {
                 MaterialTheme {
                     val kitsReady by mainViewModel.kitsReady.collectAsState()
                     if (kitsReady) {
-                        val viewModel = viewModel<NftsViewModel>(factory = NftsViewModelFactory(mainViewModel.ethereumKit))
+                        val viewModel = viewModel<NftsViewModel>(
+                            factory = NftsViewModelFactory(mainViewModel.ethereumKit, mainViewModel.databaseKey)
+                        )
                         val nftBalances by viewModel.nftBalancesFlow.collectAsState(initial = listOf())
 
                         Column(

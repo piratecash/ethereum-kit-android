@@ -14,7 +14,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 
 class NftsViewModel(
-    private val evmKit: EthereumKit
+    private val evmKit: EthereumKit,
+    private val databaseKey: ByteArray
 ) : ViewModel() {
 
     private val log = Logger.withTag("Sample")
@@ -25,7 +26,8 @@ class NftsViewModel(
 
     init {
         viewModelScope.launch {
-            val nftKit = NftKit.getInstance(App.instance, evmKit, Configuration.databaseKey)
+            NftKit.migrateDatabase(App.instance, evmKit.chain, Configuration.walletId, databaseKey)
+            val nftKit = NftKit.getInstance(App.instance, evmKit, databaseKey)
             nftKit.addEip1155TransactionSyncer()
             nftKit.addEip1155Decorators()
             nftKit.addEip721TransactionSyncer()
@@ -41,9 +43,12 @@ class NftsViewModel(
     }
 }
 
-class NftsViewModelFactory(private val evmKit: EthereumKit) : ViewModelProvider.Factory {
+class NftsViewModelFactory(
+    private val evmKit: EthereumKit,
+    private val databaseKey: ByteArray
+) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
-        return NftsViewModel(evmKit) as T
+        return NftsViewModel(evmKit, databaseKey) as T
     }
 }

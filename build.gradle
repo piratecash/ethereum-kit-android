@@ -35,7 +35,6 @@ buildscript {
 }
 
 plugins {
-    id 'maven-publish'
     id 'com.google.devtools.ksp' version '2.3.2' apply false
 }
 
@@ -51,39 +50,6 @@ def libraryModules = [
     'ethereumkit', 'erc20kit', 'uniswapkit', 'oneinchkit', 'nftkit', 'merkleiokit'
 ]
 
-def artifactNames = [
-    'ethereumkit': 'ethereum-kit-core',
-    'erc20kit': 'ethereum-kit-erc20',
-    'uniswapkit': 'ethereum-kit-uniswap',
-    'oneinchkit': 'ethereum-kit-oneinch',
-    'nftkit': 'ethereum-kit-nft',
-    'merkleiokit': 'ethereum-kit-merkleio'
-]
-
-def addLibraryModuleDependencies = { pom ->
-    pom.withXml {
-        def dependenciesNode = asNode().appendNode('dependencies')
-        libraryModules.each { mod ->
-            def dependencyNode = dependenciesNode.appendNode('dependency')
-            dependencyNode.appendNode('groupId', 'com.github.piratecash.ethereum-kit-android')
-            dependencyNode.appendNode('artifactId', artifactNames[mod])
-            // Gradle module metadata of the KMP root publication picks the platform artifact.
-            dependencyNode.appendNode('version', rootProject.ext.libraryVersion)
-        }
-    }
-}
-
-publishing {
-    publications {
-        release(MavenPublication) {
-            groupId = "com.github.piratecash"
-            artifactId = "ethereum-kit-android"
-            version = rootProject.ext.libraryVersion
-            addLibraryModuleDependencies(pom)
-        }
-    }
-}
-
 subprojects { sub ->
     sub.tasks.withType(KotlinCompile).configureEach {
         compilerOptions {
@@ -92,7 +58,7 @@ subprojects { sub ->
     }
 
     if (libraryModules.contains(sub.name)) {
-        sub.plugins.withId('org.jetbrains.kotlin.multiplatform') { configureKitModule(sub, artifactNames[sub.name]) }
+        sub.plugins.withId('org.jetbrains.kotlin.multiplatform') { configureKitModule(sub) }
         sub.plugins.withId('androidx.room') { configureRoom(sub) }
 
         sub.afterEvaluate {
@@ -101,7 +67,7 @@ subprojects { sub ->
                     groupId = "com.github.piratecash.ethereum-kit-android"
                     version = rootProject.ext.libraryVersion
                 }
-                publications.named('kotlinMultiplatform') { artifactId = artifactNames[sub.name] }
+                publications.named('kotlinMultiplatform') { artifactId = sub.name }
             }
         }
         // AGP's "test" lifecycle task only aggregates Android unit tests; wire in the desktop target too.
@@ -110,17 +76,17 @@ subprojects { sub ->
 }
 
 // Shared by every kit module: Android + desktop JVM targets over the pre-KMP `src/main/java` layout.
-def configureKitModule(Project sub, String artifactName) {
+def configureKitModule(Project sub) {
     sub.kotlin {
         // KMP publishes a root artifact plus one per target; equal ids would collide.
         androidTarget {
             publishLibraryVariants('release')
-            mavenPublication { artifactId = "$artifactName-android" }
+            mavenPublication { artifactId = "${sub.name}-android" }
             compilerOptions { jvmTarget.set(JvmTarget.JVM_17) }
         }
         // 21, not 17: hd-wallet-kit-kmp and secp256k1-kmp-jni-jvm publish Java 21 bytecode only.
         jvm('desktop') {
-            mavenPublication { artifactId = "$artifactName-desktop" }
+            mavenPublication { artifactId = "${sub.name}-desktop" }
             compilerOptions { jvmTarget.set(JvmTarget.JVM_21) }
         }
         compilerOptions {

@@ -48,6 +48,7 @@ class MainViewModel : ViewModel() {
     lateinit var ethereumAdapter: EthereumAdapter
     lateinit var signer: Signer
     lateinit var rpcSource: RpcSource
+    lateinit var databaseKey: ByteArray
     private lateinit var transactionSource: TransactionSource
 
     lateinit var erc20Adapter: Erc20Adapter
@@ -98,13 +99,15 @@ class MainViewModel : ViewModel() {
     private suspend fun initKits() {
         val words = Configuration.defaultsWords.split(" ")
         val seed = Mnemonic().toSeed(words)
+        databaseKey = Configuration.databaseKey(seed)
         signer = Signer.getInstance(seed, Configuration.chain)
         ethereumKit = createKit()
         ethereumAdapter = EthereumAdapter(ethereumKit, signer)
+        Erc20Kit.migrateDatabases(App.instance, Configuration.chain, Configuration.walletId, databaseKey)
         erc20Adapter = Erc20Adapter(
             fromToken,
             ethereumKit,
-            Erc20Kit.getInstance(App.instance, ethereumKit, fromToken.contractAddress, Configuration.databaseKey),
+            Erc20Kit.getInstance(App.instance, ethereumKit, fromToken.contractAddress, databaseKey),
             signer
         )
         uniswapKit = UniswapKit.getInstance()
@@ -225,18 +228,20 @@ class MainViewModel : ViewModel() {
             }
         }
 
+        EthereumKit.migrateDatabase(App.instance, Configuration.chain, Configuration.walletId, databaseKey)
+
         return if (Configuration.watchAddress != null) {
             EthereumKit.getInstance(
                 App.instance, Address(Configuration.watchAddress),
                 Configuration.chain, rpcSource, transactionSource,
-                Configuration.walletId, Configuration.databaseKey
+                Configuration.walletId, databaseKey
             )
         } else {
             val words = Configuration.defaultsWords.split(" ")
             EthereumKit.getInstance(
                 App.instance, words, "",
                 Configuration.chain, rpcSource, transactionSource,
-                Configuration.walletId, Configuration.databaseKey
+                Configuration.walletId, databaseKey
             )
         }
     }
