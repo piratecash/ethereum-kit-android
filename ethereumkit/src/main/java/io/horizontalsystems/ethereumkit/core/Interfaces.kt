@@ -103,6 +103,8 @@ interface IEip20Storage {
     suspend fun getLastEvent(): Eip20Event?
     suspend fun getEarliestEip20Event(): Eip20Event?
     suspend fun save(events: List<Eip20Event>)
+    /** Inserts only events whose primary key is not stored yet; stored rows stay untouched. */
+    suspend fun saveIfAbsent(events: List<Eip20Event>)
     suspend fun getEvents(): List<Eip20Event>
     suspend fun getEventsByHashes(hashes: List<ByteArray>): List<Eip20Event>
     suspend fun deleteZeroValueDuplicate(hash: ByteArray, contractAddress: Address, from: Address, to: Address)
@@ -127,6 +129,9 @@ interface ITransactionSyncer {
     val requiresExplorer: Boolean get() = true
 
     fun getTransactionsSingle(): Single<Pair<List<Transaction>, Boolean>>
+
+    /** A token balance changed, so history may lack a recent transfer. */
+    fun onTokenBalanceChanged() {}
 }
 
 interface IMethodDecorator {

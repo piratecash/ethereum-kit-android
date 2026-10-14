@@ -95,6 +95,7 @@ class EthereumKitNetworkPauseTest {
         kit.refresh()
 
         verify(exactly = 0) { transactionSyncManager.sync() }
+        verify(exactly = 0) { transactionSyncManager.onTokenBalanceChanged() }
         verify(exactly = 0) { blockchain.refresh() }
     }
 
@@ -203,6 +204,17 @@ class EthereumKitNetworkPauseTest {
 
         kit.onUpdateAccountState(AccountState(BigInteger.ONE, 9L))
 
+        verify(exactly = 2) { transactionSyncManager.sync() }
+    }
+
+    @Test
+    fun onTokenBalanceChanged_started_notifiesSyncManagerAndRequestsExplorerSync() {
+        val kit = startedKit()
+        clock.advance(Duration.ofSeconds(31))
+
+        kit.onTokenBalanceChanged()
+
+        verify(exactly = 1) { transactionSyncManager.onTokenBalanceChanged() }
         verify(exactly = 2) { transactionSyncManager.sync() }
     }
 
@@ -367,6 +379,7 @@ class EthereumKitNetworkPauseTest {
         override suspend fun getEvents(): List<Eip20Event> = suspended(emptyList())
         override suspend fun getEventsByHashes(hashes: List<ByteArray>): List<Eip20Event> = suspended(emptyList())
         override suspend fun save(events: List<Eip20Event>) = Unit
+        override suspend fun saveIfAbsent(events: List<Eip20Event>) = Unit
         override suspend fun deleteZeroValueDuplicate(hash: ByteArray, contractAddress: Address, from: Address, to: Address) = Unit
         override suspend fun saveSyncBlockInfo(lastScannedBlock: Long?, historicalMinScannedBlock: Long?) = Unit
         override suspend fun clearForeignSyncState(chainHead: Long, margin: Long) = false

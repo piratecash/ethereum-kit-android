@@ -193,6 +193,7 @@ class Erc20Kit(
         fun addTransactionSyncer(ethereumKit: EthereumKit) {
             val transactionSaver = TransactionSaver(ethereumKit.eip20Storage)
             val ownChainRpcSource = ethereumKit.ownChainRpcSource
+            val historicalRpcSource = ownChainRpcSource?.takeIf { ethereumKit.scanHistoricalEip20 }
 
             ethereumKit.addTransactionSyncer(
                 transactionSyncer = Erc20TransactionSyncer(
@@ -207,11 +208,26 @@ class Erc20Kit(
                 )
             )
 
-            if (ethereumKit.scanHistoricalEip20 && ownChainRpcSource != null) {
+            ownChainRpcSource?.let {
+                ethereumKit.addTransactionSyncer(
+                    RecentErc20TransfersSyncer(
+                        // Own instance: the provider's caches are not thread-safe
+                        tokenTransactionProvider = rpcLogsProvider(ethereumKit, it),
+                        transactionManager = ethereumKit.transactionManager,
+                        transactionSaver = transactionSaver,
+                        syncSourceStorage = ethereumKit.transactionSyncSourceStorage,
+                        storage = ethereumKit.eip20Storage,
+                        awaitExplorerHistory = historicalRpcSource != null,
+                        log = kitLogger(ethereumKit.chain.id)
+                    )
+                )
+            }
+
+            if (historicalRpcSource != null) {
                 val historicalSyncer = HistoricalErc20Syncer(
                     transactionManager = ethereumKit.transactionManager,
                     // Separate instance to avoid shared mutable state (caches)
-                    tokenTransactionProvider = rpcLogsProvider(ethereumKit, ownChainRpcSource),
+                    tokenTransactionProvider = rpcLogsProvider(ethereumKit, historicalRpcSource),
                     storage = ethereumKit.eip20Storage,
                     transactionSaver = transactionSaver,
                     connectionManager = ethereumKit.connectionManager,

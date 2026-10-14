@@ -6,12 +6,18 @@ import io.horizontalsystems.ethereumkit.models.InternalTransaction
 import io.horizontalsystems.ethereumkit.models.Transaction
 import io.horizontalsystems.ethereumkit.models.TransactionTag
 import io.mockk.mockk
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertArrayEquals
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.math.BigInteger
 
 class TransactionManagerTest {
 
@@ -25,8 +31,8 @@ class TransactionManagerTest {
 
     @Test
     fun handle_sameTransactionConfirmedBetweenPendingReads_staysSuccessful() = runTest {
-        // A concurrent handle() confirms the swap after this one listed it as pending.
-        storage.beforeNextNonPendingRead = { manager.handle(listOf(mined(swapHash))) }
+        // The swap is confirmed after this handle() listed it as pending; handle() itself is serialized.
+        storage.beforeNextNonPendingRead = { storage.save(listOf(mined(swapHash))) }
 
         manager.handle(listOf(pending(swapHash)))
 
@@ -47,12 +53,42 @@ class TransactionManagerTest {
         assertArrayEquals(replacementHash, stored.replacedWith)
     }
 
+    @Test
+    fun handle_concurrentPartialAndCompleteRow_keepsCompleteFields() = runTest {
+        val complete = Transaction(
+            swapHash, 1L, false, blockNumber = 100, from = address, to = address,
+            value = BigInteger.TEN, gasUsed = 21_000
+        )
+        val partial = Transaction(swapHash, 1L, false, blockNumber = 100)
+        val secondHandleStarted = CompletableDeferred<Unit>()
+        storage.afterNextTransactionsRead = { secondHandleStarted.await() }
+
+        val partialHandle = async { manager.handle(listOf(partial)) }
+        runCurrent()
+        val completeHandle = async { manager.handle(listOf(complete)) }
+        runCurrent()
+        secondHandleStarted.complete(Unit)
+        awaitAll(partialHandle, completeHandle)
+
+        val stored = requireNotNull(storage.getTransaction(swapHash))
+        assertEquals(address, stored.to)
+        assertEquals(BigInteger.TEN, stored.value)
+        assertEquals(21_000L, stored.gasUsed)
+    }
+
     /** Mirrors the Room queries TransactionManager relies on; hashes compare by content like SQLite blobs. */
     private class InMemoryTransactionStorage : ITransactionStorage {
         private val rows = linkedMapOf<String, Transaction>()
         var beforeNextNonPendingRead: (suspend () -> Unit)? = null
 
-        override suspend fun getTransactions(hashes: List<ByteArray>) = hashes.mapNotNull { rows[it.toHexString()]?.detached() }
+        /** Suspends after the rows are read, as a Room read answers later with a snapshot. */
+        var afterNextTransactionsRead: (suspend () -> Unit)? = null
+
+        override suspend fun getTransactions(hashes: List<ByteArray>): List<Transaction> {
+            val snapshot = hashes.mapNotNull { rows[it.toHexString()]?.detached() }
+            afterNextTransactionsRead?.also { afterNextTransactionsRead = null }?.invoke()
+            return snapshot
+        }
         override suspend fun getTransaction(hash: ByteArray) = rows[hash.toHexString()]?.detached()
         override suspend fun getTransactionsBefore(tags: List<List<String>>, hash: ByteArray?, limit: Int?) =
             emptyList<Transaction>()

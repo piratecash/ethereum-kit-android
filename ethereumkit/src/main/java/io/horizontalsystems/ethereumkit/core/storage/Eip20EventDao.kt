@@ -18,6 +18,9 @@ interface Eip20EventDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertEip20Events(events: List<Eip20Event>)
 
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertEip20EventsIfAbsent(events: List<Eip20Event>)
+
     @Query("SELECT * FROM Eip20Event")
     suspend fun getEip20Events(): List<Eip20Event>
 

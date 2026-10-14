@@ -7,7 +7,8 @@ import io.horizontalsystems.ethereumkit.models.ProviderTokenTransaction
 class TransactionSaver(
     private val storage: IEip20Storage
 ) {
-    suspend fun handle(transactions: List<ProviderTokenTransaction>) {
+    /** With [replaceExisting] false the save is purely additive: stored events are never deleted or rewritten. */
+    suspend fun handle(transactions: List<ProviderTokenTransaction>, replaceExisting: Boolean = true) {
         if (transactions.isEmpty()) return
 
         val events = transactions.map { tx ->
@@ -22,6 +23,11 @@ class TransactionSaver(
                 tokenSymbol = tx.tokenSymbol,
                 tokenDecimal = tx.tokenDecimal
             )
+        }
+
+        if (!replaceExisting) {
+            storage.saveIfAbsent(events)
+            return
         }
 
         // Delete zero-value duplicates before saving new events with correct values

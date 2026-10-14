@@ -13,6 +13,8 @@ import io.reactivex.Single
 import io.reactivex.subjects.PublishSubject
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.rx2.rxSingle
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.math.BigInteger
 
@@ -24,6 +26,7 @@ class TransactionManager(
     private val provider: ITransactionProvider
 ) {
 
+    private val handleMutex = Mutex()
     private val fullTransactionsSubject = PublishSubject.create<Pair<List<FullTransaction>, Boolean>>()
     private val fullTransactionsWithTagsSubject = PublishSubject.create<List<TransactionWithTags>>()
 
@@ -99,8 +102,12 @@ class TransactionManager(
     }
 
     // Not cancellable: a disposed caller must not leave transactions saved without their tags.
-    suspend fun handle(transactions: List<Transaction>, initial: Boolean = false): List<FullTransaction> = withContext(NonCancellable) {
-        if (transactions.isEmpty()) return@withContext listOf()
+    // Locked: save() reads, merges and replaces rows, so concurrent writers would overwrite each other's fields.
+    suspend fun handle(transactions: List<Transaction>, initial: Boolean = false): List<FullTransaction> =
+        withContext(NonCancellable) { handleMutex.withLock { handleLocked(transactions, initial) } }
+
+    private suspend fun handleLocked(transactions: List<Transaction>, initial: Boolean): List<FullTransaction> {
+        if (transactions.isEmpty()) return listOf()
 
         save(transactions)
         val failedTransactions = failPendingTransactions()
@@ -129,7 +136,7 @@ class TransactionManager(
         fullTransactionsSubject.onNext(Pair(fullTransactions, initial))
         fullTransactionsWithTagsSubject.onNext(transactionWithTags)
 
-        fullTransactions
+        return fullTransactions
     }
 
     fun etherTransferTransactionData(address: Address, value: BigInteger): TransactionData {
@@ -172,7 +179,7 @@ class TransactionManager(
         val processedTransactions: MutableList<Transaction> = mutableListOf()
 
         for (nonPendingTransaction in nonPendingTransactions) {
-            // The pending list may be stale: a concurrent handle() can confirm the same transaction in between.
+            // A transaction never replaces itself, even if the pending list went stale before this read.
             val duplicateTransactions = pendingTransactions.filter {
                 it.nonce == nonPendingTransaction.nonce && !it.hash.contentEquals(nonPendingTransaction.hash)
             }

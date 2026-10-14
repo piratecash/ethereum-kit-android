@@ -267,7 +267,8 @@ class RpcLogsTokenTransactionProvider(
                 gasUsed = receipt?.gasUsed ?: 0,
                 cumulativeGasUsed = receipt?.cumulativeGasUsed ?: 0,
                 input = tx?.input,
-                transactionSender = tx?.from
+                transactionSender = tx?.from,
+                tokenMetaResolved = tokenMeta.resolved
             )
         } catch (e: Throwable) {
             logger.w(e) { "Failed to convert log to transaction" }
@@ -282,7 +283,7 @@ class RpcLogsTokenTransactionProvider(
         val symbol = fetchTokenString(contractAddress, SYMBOL_METHOD_ID) ?: "Unknown"
         val decimals = fetchTokenDecimals(contractAddress)
 
-        val meta = TokenMeta(name, symbol, decimals)
+        val meta = TokenMeta(name, symbol, decimals ?: DEFAULT_DECIMALS, resolved = decimals != null)
         tokenMetaCache[contractAddress] = meta
         return meta
     }
@@ -297,17 +298,17 @@ class RpcLogsTokenTransactionProvider(
         }
     }
 
-    private fun fetchTokenDecimals(contractAddress: Address): Int {
+    private fun fetchTokenDecimals(contractAddress: Address): Int? {
         return try {
             val rpc = CallJsonRpc(contractAddress, DECIMALS_METHOD_ID, DefaultBlockParameter.Latest)
             val result = executeRpcWithFallback(rpc)
             if (result.isNotEmpty()) {
                 result.toBigInteger().toInt()
             } else {
-                18
+                DEFAULT_DECIMALS
             }
         } catch (e: Throwable) {
-            18
+            null
         }
     }
 
@@ -420,12 +421,14 @@ class RpcLogsTokenTransactionProvider(
     data class TokenMeta(
         val name: String,
         val symbol: String,
-        val decimals: Int
+        val decimals: Int,
+        val resolved: Boolean
     )
 
     companion object {
         private const val INITIAL_CHUNK_SIZE = 50_000L
         private const val MIN_CHUNK_SIZE = 4999L
+        private const val DEFAULT_DECIMALS = 18
 
         // Transfer(address indexed from, address indexed to, uint256 value)
         private const val TRANSFER_EVENT_SIGNATURE =

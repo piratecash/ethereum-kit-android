@@ -158,6 +158,40 @@ class TransactionSyncManagerTest {
         assertTrue(syncManager.syncState is EthereumKit.SyncState.NotSynced)
     }
 
+    @Test
+    fun onTokenBalanceChanged_notifiesEverySyncer_andRunsRpcOnlySyncers() {
+        val syncManager = TransactionSyncManager(transactionManager(FakeTransactionStorage()), KermitLogger.withTag("Test"))
+        val explorer = RecordingSyncer(requiresExplorer = true)
+        val rpcOnly = RecordingSyncer(requiresExplorer = false)
+        syncManager.add(explorer)
+        syncManager.add(rpcOnly)
+        val states = syncManager.syncStateAsync.test()
+
+        syncManager.onTokenBalanceChanged()
+
+        assertEquals(1, explorer.tokenBalanceChanges)
+        assertEquals(1, rpcOnly.tokenBalanceChanges)
+        assertEquals(0, explorer.calls)
+        assertEquals(1, rpcOnly.calls)
+        states.assertNoValues()
+    }
+
+    @Test
+    fun onTokenBalanceChanged_fullSyncInFlight_doesNotStartRpcOnlyRun() {
+        val syncManager = TransactionSyncManager(transactionManager(FakeTransactionStorage()), KermitLogger.withTag("Test"))
+        val explorer = RecordingSyncer(requiresExplorer = true, result = Single.never())
+        val rpcOnly = RecordingSyncer(requiresExplorer = false)
+        syncManager.add(explorer)
+        syncManager.add(rpcOnly)
+        syncManager.sync()
+
+        syncManager.onTokenBalanceChanged()
+
+        assertEquals(1, rpcOnly.tokenBalanceChanges)
+        assertEquals(1, rpcOnly.calls) // only the in-flight full sync's call
+        assertTrue(syncManager.syncState is EthereumKit.SyncState.Syncing)
+    }
+
     private class RecordingSyncer(
         override val requiresExplorer: Boolean,
         private val result: Single<Pair<List<Transaction>, Boolean>> =
@@ -165,10 +199,16 @@ class TransactionSyncManagerTest {
     ) : ITransactionSyncer {
         var calls = 0
             private set
+        var tokenBalanceChanges = 0
+            private set
 
         override fun getTransactionsSingle(): Single<Pair<List<Transaction>, Boolean>> {
             calls++
             return result
+        }
+
+        override fun onTokenBalanceChanged() {
+            tokenBalanceChanges++
         }
     }
 

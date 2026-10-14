@@ -388,6 +388,7 @@ class EthereumKit(
     fun onTokenBalanceChanged() {
         if (!started.get()) return
 
+        transactionSyncManager.onTokenBalanceChanged()
         requestFullSync(Reason.TokenBalanceChanged)
     }
 

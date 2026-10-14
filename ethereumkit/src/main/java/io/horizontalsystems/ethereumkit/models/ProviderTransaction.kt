@@ -43,7 +43,9 @@ data class ProviderTokenTransaction(
     var cumulativeGasUsed: Long,
     val input: ByteArray?,
     /** Sender of the transaction. `from` above is the token transfer's sender — for a swap, the pool. */
-    val transactionSender: Address? = null
+    val transactionSender: Address? = null,
+    /** False when the token's decimals() call failed and [tokenDecimal] is a guess. */
+    val tokenMetaResolved: Boolean = true
 )
 
 data class ProviderInternalTransaction(

@@ -93,6 +93,11 @@ class TransactionSyncManager(
             })
     }
 
+    fun onTokenBalanceChanged() {
+        syncers.forEach { it.onTokenBalanceChanged() }
+        syncRpcOnly()
+    }
+
     private fun zipped(syncers: List<ITransactionSyncer>): Single<Pair<List<Transaction>, Boolean>> =
         Single.zip(syncers.map {
             it.getTransactionsSingle()

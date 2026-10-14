@@ -26,6 +26,10 @@ class Eip20Storage(
         erc20EventDao.insertEip20Events(events)
     }
 
+    override suspend fun saveIfAbsent(events: List<Eip20Event>) {
+        erc20EventDao.insertEip20EventsIfAbsent(events)
+    }
+
     override suspend fun getEvents(): List<Eip20Event> =
         erc20EventDao.getEip20Events()
 

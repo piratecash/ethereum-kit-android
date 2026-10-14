@@ -343,6 +343,8 @@ internal class FakeEip20Storage(
 ) : IEip20Storage {
     var savedEvents: List<Eip20Event> = emptyList()
         private set
+    var savedIfAbsentEvents: List<Eip20Event> = emptyList()
+        private set
     var savedLastScannedBlock: Long? = null
         private set
     var saveSyncBlockInfoCallCount = 0
@@ -352,6 +354,9 @@ internal class FakeEip20Storage(
     override suspend fun getEarliestEip20Event(): Eip20Event? = null
     override suspend fun save(events: List<Eip20Event>) {
         savedEvents = events
+    }
+    override suspend fun saveIfAbsent(events: List<Eip20Event>) {
+        savedIfAbsentEvents = events
     }
     override suspend fun getEvents(): List<Eip20Event> = savedEvents
     override suspend fun getEventsByHashes(hashes: List<ByteArray>): List<Eip20Event> = emptyList()
