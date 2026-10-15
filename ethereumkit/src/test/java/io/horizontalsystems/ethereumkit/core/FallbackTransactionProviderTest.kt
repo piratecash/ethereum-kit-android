@@ -3,15 +3,18 @@ package io.horizontalsystems.ethereumkit.core
 import co.touchlab.kermit.Logger
 import io.horizontalsystems.ethereumkit.models.Address
 import io.horizontalsystems.ethereumkit.models.ProviderTransaction
+import io.horizontalsystems.ethereumkit.network.EtherscanService
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import io.reactivex.Single
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import java.io.IOException
 import java.math.BigInteger
 
 class FallbackTransactionProviderTest {
@@ -60,6 +63,45 @@ class FallbackTransactionProviderTest {
 
         assertEquals(FALLBACK_ERROR, error?.message)
         assertTrue(provider.statusInfo.getValue("Last explorer error").toString().contains(FALLBACK_HOST))
+    }
+
+    @Test
+    fun getTransactions_sourceRefusedWithText_statusLineHasText() {
+        val refusal = "Free API access is not supported for this chain"
+        every { primary.getTransactions(START_BLOCK) } returns Single.error(EtherscanService.RequestError.InvalidApiKey(refusal))
+        every { fallback.getTransactions(START_BLOCK) } returns Single.just(emptyList())
+        val provider = provider()
+
+        provider.getTransactions(START_BLOCK).blockingGet()
+
+        assertTrue(provider.statusInfo.getValue("Last explorer error").toString().contains(refusal))
+    }
+
+    @Test
+    fun getTransactions_ioErrorWithKeyInUrl_statusLineHasNoUrlOrKey() {
+        every { primary.getTransactions(START_BLOCK) } returns Single.error(IOException("failed https://x/api?apikey=SECRET"))
+        every { fallback.getTransactions(START_BLOCK) } returns Single.just(emptyList())
+        val provider = provider()
+
+        provider.getTransactions(START_BLOCK).blockingGet()
+
+        val status = provider.statusInfo.getValue("Last explorer error").toString()
+        assertFalse(status.contains("SECRET"))
+        assertFalse(status.contains("apikey"))
+    }
+
+    @Test
+    fun getTransactions_responseErrorWithKeyInBody_statusLineHasClassNameOnly() {
+        val error = EtherscanService.RequestError.ResponseError("Unexpected response: {\"url\":\"apikey=SECRET\"}")
+        every { primary.getTransactions(START_BLOCK) } returns Single.error(error)
+        every { fallback.getTransactions(START_BLOCK) } returns Single.just(emptyList())
+        val provider = provider()
+
+        provider.getTransactions(START_BLOCK).blockingGet()
+
+        val status = provider.statusInfo.getValue("Last explorer error").toString()
+        assertTrue(status.contains("ResponseError"))
+        assertFalse(status.contains("SECRET"))
     }
 
     @Test

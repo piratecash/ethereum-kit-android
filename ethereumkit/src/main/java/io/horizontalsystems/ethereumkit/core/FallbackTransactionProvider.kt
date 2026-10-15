@@ -1,6 +1,7 @@
 package io.horizontalsystems.ethereumkit.core
 
 import co.touchlab.kermit.Logger
+import io.horizontalsystems.ethereumkit.network.EtherscanService
 import io.horizontalsystems.ethereumkit.models.ProviderEip1155Transaction
 import io.horizontalsystems.ethereumkit.models.ProviderEip721Transaction
 import io.horizontalsystems.ethereumkit.models.ProviderInternalTransaction
@@ -58,17 +59,25 @@ class FallbackTransactionProvider(
         sources.indices.drop(1)
             .fold(attempt(sources.first(), call)) { chain, index ->
                 chain.onErrorResumeNext { error: Throwable ->
-                    log.w { "${sources[index - 1].host} failed (${error.errorName()}), switching to ${sources[index].host}" }
+                    log.w { "${sources[index - 1].host} failed (${error.describe()}), switching to ${sources[index].host}" }
                     attempt(sources[index], call)
                 }
             }
-            .doOnError { log.w { "all transaction sources failed (${it.errorName()})" } }
+            .doOnError { log.w { "all transaction sources failed (${it.describe()})" } }
 
     private fun <T> attempt(source: Source, call: (ITransactionProvider) -> Single<T>): Single<T> =
         call(source.provider)
             .doOnSuccess { lastSuccessfulHost = source.host }
-            .doOnError { lastError = "${Instant.now()} ${source.host} ${it.errorName()}" }
+            .doOnError { lastError = "${Instant.now()} ${source.host} ${it.describe()}" }
 
-    // Only the error class: an OkHttp message can carry the full URL, and that carries the API key.
-    private fun Throwable.errorName() = javaClass.simpleName
+    // Only the error class, except the key-free refusal text of InvalidApiKey: any other message
+    // (OkHttp, ResponseError) can carry the full URL, and that carries the API key.
+    private fun Throwable.describe(): String {
+        val refusal = (this as? EtherscanService.RequestError.InvalidApiKey)?.message
+        return if (refusal.isNullOrBlank()) javaClass.simpleName else "${javaClass.simpleName}: ${refusal.take(MAX_REFUSAL_LENGTH)}"
+    }
+
+    private companion object {
+        const val MAX_REFUSAL_LENGTH = 160
+    }
 }

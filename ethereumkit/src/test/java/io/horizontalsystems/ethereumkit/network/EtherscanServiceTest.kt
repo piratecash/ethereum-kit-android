@@ -10,6 +10,7 @@ import okhttp3.mockwebserver.RecordedRequest
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -70,6 +71,48 @@ class EtherscanServiceTest {
 
         assertEquals(listOf("10"), response.result.map { it.getValue("blockNumber") })
         assertEquals(2, server.requestCount)
+    }
+
+    @Test
+    fun getTransactionList_freePlanRefusal_retriesWithNextApiKey() {
+        enqueueRefusal("NOTOK", "Free API access is not supported for this chain. Please upgrade your api plan.")
+        enqueueTransactionList()
+
+        val response = service().getTransactionList(ADDRESS, 0).blockingGet()
+
+        assertEquals(listOf("10"), response.result.map { it.getValue("blockNumber") })
+        assertEquals(2, server.requestCount)
+        assertNotEquals(apiKeyOf(server.takeRequest()), apiKeyOf(server.takeRequest()))
+    }
+
+    @Test
+    fun getTransactionList_unknownRefusalWithOtherMessage_retriesWithNextApiKey() {
+        enqueueRefusal("Error!", "Some future wording")
+        enqueueTransactionList()
+
+        val response = service().getTransactionList(ADDRESS, 0).blockingGet()
+
+        assertEquals(listOf("10"), response.result.map { it.getValue("blockNumber") })
+        assertEquals(2, server.requestCount)
+    }
+
+    @Test
+    fun getTransactionList_everyKeyRefused_failsWithRefusalTextAfterEachKeyOnce() {
+        repeat(2) { enqueueRefusal("NOTOK", REFUSAL) }
+
+        val error = invalidApiKeyOf(service())
+
+        assertEquals(REFUSAL, error.message)
+        assertEquals(2, server.requestCount)
+    }
+
+    @Test
+    fun getTransactionList_refusalContainsApiKey_messageHasNoKey() {
+        repeat(2) { enqueueRefusal("NOTOK", "Key $FIRST_KEY and $SECOND_KEY refused") }
+
+        val error = invalidApiKeyOf(service())
+
+        assertEquals("Key *** and *** refused", error.message)
     }
 
     @Test
@@ -172,6 +215,10 @@ class EtherscanServiceTest {
     }
 
     private fun assertFailsWithInvalidApiKey(service: EtherscanService) {
+        invalidApiKeyOf(service)
+    }
+
+    private fun invalidApiKeyOf(service: EtherscanService): EtherscanService.RequestError.InvalidApiKey {
         val error = try {
             service.getTransactionList(ADDRESS, 0).blockingGet()
             null
@@ -179,11 +226,16 @@ class EtherscanServiceTest {
             thrown
         }
 
-        assertTrue(
-            "expected InvalidApiKey, got $error",
-            generateSequence(error) { it.cause }.any { it is EtherscanService.RequestError.InvalidApiKey }
-        )
+        val invalidApiKey = generateSequence(error) { it.cause }
+            .filterIsInstance<EtherscanService.RequestError.InvalidApiKey>()
+            .firstOrNull()
+        assertNotNull("expected InvalidApiKey, got $error", invalidApiKey)
+        return requireNotNull(invalidApiKey)
     }
+
+    private fun enqueueRefusal(message: String, text: String) = server.enqueue(
+        jsonResponse(200, """{"status":"0","message":"$message","result":"$text"}""")
+    )
 
     private fun service(apiKeys: List<String> = listOf(FIRST_KEY, SECOND_KEY)) =
         EtherscanService(server.url("/").toString(), apiKeys, CHAIN_ID)
@@ -203,6 +255,7 @@ class EtherscanServiceTest {
         private const val FIRST_KEY = "key-one"
         private const val SECOND_KEY = "key-two"
         private const val CHAIN_ID = 1
+        private const val REFUSAL = "Free API access is not supported for this chain"
         private const val HASH =
             "0x0000000000000000000000000000000000000000000000000000000000000001"
         private val ADDRESS = Address("0x0000000000000000000000000000000000000001")

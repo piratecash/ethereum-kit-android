@@ -177,16 +177,13 @@ class EtherscanService(
             // A "status 0" envelope with an array result is a normal empty list, not an error text.
             val resultElement = responseObj["result"]
             val errorText = resultElement?.takeIf { it.isJsonPrimitive }?.asString
-            if (status == "0" && message == "NOTOK" && errorText != null) {
+            if (status == "0" && errorText != null) {
                 // The wording varies ("Max rate limit reached", "Max calls per sec rate limit
                 // reached (3/sec)", daily variants), so match the stable part.
                 if (errorText.contains(RATE_LIMIT_MARKER, ignoreCase = true)) {
                     throw RequestError.RateLimitExceed()
-                } else if (errorText.startsWith("Invalid API Key") ||
-                    errorText.startsWith("Too many invalid api key attempts")
-                ) {
-                    throw RequestError.InvalidApiKey()
                 }
+                throw RequestError.InvalidApiKey(errorText.withoutApiKeys())
             }
             val result: List<Map<String, String>> = gson.fromJson(
                 resultElement,
@@ -203,6 +200,8 @@ class EtherscanService(
         }
     }
 
+    private fun String.withoutApiKeys() = apiKeys.fold(this) { text, key -> text.replace(key, "***") }
+
     private fun <T> Single<T>.retryInCaseErrorWithLogging(methodName: String) =
         this.onErrorResumeNext { error: Throwable -> Single.error(error.toRequestErrorOrSelf()) }
             .doOnError { error ->
@@ -212,7 +211,7 @@ class EtherscanService(
                         log.w { "$host $methodName: rate limit exceeded (key ...$currentApiKey)" }
                     }
                     is RequestError.InvalidApiKey -> {
-                        log.w { "$host $methodName: key rejected or out of credits (key ...$currentApiKey)" }
+                        log.w { "$host $methodName: key refused the request (key ...$currentApiKey)" }
                     }
                     is RequestError.ResponseError -> {
                         log.w { "$host $methodName: unexpected response envelope" }
@@ -231,7 +230,7 @@ class EtherscanService(
     open class RequestError(message: String? = null) : Exception(message ?: "") {
         class ResponseError(message: String) : RequestError(message)
         class RateLimitExceed : RequestError()
-        class InvalidApiKey : RequestError()
+        class InvalidApiKey(message: String? = null) : RequestError(message)
     }
 
     companion object {
