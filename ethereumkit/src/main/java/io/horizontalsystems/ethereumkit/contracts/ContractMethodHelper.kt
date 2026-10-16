@@ -91,6 +91,10 @@ object ContractMethodHelper {
                     parsedArguments.add(bytes32Array)
                     position += 32
                 }
+                BytesArray::class -> {
+                    parsedArguments.add(parseBytesArray(inputArguments.wordAt(position), inputArguments))
+                    position += 32
+                }
                 is DynamicStruct -> {
                     val argumentsPosition = inputArguments.copyOfRange(position, position + 32).toInt()
                     val structParameterData = inputArguments.copyOfRange(argumentsPosition, inputArguments.size)
@@ -127,9 +131,41 @@ object ContractMethodHelper {
     }
 
     private fun parseByteArray(startPosition: Int, inputArguments: ByteArray): ByteArray {
-        val dataStartPosition = startPosition + 32
-        val size = inputArguments.copyOfRange(startPosition, dataStartPosition).toInt()
-        return inputArguments.copyOfRange(dataStartPosition, dataStartPosition + size)
+        val size = inputArguments.wordAt(startPosition)
+        return inputArguments.range(startPosition + 32, size)
+    }
+
+    private fun parseBytesArray(startPosition: Int, inputArguments: ByteArray): BytesArray {
+        val headStart = startPosition + 32
+        val count = inputArguments.wordAt(startPosition)
+        if (count > (inputArguments.size - headStart) / 32) {
+            throw IndexOutOfBoundsException("bytes[] count $count exceeds the data")
+        }
+        // Canonical encoding never shares tails, so a larger total means offsets point at one tail repeatedly.
+        var totalSize = 0
+        val elements = List(count) { i ->
+            parseByteArray(headStart + inputArguments.wordAt(headStart + 32 * i), inputArguments).also {
+                totalSize += it.size
+                if (totalSize > inputArguments.size) throw IndexOutOfBoundsException("bytes[] elements exceed the data")
+            }
+        }
+        return BytesArray(elements)
+    }
+
+    // Unlike toInt(), which keeps the low 32 bits, rejects a word that does not fit instead of truncating it.
+    private fun ByteArray.wordAt(position: Int): Int {
+        val word = range(position, 32).toBigInteger()
+        if (word.bitLength() > 31) throw IndexOutOfBoundsException("ABI word does not fit in Int")
+        return word.toInt()
+    }
+
+    // createMethodFromInput treats only IndexOutOfBoundsException as malformed input; copyOfRange would throw
+    // IllegalArgumentException for an inverted range.
+    private fun ByteArray.range(from: Int, length: Int): ByteArray {
+        if (from < 0 || length < 0 || from > size - length) {
+            throw IndexOutOfBoundsException("Range $from+$length is outside $size bytes")
+        }
+        return copyOfRange(from, from + length)
     }
 
     private fun parseAddressArray(positionStart: Int, inputArguments: ByteArray): List<Address> {
