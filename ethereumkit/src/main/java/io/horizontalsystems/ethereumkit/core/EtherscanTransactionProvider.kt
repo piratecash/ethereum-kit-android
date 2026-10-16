@@ -48,13 +48,13 @@ class EtherscanTransactionProvider(
             .map { response ->
                 response.result.mapNotNull { internalTx ->
                     try {
-                        val hash = internalTx.getValue("hash").hexStringToByteArray()
+                        val hash = internalTx.getHashOrTransactionHash().hexStringToByteArray()
                         val blockNumber = internalTx.getValue("blockNumber").toLong()
                         val timestamp = internalTx.getValue("timeStamp").toLong()
                         val from = Address(internalTx.getValue("from"))
                         val to = Address(internalTx.getValue("to"))
                         val value = internalTx.getValue("value").toBigInteger()
-                        val traceId = internalTx.getValue("traceId")
+                        val traceId = internalTx.getTraceId()
 
                         ProviderInternalTransaction(hash, blockNumber, timestamp, from, to, value, traceId)
                     } catch (throwable: Throwable) {
@@ -74,7 +74,7 @@ class EtherscanTransactionProvider(
                         val from = Address(internalTx.getValue("from"))
                         val to = Address(internalTx.getValue("to"))
                         val value = internalTx.getValue("value").toBigInteger()
-                        val traceId = internalTx.getValue("traceId")
+                        val traceId = internalTx.getTraceId()
 
                         ProviderInternalTransaction(hash, blockNumber, timestamp, from, to, value, traceId)
                     } catch (throwable: Throwable) {
@@ -108,8 +108,24 @@ class EtherscanTransactionProvider(
                         val cumulativeGasUsed = tx.getValue("cumulativeGasUsed").toLong()
 
                         ProviderTokenTransaction(
-                            blockNumber, timestamp, hash, nonce, blockHash, from, contractAddress, to, value, tokenName, tokenSymbol, tokenDecimal,
-                            transactionIndex, gasLimit, gasPrice, gasUsed, cumulativeGasUsed
+                            blockNumber = blockNumber,
+                            timestamp = timestamp,
+                            hash = hash,
+                            nonce = nonce,
+                            blockHash = blockHash,
+                            from = from,
+                            contractAddress = contractAddress,
+                            to = to,
+                            value = value,
+                            tokenName = tokenName,
+                            tokenSymbol = tokenSymbol,
+                            tokenDecimal = tokenDecimal,
+                            transactionIndex = transactionIndex,
+                            gasLimit = gasLimit,
+                            gasPrice = gasPrice,
+                            gasUsed = gasUsed,
+                            cumulativeGasUsed = cumulativeGasUsed,
+                            input = null
                         )
 
                     } catch (throwable: Throwable) {
@@ -221,5 +237,9 @@ class EtherscanTransactionProvider(
 
     private fun getAddressOrNull(addressString: String?): Address? =
         if (!addressString.isNullOrEmpty()) Address(addressString) else null
+
+    // Blockscout names an internal transaction's parent hash/trace differently from Etherscan.
+    private fun Map<String, String>.getHashOrTransactionHash(): String = this["hash"] ?: getValue("transactionHash")
+    private fun Map<String, String>.getTraceId(): String = this["traceId"] ?: getValue("index")
 
 }

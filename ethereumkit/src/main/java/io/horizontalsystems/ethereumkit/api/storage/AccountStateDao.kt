@@ -7,9 +7,9 @@ import io.horizontalsystems.ethereumkit.api.models.AccountState
 interface AccountStateDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    fun insert(accountState: AccountState)
+    suspend fun insert(accountState: AccountState)
 
     @Query("SELECT * FROM AccountState LIMIT 1")
-    fun getAccountState(): AccountState?
+    suspend fun getAccountState(): AccountState?
 
 }

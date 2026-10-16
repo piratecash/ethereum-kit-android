@@ -10,9 +10,9 @@ import io.horizontalsystems.erc20kit.models.TokenBalance
 interface TokenBalanceDao {
 
     @Query("SELECT * FROM TokenBalance LIMIT 1")
-    fun getBalance(): TokenBalance?
+    suspend fun getBalance(): TokenBalance?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    fun insert(balance: TokenBalance)
+    suspend fun insert(balance: TokenBalance)
 
 }

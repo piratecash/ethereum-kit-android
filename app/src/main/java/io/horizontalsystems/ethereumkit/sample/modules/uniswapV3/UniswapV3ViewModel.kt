@@ -1,6 +1,5 @@
 package io.horizontalsystems.ethereumkit.sample.modules.uniswapV3
 
-import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -8,6 +7,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import io.horizontalsystems.ethereumkit.core.EthereumKit
+import io.horizontalsystems.ethereumkit.core.kitLogger
 import io.horizontalsystems.ethereumkit.core.signer.Signer
 import io.horizontalsystems.ethereumkit.models.GasPrice
 import io.horizontalsystems.ethereumkit.models.RpcSource
@@ -37,11 +37,12 @@ class UniswapV3ViewModel(
 ) : ViewModel() {
 
     private val chain = ethereumKit.chain
+    private val log = kitLogger(chain.id)
     private var uniswapV3Kit = UniswapV3Kit.getInstance(DexType.PancakeSwap)
     private var gasPrice: GasPrice = GasPrice.Legacy(20_000_000_000)
 
-    val fromToken: Erc20Token? = Configuration.erc20Tokens[5]
-    val toToken: Erc20Token? = Configuration.erc20Tokens[3]
+    val fromToken: Erc20Token? = Configuration.erc20Tokens[0]
+    val toToken: Erc20Token? = Configuration.erc20Tokens[1]
 
     private val fromUniswapToken = uniswapToken(fromToken)
     private val toUniswapToken = uniswapToken(toToken)
@@ -88,7 +89,7 @@ class UniswapV3ViewModel(
             allowance = try {
                 erc20Adapter.allowance(uniswapV3Kit.routerAddress(chain)).await().stripTrailingZeros()
             } catch (it: Throwable) {
-                Log.e("AAA", "allowance error", it)
+                log.e(it) { "allowance error" }
                 BigDecimal.ZERO
             }
         }
@@ -109,13 +110,13 @@ class UniswapV3ViewModel(
 
             try {
                 val gasLimit = ethereumKit.estimateGas(transactionData, gasPrice).await()
-                Log.e("AAA", "gas limit: $gasLimit")
+                log.d { "gas limit: $gasLimit" }
                 val rawTransaction = ethereumKit.rawTransaction(transactionData, gasPrice, gasLimit).await()
                 val signature = signer.signature(rawTransaction)
                 val fullTransaction = ethereumKit.send(rawTransaction, signature).await()
-                Log.e("AAA", "approve: ${fullTransaction.transaction.hash}")
+                log.d { "approve: ${fullTransaction.transaction.hash}" }
             } catch (it: Throwable) {
-                Log.e("AAA", "approve ERROR = ${it.message}")
+                log.e(it) { "approve ERROR" }
             }
             syncAllowance()
 
@@ -221,7 +222,7 @@ class UniswapV3ViewModel(
                 error = error,
                 allowance = allowance
             )
-            Log.e("AAA", "swapState: $swapState")
+            log.d { "swapState: ${swapState.javaClass.simpleName}" }
         }
     }
 
@@ -236,12 +237,12 @@ class UniswapV3ViewModel(
 
             try {
                 val gasLimit = ethereumKit.estimateGas(transactionData, gasPrice).await()
-                Log.e("AAA", "gas limit: $gasLimit")
+                log.d { "gas limit: $gasLimit" }
                 val rawTransaction = ethereumKit.rawTransaction(transactionData, gasPrice, gasLimit).await()
                 val signature = signer.signature(rawTransaction)
 //                val fullTransaction = ethereumKit.send(rawTransaction, signature).await()
 //                error = null
-//                Log.e("AAA", "swap SUCCESS, txHash=${fullTransaction.transaction.hash.toHexString()}")
+
             } catch (it: Throwable) {
                 error = it
             }

@@ -1,12 +1,12 @@
 package io.horizontalsystems.erc20kit.core.room
 
-import android.content.Context
 import androidx.room.Database
-import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import io.horizontalsystems.erc20kit.models.TokenBalance
+import io.horizontalsystems.ethereumkit.PlatformContext
 import io.horizontalsystems.ethereumkit.api.storage.RoomTypeConverters
+import io.horizontalsystems.ethereumkit.database.kitDatabaseBuilder
 
 @Database(entities = [TokenBalance::class], version = 5, exportSchema = true)
 @TypeConverters(RoomTypeConverters::class)
@@ -16,12 +16,11 @@ abstract class Erc20KitDatabase : RoomDatabase() {
 
     companion object {
 
-        fun getInstance(context: Context, databaseName: String): Erc20KitDatabase {
-            return Room.databaseBuilder(context, Erc20KitDatabase::class.java, databaseName)
-                    .fallbackToDestructiveMigration()
-                    .allowMainThreadQueries()
-                    .build()
-        }
+        fun getInstance(context: PlatformContext, databaseName: String, databaseKey: ByteArray): Erc20KitDatabase =
+            build(kitDatabaseBuilder(context, databaseName, databaseKey))
+
+        internal fun build(builder: RoomDatabase.Builder<Erc20KitDatabase>): Erc20KitDatabase =
+            builder.fallbackToDestructiveMigration(dropAllTables = false).build()
     }
 
 }

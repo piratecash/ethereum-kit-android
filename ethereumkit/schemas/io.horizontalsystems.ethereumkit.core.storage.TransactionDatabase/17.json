@@ -1,0 +1,278 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 17,
+    "identityHash": "1af1d62c3bef8d981770a62efa7bfa7d",
+    "entities": [
+      {
+        "tableName": "Transaction",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`hash` BLOB NOT NULL, `timestamp` INTEGER NOT NULL, `isFailed` INTEGER NOT NULL, `blockNumber` INTEGER, `transactionIndex` INTEGER, `from` BLOB, `to` BLOB, `value` TEXT, `input` BLOB, `nonce` INTEGER, `gasPrice` INTEGER, `maxFeePerGas` INTEGER, `maxPriorityFeePerGas` INTEGER, `gasLimit` INTEGER, `gasUsed` INTEGER, `replacedWith` BLOB, PRIMARY KEY(`hash`))",
+        "fields": [
+          {
+            "fieldPath": "hash",
+            "columnName": "hash",
+            "affinity": "BLOB",
+            "notNull": true
+          },
+          {
+            "fieldPath": "timestamp",
+            "columnName": "timestamp",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isFailed",
+            "columnName": "isFailed",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "blockNumber",
+            "columnName": "blockNumber",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "transactionIndex",
+            "columnName": "transactionIndex",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "from",
+            "columnName": "from",
+            "affinity": "BLOB"
+          },
+          {
+            "fieldPath": "to",
+            "columnName": "to",
+            "affinity": "BLOB"
+          },
+          {
+            "fieldPath": "value",
+            "columnName": "value",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "input",
+            "columnName": "input",
+            "affinity": "BLOB"
+          },
+          {
+            "fieldPath": "nonce",
+            "columnName": "nonce",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "gasPrice",
+            "columnName": "gasPrice",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "maxFeePerGas",
+            "columnName": "maxFeePerGas",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "maxPriorityFeePerGas",
+            "columnName": "maxPriorityFeePerGas",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "gasLimit",
+            "columnName": "gasLimit",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "gasUsed",
+            "columnName": "gasUsed",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "replacedWith",
+            "columnName": "replacedWith",
+            "affinity": "BLOB"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "hash"
+          ]
+        }
+      },
+      {
+        "tableName": "InternalTransaction",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`hash` BLOB NOT NULL, `traceId` TEXT NOT NULL, `blockNumber` INTEGER NOT NULL, `from` BLOB NOT NULL, `to` BLOB NOT NULL, `value` TEXT NOT NULL, PRIMARY KEY(`hash`, `traceId`))",
+        "fields": [
+          {
+            "fieldPath": "hash",
+            "columnName": "hash",
+            "affinity": "BLOB",
+            "notNull": true
+          },
+          {
+            "fieldPath": "traceId",
+            "columnName": "traceId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "blockNumber",
+            "columnName": "blockNumber",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "from",
+            "columnName": "from",
+            "affinity": "BLOB",
+            "notNull": true
+          },
+          {
+            "fieldPath": "to",
+            "columnName": "to",
+            "affinity": "BLOB",
+            "notNull": true
+          },
+          {
+            "fieldPath": "value",
+            "columnName": "value",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "hash",
+            "traceId"
+          ]
+        }
+      },
+      {
+        "tableName": "TransactionTag",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`name` TEXT NOT NULL, `hash` BLOB NOT NULL, PRIMARY KEY(`name`, `hash`))",
+        "fields": [
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "hash",
+            "columnName": "hash",
+            "affinity": "BLOB",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "name",
+            "hash"
+          ]
+        }
+      },
+      {
+        "tableName": "TransactionSyncerState",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`syncerId` TEXT NOT NULL, `lastBlockNumber` INTEGER NOT NULL, PRIMARY KEY(`syncerId`))",
+        "fields": [
+          {
+            "fieldPath": "syncerId",
+            "columnName": "syncerId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastBlockNumber",
+            "columnName": "lastBlockNumber",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "syncerId"
+          ]
+        }
+      },
+      {
+        "tableName": "TransactionSyncSource",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`transactionHash` BLOB NOT NULL, `source` TEXT NOT NULL, PRIMARY KEY(`transactionHash`))",
+        "fields": [
+          {
+            "fieldPath": "transactionHash",
+            "columnName": "transactionHash",
+            "affinity": "BLOB",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source",
+            "columnName": "source",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "transactionHash"
+          ]
+        }
+      },
+      {
+        "tableName": "RawTransactionBroadcastRecord",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`hash` BLOB NOT NULL, `rawTransaction` BLOB NOT NULL, `firstSendTime` INTEGER NOT NULL, `lastSendTime` INTEGER NOT NULL, `retriesCount` INTEGER NOT NULL, `expiresAt` INTEGER NOT NULL, PRIMARY KEY(`hash`))",
+        "fields": [
+          {
+            "fieldPath": "hash",
+            "columnName": "hash",
+            "affinity": "BLOB",
+            "notNull": true
+          },
+          {
+            "fieldPath": "rawTransaction",
+            "columnName": "rawTransaction",
+            "affinity": "BLOB",
+            "notNull": true
+          },
+          {
+            "fieldPath": "firstSendTime",
+            "columnName": "firstSendTime",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastSendTime",
+            "columnName": "lastSendTime",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "retriesCount",
+            "columnName": "retriesCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "expiresAt",
+            "columnName": "expiresAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "hash"
+          ]
+        }
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '1af1d62c3bef8d981770a62efa7bfa7d')"
+    ]
+  }
+}
