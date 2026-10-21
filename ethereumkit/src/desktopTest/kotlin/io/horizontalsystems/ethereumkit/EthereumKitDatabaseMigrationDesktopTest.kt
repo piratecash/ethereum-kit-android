@@ -246,8 +246,8 @@ class EthereumKitDatabaseMigrationDesktopTest {
         val caller = QueueDispatcher()
         var built: Eip20Database? = null
         val job = CoroutineScope(caller).launch {
-            EthereumKitDatabases.open {
-                Eip20Database.getInstance(context, EthereumKitFixture.EIP20_EVENTS_DB, databaseKey).also { built = it }
+            EthereumKitDatabases.open(context, EthereumKitFixture.EIP20_EVENTS_DB) {
+                Eip20Database.getInstance(context, it, databaseKey).also { database -> built = database }
             }
         }
         caller.runNext()

@@ -1,5 +1,6 @@
 package io.horizontalsystems.nftkit
 
+import androidx.room.useReaderConnection
 import io.horizontalsystems.ethereumkit.PlatformContext
 import io.horizontalsystems.ethereumkit.fixture.BACKUP_SUFFIX
 import io.horizontalsystems.ethereumkit.fixture.assertCancelledAtAnyStepReleases
@@ -16,6 +17,7 @@ import io.horizontalsystems.ethereumkit.fixture.plaintextTables
 import io.horizontalsystems.ethereumkit.fixture.watchKit
 import io.horizontalsystems.ethereumkit.models.Chain
 import io.horizontalsystems.nftkit.core.NftKit
+import io.horizontalsystems.nftkit.core.db.NftKitDatabaseManager
 import io.horizontalsystems.nftkit.fixture.NftKitFixture
 import io.horizontalsystems.nftkit.fixture.NftKitFixture.snapshot
 import io.horizontalsystems.nftkit.models.NftBalanceRecord
@@ -23,6 +25,7 @@ import io.horizontalsystems.sqlcipher.room.DatabaseMigrationResult
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertThrows
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
@@ -71,6 +74,16 @@ class NftKitDatabaseMigrationDesktopTest {
         assertEquals(emptyList<String>(), databaseFamily(directory, database.name).filterNot { it == otherWallet.name })
         assertEquals(emptyList<String>(), migrationArtifacts(directory) - foreign.keys.map(File::getName).toSet())
         assertUnchanged(foreign)
+    }
+
+    @Test
+    fun clear_databaseOpen_closesItAndDeletesFile() = runBlocking<Unit> {
+        val openDatabase = NftKitDatabaseManager.open(context, Chain.Ethereum, WALLET_ID, databaseKey)
+
+        NftKit.clear(context, Chain.Ethereum, WALLET_ID)
+
+        assertEquals(emptyList<String>(), databaseFamily(directory, database.name))
+        assertThrows(IllegalStateException::class.java) { runBlocking { openDatabase.useReaderConnection { } } }
     }
 
     @Test

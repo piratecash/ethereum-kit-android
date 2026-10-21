@@ -11,6 +11,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * The SQLCipher namespace shared by every module of the kit; public only for those modules.
@@ -21,6 +22,11 @@ object EthereumKitDatabases {
     // Names the on-disk manifest and lock files (`.ethereum-kit-sqlcipher*`); must never change.
     private val databases = SqlCipherDatabases("ethereum-kit")
     private val mutex = Mutex()
+
+    // Every instance this process opened and has not closed, by file path; a kit recreated on an RPC change
+    // opens a second instance of the same file while the first one is still open. Strong on purpose: SQLCipher
+    // connections close only explicitly, so a collected instance would keep its file open past clear().
+    private val openDatabases = ConcurrentHashMap<RoomDatabase, String>()
 
     /** Throws [IllegalArgumentException] unless [databaseKey] has exactly 32 bytes. */
     fun requireValidDatabaseKey(databaseKey: ByteArray) {
@@ -61,29 +67,44 @@ object EthereumKitDatabases {
         }
     }
 
-    /** Deletes [databaseNames] and whatever an interrupted migration or clear of [migrationId] left behind. */
+    /**
+     * Closes the still open instances of [databaseNames], then deletes them and whatever an interrupted
+     * migration or clear of [migrationId] left behind. Closing interrupts their pending writes.
+     */
     suspend fun clear(context: PlatformContext, migrationId: String, databaseNames: List<String>) {
         databaseNames.forEach(::requireValidDatabaseName)
         val directory = directory(context).path
+        val paths = databaseNames.map { databasePath(context, it) }.toSet()
         mutex.withLock {
             withContext(Dispatchers.IO) {
+                // An open file cannot be deleted on Windows, and an open connection would write into a deleted file.
+                openDatabases.filterValues(paths::contains).keys.forEach(::close)
                 databases.clearDatabases(directory, databaseNames, migrationId)
             }
         }
     }
 
-    /** Builds and opens the database, so key and open failures surface here rather than on a later query. */
-    suspend fun <T : RoomDatabase> open(build: () -> T): T = mutex.withLock {
+    /** Builds and opens the database file [name], so key and open failures surface here rather than on a later query. */
+    suspend fun <T : RoomDatabase> open(context: PlatformContext, name: String, build: (name: String) -> T): T = mutex.withLock {
         var database: T? = null
         try {
             withContext(Dispatchers.IO) {
-                build().also { database = it }.apply { useReaderConnection { } }
+                build(name).also {
+                    database = it
+                    openDatabases[it] = databasePath(context, name)
+                }.apply { useReaderConnection { } }
             }
         } catch (error: Throwable) {
             // Also covers a cancellation on the way back to the caller, which drops the opened database.
-            database?.close()
+            database?.let(::close)
             throw error
         }
+    }
+
+    /** Closes a database opened by [open]; the kit's modules close theirs only through it. */
+    fun close(database: RoomDatabase) {
+        openDatabases.remove(database)
+        database.close()
     }
 
     /**
@@ -103,6 +124,8 @@ object EthereumKitDatabases {
         path: String,
         databaseKey: ByteArray,
     ): RoomDatabase.Builder<T> = databases.encrypted(builder, path, databaseKey)
+
+    private fun databasePath(context: PlatformContext, name: String): String = databaseFile(context, name).absolutePath
 
     private fun requireValidDatabaseName(name: String) {
         require(name.isNotBlank()) { "Database name must not be blank" }

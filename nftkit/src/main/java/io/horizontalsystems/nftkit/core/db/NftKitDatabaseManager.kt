@@ -8,7 +8,7 @@ import io.horizontalsystems.sqlcipher.room.DatabaseMigrationResult
 internal object NftKitDatabaseManager {
 
     suspend fun open(context: PlatformContext, chain: Chain, walletId: String, databaseKey: ByteArray): NftKitDatabase =
-        EthereumKitDatabases.open { NftKitDatabase.getInstance(context, getDbName(chain, walletId), databaseKey) }
+        EthereumKitDatabases.open(context, getDbName(chain, walletId)) { NftKitDatabase.getInstance(context, it, databaseKey) }
 
     suspend fun migrate(context: PlatformContext, chain: Chain, walletId: String, databaseKey: ByteArray): DatabaseMigrationResult =
         EthereumKitDatabases.migrate(context, migrationId(chain, walletId), listOf(getDbName(chain, walletId)), databaseKey)

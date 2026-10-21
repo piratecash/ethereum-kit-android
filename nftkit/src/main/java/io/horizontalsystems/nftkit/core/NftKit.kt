@@ -128,7 +128,7 @@ class NftKit(
             EthereumKitDatabases.requireValidDatabaseKey(databaseKey)
             val nftKitDatabase = NftKitDatabaseManager.open(context, evmKit.chain, evmKit.walletId, databaseKey)
             val storage = Storage(nftKitDatabase)
-            val existingNftBalances = EthereumKitDatabases.readOrClose(nftKitDatabase::close) { storage.existingNftBalances() }
+            val existingNftBalances = EthereumKitDatabases.readOrClose({ EthereumKitDatabases.close(nftKitDatabase) }) { storage.existingNftBalances() }
             val dataProvider = DataProvider(evmKit)
             val balanceSyncManager = BalanceSyncManager(evmKit.receiveAddress, storage, dataProvider, kitLogger(evmKit.chain.id))
             val balanceManager = BalanceManager(balanceSyncManager, storage, existingNftBalances)

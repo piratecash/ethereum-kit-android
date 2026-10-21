@@ -1,5 +1,7 @@
 package io.horizontalsystems.erc20kit
 
+import androidx.room.useReaderConnection
+import io.horizontalsystems.erc20kit.core.Erc20DatabaseManager
 import io.horizontalsystems.erc20kit.core.Erc20Kit
 import io.horizontalsystems.erc20kit.fixture.Erc20KitFixture
 import io.horizontalsystems.ethereumkit.PlatformContext
@@ -25,6 +27,7 @@ import io.horizontalsystems.sqlcipher.room.DatabaseMigrationResult
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertThrows
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
@@ -117,11 +120,21 @@ class Erc20KitDatabaseMigrationDesktopTest {
     }
 
     @Test
+    fun clear_tokenDatabaseOpen_closesItAndDeletesFile() = runBlocking<Unit> {
+        val database = Erc20DatabaseManager.open(context, Chain.Ethereum, "a", Address(USDT), databaseKey)
+
+        Erc20Kit.clear(context, Chain.Ethereum, "a")
+
+        assertEquals(emptyList<String>(), databaseFamily(directory, "Erc20-1-a-$USDT"))
+        assertThrows(IllegalStateException::class.java) { runBlocking { database.useReaderConnection { } } }
+    }
+
+    @Test
     fun getInstance_callerCancelledAtAnyStep_closesTokenDatabase() = runBlocking {
         val ethereumKit = watchKit(context, FIXTURE_WALLET, databaseKey)
 
         assertCancelledAtAnyStepReleases(held = { openDatabases(directory, "Erc20-") }) {
-            Erc20Kit.getInstance(context, ethereumKit, Address("0xdac17f958d2ee523a2206206994597c13d831ec7"), databaseKey)
+            Erc20Kit.getInstance(context, ethereumKit, Address(USDT), databaseKey)
         }
     }
 
@@ -130,5 +143,6 @@ class Erc20KitDatabaseMigrationDesktopTest {
     private companion object {
         const val FIXTURE_WALLET = "fixturewallet"
         const val MIGRATION_ID = "erc20:1:a"
+        const val USDT = "0xdac17f958d2ee523a2206206994597c13d831ec7"
     }
 }

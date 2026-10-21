@@ -13,24 +13,23 @@ internal object EthereumDatabaseManager {
 
     class Databases(val api: ApiDatabase, val transactions: TransactionDatabase, val erc20: Eip20Database) {
         fun close() {
-            api.close()
-            transactions.close()
-            erc20.close()
+            listOf(api, transactions, erc20).forEach(EthereumKitDatabases::close)
         }
     }
 
     /** Opens all three databases or, if one fails, closes those already open. */
     suspend fun open(context: PlatformContext, chain: Chain, walletId: String, databaseKey: ByteArray): Databases {
         val opened = mutableListOf<RoomDatabase>()
-        suspend fun <T : RoomDatabase> open(build: () -> T): T = EthereumKitDatabases.open(build).also(opened::add)
+        suspend fun <T : RoomDatabase> open(name: String, build: (String) -> T): T =
+            EthereumKitDatabases.open(context, name, build).also(opened::add)
         try {
             return Databases(
-                api = open { ApiDatabase.getInstance(context, getDbNameApi(walletId, chain), databaseKey) },
-                transactions = open { TransactionDatabase.getInstance(context, getDbNameTransactions(walletId, chain), databaseKey) },
-                erc20 = open { Eip20Database.getInstance(context, getDbNameErc20Events(walletId, chain), databaseKey) },
+                api = open(getDbNameApi(walletId, chain)) { ApiDatabase.getInstance(context, it, databaseKey) },
+                transactions = open(getDbNameTransactions(walletId, chain)) { TransactionDatabase.getInstance(context, it, databaseKey) },
+                erc20 = open(getDbNameErc20Events(walletId, chain)) { Eip20Database.getInstance(context, it, databaseKey) },
             )
         } catch (error: Throwable) {
-            opened.forEach(RoomDatabase::close)
+            opened.forEach(EthereumKitDatabases::close)
             throw error
         }
     }

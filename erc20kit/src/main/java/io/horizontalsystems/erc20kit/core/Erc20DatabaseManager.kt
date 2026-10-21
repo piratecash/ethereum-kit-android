@@ -18,8 +18,8 @@ internal object Erc20DatabaseManager {
         walletId: String,
         contractAddress: Address,
         databaseKey: ByteArray,
-    ): Erc20KitDatabase = EthereumKitDatabases.open {
-        Erc20KitDatabase.getInstance(context, "${getDbNameBase(chain, walletId)}-${contractAddress.hex}", databaseKey)
+    ): Erc20KitDatabase = EthereumKitDatabases.open(context, "${getDbNameBase(chain, walletId)}-${contractAddress.hex}") {
+        Erc20KitDatabase.getInstance(context, it, databaseKey)
     }
 
     suspend fun migrate(context: PlatformContext, chain: Chain, walletId: String, databaseKey: ByteArray): DatabaseMigrationResult {

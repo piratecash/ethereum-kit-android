@@ -27,6 +27,7 @@ import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertThrows
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
@@ -79,6 +80,16 @@ class MerkleDatabaseMigrationDesktopTest {
         assertEquals(emptyList<String>(), databaseFamily(directory, database.name))
         assertEquals(emptyList<String>(), migrationArtifacts(directory) - foreign.keys.map(File::getName).toSet())
         assertUnchanged(foreign)
+    }
+
+    @Test
+    fun clear_adapterOpen_closesItsDatabaseAndDeletesFile() = runBlocking<Unit> {
+        val adapter = adapter(watchKit(context, WALLET_ID, databaseKey))
+
+        MerkleTransactionAdapter.clear(context, Chain.Ethereum, WALLET_ID)
+
+        assertEquals(emptyList<String>(), databaseFamily(directory, database.name))
+        assertThrows(IllegalStateException::class.java) { runBlocking { adapter.syncer.extra(ByteArray(32)) } }
     }
 
     @Test

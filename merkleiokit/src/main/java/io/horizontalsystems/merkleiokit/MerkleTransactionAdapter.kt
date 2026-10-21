@@ -81,8 +81,8 @@ class MerkleTransactionAdapter(
             )
 
             // Opened first: the syncer registers a connection listener, and nothing may suspend after that.
-            val merkleDatabase = EthereumKitDatabases.open {
-                MerkleDatabase.getInstance(context, databaseName(chain, walletId), databaseKey)
+            val merkleDatabase = EthereumKitDatabases.open(context, databaseName(chain, walletId)) {
+                MerkleDatabase.getInstance(context, it, databaseKey)
             }
 
             val connectionManager = ConnectionManager.getInstance(context)
