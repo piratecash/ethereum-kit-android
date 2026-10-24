@@ -1,5 +1,6 @@
 package io.horizontalsystems.ethereumkit.api.core
 
+import co.touchlab.kermit.Logger
 import io.horizontalsystems.ethereumkit.api.jsonrpc.BlockNumberJsonRpc
 import io.horizontalsystems.ethereumkit.api.jsonrpc.CallJsonRpc
 import io.horizontalsystems.ethereumkit.api.jsonrpc.DataJsonRpc
@@ -25,6 +26,7 @@ import io.horizontalsystems.ethereumkit.core.IBlockchainListener
 import io.horizontalsystems.ethereumkit.core.INonceProvider
 import io.horizontalsystems.ethereumkit.core.RpcApiProviderFactory
 import io.horizontalsystems.ethereumkit.core.TransactionBuilder
+import io.horizontalsystems.ethereumkit.core.rxIoDispatcher
 import io.horizontalsystems.ethereumkit.models.Address
 import io.horizontalsystems.ethereumkit.models.DefaultBlockParameter
 import io.horizontalsystems.ethereumkit.models.GasPrice
@@ -35,34 +37,45 @@ import io.horizontalsystems.ethereumkit.models.Transaction
 import io.horizontalsystems.ethereumkit.models.TransactionLog
 import io.reactivex.Single
 import io.reactivex.disposables.CompositeDisposable
+import io.reactivex.disposables.Disposable
 import io.reactivex.schedulers.Schedulers
+import io.reactivex.subjects.PublishSubject
+import kotlinx.coroutines.rx2.rxMaybe
+import kotlinx.coroutines.rx2.rxSingle
 import java.math.BigInteger
 
 class RpcBlockchain(
     private val address: Address,
     private val storage: IApiStorage,
     private val syncer: IRpcSyncer,
-    private val transactionBuilder: TransactionBuilder
+    private val transactionBuilder: TransactionBuilder,
+    private val logger: Logger
 ) : IBlockchain, IRpcSyncerListener, INonceProvider {
 
     private val disposables = CompositeDisposable()
 
-    private fun onUpdateLastBlockHeight(lastBlockHeight: Long) {
-        storage.saveLastBlockHeight(lastBlockHeight)
-        listener?.onUpdateLastBlockHeight(lastBlockHeight)
-    }
+    // Heads arrive from the syncer callback and from polling; one queue saves each before it is
+    // published, in arrival order. A failed save drops that head, as the blocking save did.
+    private val lastBlockHeights = PublishSubject.create<Long>().toSerialized()
 
-    private fun onUpdateAccountState(state: AccountState) {
-        storage.saveAccountState(state)
-        listener?.onUpdateAccountState(state)
-    }
+    // Lives from start() to stop(): a save still pending at stop() must not publish to a stopped kit.
+    private var lastBlockHeightQueue: Disposable? = null
+
+    private fun subscribeLastBlockHeightQueue(): Disposable = lastBlockHeights
+        .concatMapMaybe { lastBlockHeight ->
+            rxMaybe(rxIoDispatcher) {
+                storage.saveLastBlockHeight(lastBlockHeight)
+                lastBlockHeight
+            }.onErrorComplete()
+        }
+        .subscribe { listener?.onUpdateLastBlockHeight(it) }
 
     private fun syncLastBlockHeight() {
         syncer.single(BlockNumberJsonRpc())
             .subscribeOn(Schedulers.io())
             .observeOn(Schedulers.io())
             .subscribe({ lastBlockNumber ->
-                onUpdateLastBlockHeight(lastBlockNumber)
+                lastBlockHeights.onNext(lastBlockNumber)
             }, {
                 syncState = SyncState.NotSynced(it)
             }).let {
@@ -74,13 +87,19 @@ class RpcBlockchain(
         Single.zip(
             syncer.single(GetBalanceJsonRpc(address, DefaultBlockParameter.Latest)),
             syncer.single(GetTransactionCountJsonRpc(address, DefaultBlockParameter.Latest))
-        ) { t1, t2 -> Pair(t1, t2) }
+        ) { balance, nonce -> AccountState(balance, nonce) }
+            .flatMap { state ->
+                rxSingle(rxIoDispatcher) {
+                    storage.saveAccountState(state)
+                    state
+                }
+            }
             .subscribeOn(Schedulers.io())
-            .subscribe({ (balance, nonce) ->
-                onUpdateAccountState(AccountState(balance, nonce))
+            .subscribe({ state ->
+                listener?.onUpdateAccountState(state)
                 syncState = SyncState.Synced()
             }, {
-                it?.printStackTrace()
+                logger.w(it) { "syncAccountState failed" }
                 syncState = SyncState.NotSynced(it)
             }).let {
                 disposables.add(it)
@@ -102,13 +121,13 @@ class RpcBlockchain(
     override val source: String
         get() = "RPC ${syncer.source}"
 
-    override val lastBlockHeight: Long?
-        get() = storage.getLastBlockHeight()
+    override suspend fun storedLastBlockHeight(): Long? = storage.getLastBlockHeight()
 
-    override val accountState: AccountState?
-        get() = storage.getAccountState()
+    override suspend fun storedAccountState(): AccountState? = storage.getAccountState()
 
     override fun start() {
+        lastBlockHeightQueue?.dispose()
+        lastBlockHeightQueue = subscribeLastBlockHeightQueue()
         syncState = SyncState.Syncing()
         syncer.start()
     }
@@ -130,6 +149,8 @@ class RpcBlockchain(
     }
 
     override fun stop() {
+        lastBlockHeightQueue?.dispose()
+        lastBlockHeightQueue = null
         syncer.stop()
     }
 
@@ -139,6 +160,10 @@ class RpcBlockchain(
 
         return syncer.single(SendRawTransactionJsonRpc(encoded))
             .map { transaction }
+    }
+
+    override fun sendRawTransaction(rawTransaction: ByteArray): Single<ByteArray> {
+        return syncer.single(SendRawTransactionJsonRpc(rawTransaction))
     }
 
     override fun getNonce(defaultBlockParameter: DefaultBlockParameter): Single<Long> {
@@ -232,7 +257,7 @@ class RpcBlockchain(
 
     //region IRpcSyncerListener
     override fun didUpdateLastBlockHeight(lastBlockHeight: Long) {
-        onUpdateLastBlockHeight(lastBlockHeight)
+        lastBlockHeights.onNext(lastBlockHeight)
     }
 
     override fun didUpdateSyncerState(state: SyncerState) {
@@ -261,10 +286,11 @@ class RpcBlockchain(
             address: Address,
             storage: IApiStorage,
             syncer: IRpcSyncer,
-            transactionBuilder: TransactionBuilder
+            transactionBuilder: TransactionBuilder,
+            logger: Logger
         ): RpcBlockchain {
 
-            val rpcBlockchain = RpcBlockchain(address, storage, syncer, transactionBuilder)
+            val rpcBlockchain = RpcBlockchain(address, storage, syncer, transactionBuilder, logger)
             syncer.listener = rpcBlockchain
 
             return rpcBlockchain
@@ -283,7 +309,6 @@ class RpcBlockchain(
             data: ByteArray?
         ): Single<Long> {
             val rpcApiProvider = RpcApiProviderFactory.nodeApiProvider(rpcSource)
-
             return rpcApiProvider.single(EstimateGasJsonRpc(from, to, amount, gasLimit, gasPrice, data))
         }
     }

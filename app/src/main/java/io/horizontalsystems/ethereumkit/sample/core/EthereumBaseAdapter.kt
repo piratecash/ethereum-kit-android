@@ -1,6 +1,7 @@
 package io.horizontalsystems.ethereumkit.sample.core
 
 import io.horizontalsystems.ethereumkit.core.EthereumKit
+import io.horizontalsystems.ethereumkit.core.storage.TransactionSyncSourceStorage
 import io.horizontalsystems.ethereumkit.core.toHexString
 import io.horizontalsystems.ethereumkit.decorations.TransactionDecoration
 import io.horizontalsystems.ethereumkit.models.Address
@@ -95,13 +96,14 @@ open class EthereumBaseAdapter(private val ethereumKit: EthereumKit) : IAdapter 
 
     private fun transactionRecord(fullTransaction: FullTransaction): TransactionRecord {
         val transaction = fullTransaction.transaction
-        val mineAddress = ethereumKit.receiveAddress
 
         var amount: BigDecimal = 0.toBigDecimal()
 
         transaction.value?.toBigDecimal()?.let {
             amount = it.movePointLeft(decimal)
         }
+
+        val syncSource = TransactionSyncSourceStorage.syncSource(fullTransaction)?.displayName
 
         return TransactionRecord(
             transactionHash = transaction.hash.toHexString(),
@@ -112,7 +114,8 @@ open class EthereumBaseAdapter(private val ethereumKit: EthereumKit) : IAdapter 
             amount = amount,
             blockHeight = transaction.blockNumber,
             transactionIndex = transaction.transactionIndex ?: 0,
-            decoration = fullTransaction.decoration.describe()
+            decoration = fullTransaction.decoration.describe(),
+            syncSource = syncSource
         )
     }
 }

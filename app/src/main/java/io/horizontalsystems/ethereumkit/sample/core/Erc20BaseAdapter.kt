@@ -1,9 +1,9 @@
 package io.horizontalsystems.ethereumkit.sample.core
 
-import android.content.Context
 import io.horizontalsystems.erc20kit.core.Erc20Kit
 import io.horizontalsystems.ethereumkit.core.EthereumKit
 import io.horizontalsystems.ethereumkit.core.EthereumKit.SyncState
+import io.horizontalsystems.ethereumkit.core.storage.TransactionSyncSourceStorage
 import io.horizontalsystems.ethereumkit.core.toHexString
 import io.horizontalsystems.ethereumkit.models.Address
 import io.horizontalsystems.ethereumkit.models.FullTransaction
@@ -16,14 +16,12 @@ import java.math.BigDecimal
 import java.math.BigInteger
 
 open class Erc20BaseAdapter(
-    context: Context,
     token: Erc20Token,
-    private val ethereumKit: EthereumKit
+    private val ethereumKit: EthereumKit,
+    protected val erc20Kit: Erc20Kit
 ) : IAdapter {
 
-    private val contractAddress: Address = token.contractAddress
     protected val decimals: Int = token.decimals
-    protected val erc20Kit = Erc20Kit.getInstance(context, ethereumKit, contractAddress)
 
     override val name: String = token.name
     override val coin: String = token.code
@@ -108,6 +106,8 @@ open class Erc20BaseAdapter(
             amount = it.movePointLeft(decimals)
         }
 
+        val syncSource = TransactionSyncSourceStorage.syncSource(fullTransaction)?.displayName
+
         return TransactionRecord(
             transactionHash = transaction.hash.toHexString(),
             timestamp = transaction.timestamp,
@@ -117,7 +117,8 @@ open class Erc20BaseAdapter(
             amount = amount,
             blockHeight = fullTransaction.transaction.blockNumber,
             transactionIndex = fullTransaction.transaction.transactionIndex ?: 0,
-            decoration = fullTransaction.decoration.describe()
+            decoration = fullTransaction.decoration.describe(),
+            syncSource = syncSource
         )
     }
 

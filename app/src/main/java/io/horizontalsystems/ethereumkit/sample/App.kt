@@ -1,24 +1,21 @@
 package io.horizontalsystems.ethereumkit.sample
 
 import android.app.Application
+import co.touchlab.kermit.Logger
 import com.facebook.stetho.Stetho
 import io.horizontalsystems.ethereumkit.core.EthereumKit
 import io.reactivex.plugins.RxJavaPlugins
-import timber.log.Timber
-import java.util.logging.Logger
 
 class App : Application() {
 
-    private val logger = Logger.getLogger("App")
+    private val logger = Logger.withTag("Sample")
 
     override fun onCreate() {
         super.onCreate()
         instance = this
 
-        Timber.plant(Timber.DebugTree())
-
         RxJavaPlugins.setErrorHandler { e: Throwable? ->
-            logger.warning("RxJava ErrorHandler: ${e?.message}")
+            logger.w { "RxJava ErrorHandler: ${e?.message}" }
         }
 
         // Enable debug bridge
