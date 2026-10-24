@@ -21,6 +21,7 @@ kotlin {
                 implementation("com.squareup.okhttp3:logging-interceptor:4.9.0")
                 implementation("com.squareup.retrofit2:converter-scalars:2.9.0")
                 implementation("com.google.code.gson:gson:2.9.0")
+                implementation("io.github.adraffy:ens-normalize:0.2.0")
 
                 val scarletVersion = "0.1.12"
                 implementation("com.tinder.scarlet:scarlet:$scarletVersion")
@@ -69,6 +70,7 @@ kotlin {
                 implementation(libs.mockk)
                 implementation(libs.kotlinx.coroutines.test)
                 implementation("com.squareup.okhttp3:mockwebserver:4.9.0")
+                implementation("com.squareup.okhttp3:okhttp-tls:4.9.0")
                 runtimeOnly(libs.secp256k1.jni.jvm)
             }
         }
