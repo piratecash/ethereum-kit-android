@@ -37,17 +37,21 @@ import org.web3j.abi.datatypes.generated.Bytes4
 import org.web3j.abi.datatypes.generated.Uint16
 import java.net.InetAddress
 import java.net.URI
+import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.reflect.KClass
 import org.web3j.abi.datatypes.Address as AbiAddress
 
 class EnsResolverTest {
 
     private lateinit var rpc: MockWebServer
+    private val node = FakeNode()
     private val gateway = FakeGateway()
 
     @Before
     fun setUp() {
         rpc = MockWebServer()
+        rpc.dispatcher = node
         rpc.start()
         // The module's unit tests have no Android stubs, so a real log writer would hit android.util.Log.
         KermitLogger.setLogWriters(emptyList())
@@ -61,9 +65,44 @@ class EnsResolverTest {
         returns(resolveResult(ADDRESS))
 
         assertEquals(Address(ADDRESS), resolver().resolve(NAME).blockingGet())
-        val call = rpc.takeRequest().ethCall()
+        val call = node.ethCalls.single()
         assertEquals(UR, call.to)
         assertEquals(EnsAbi.resolveCall(NAME).toHexString(), call.data)
+        assertEquals(HEAD_HEX, call.block)
+        assertEquals(HEAD_HEX, node.requestedBlock)
+    }
+
+    @Test
+    fun resolve_headerNumberDiffersFromHead_failsInvalidResponseWithoutEthCall() {
+        node.headerNumber = "0x1312d01"
+        returns(resolveResult(ADDRESS))
+
+        assertFailure(EnsResolutionError.InvalidResponse::class)
+        assertEquals(0, node.ethCalls.size)
+    }
+
+    @Test
+    fun resolve_timestampOverflowingMillis_failsNodeNotSyncedWithoutEthCall() {
+        assertHeadRejectedAsNotSynced(0x20c49ba5e353f8L)
+    }
+
+    @Test
+    fun resolve_timestampInMilliseconds_failsNodeNotSyncedWithoutEthCall() {
+        assertHeadRejectedAsNotSynced(System.currentTimeMillis())
+    }
+
+    @Test
+    fun resolve_staleHead_failsNodeNotSyncedWithoutEthCall() {
+        assertHeadRejectedAsNotSynced(System.currentTimeMillis() / 1000 - 4 * 60)
+    }
+
+    @Test
+    fun resolve_headRequestFails_failsRpcWithoutEthCall() {
+        node.headFails = true
+        returns(resolveResult(ADDRESS))
+
+        assertFailure(EnsResolutionError.Rpc::class)
+        assertEquals(0, node.ethCalls.size)
     }
 
     @Test
@@ -81,8 +120,8 @@ class EnsResolverTest {
         assertEquals(CALL_DATA.toHexString(), body["data"].asString)
         assertEquals(UR, body["sender"].asString)
 
-        rpc.takeRequest()
-        val callback = rpc.takeRequest().ethCall()
+        assertEquals(listOf(HEAD_HEX, HEAD_HEX), node.ethCalls.map { it.block })
+        val callback = node.ethCalls[1]
         assertEquals(UR, callback.to)
         val expectedArgs = FunctionEncoder.encodeConstructor(
             listOf(DynamicBytes(GATEWAY_DATA.hexStringToByteArray()), DynamicBytes(EXTRA_DATA))
@@ -115,7 +154,7 @@ class EnsResolverTest {
         reverts(RESOLVER_NOT_FOUND)
         assertFailure(EnsResolutionError.NotFound::class)
 
-        rpc.enqueue(MockResponse().setBody("""{"jsonrpc":"2.0","id":1,"error":{"code":3,"message":"execution reverted"}}"""))
+        node.enqueue(MockResponse().setBody("""{"jsonrpc":"2.0","id":1,"error":{"code":3,"message":"execution reverted"}}"""))
         assertFailure(EnsResolutionError.NotFound::class)
     }
 
@@ -130,13 +169,11 @@ class EnsResolverTest {
 
     @Test
     fun resolve_moreThanLookupLimit_failsLookupLimit() {
-        rpc.dispatcher = object : Dispatcher() {
-            override fun dispatch(request: RecordedRequest) = revertResponse(lookup(listOf("https://gw-a.test/lookup")))
-        }
+        node.repeatedCallReply = revertResponse(lookup(listOf("https://gw-a.test/lookup")))
         gateway.reply("gw-a.test", 200, GATEWAY_OK)
 
         assertFailure(EnsResolutionError.LookupLimit::class)
-        assertEquals(EnsResolver.LOOKUP_LIMIT + 1, rpc.requestCount)
+        assertEquals(EnsResolver.LOOKUP_LIMIT + 1, node.ethCalls.size)
         assertEquals(EnsResolver.LOOKUP_LIMIT, gateway.requests.size)
     }
 
@@ -332,9 +369,8 @@ class EnsResolverTest {
 
         assertEquals(Address(ADDRESS), resolver().resolve(NAME).blockingGet())
 
-        rpc.takeRequest()
         val expectedArgs = FunctionEncoder.encodeConstructor(listOf(DynamicBytes(ByteArray(0)), DynamicBytes(EXTRA_DATA)))
-        assertEquals(CALLBACK + expectedArgs, rpc.takeRequest().ethCall().data)
+        assertEquals(CALLBACK + expectedArgs, node.ethCalls[1].data)
     }
 
     @Test
@@ -372,8 +408,15 @@ class EnsResolverTest {
         assertEquals("0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE", resolved["ur.gtest.eth"])
     }
 
+    private fun assertHeadRejectedAsNotSynced(timestamp: Long) {
+        node.headTimestamp = timestamp
+        returns(resolveResult(ADDRESS))
+
+        assertFailure(EnsResolutionError.NodeNotSynced::class)
+        assertEquals(0, node.ethCalls.size)
+    }
+
     private fun assertBatchCallback(failures: List<Boolean>, responses: List<String>) {
-        rpc.takeRequest()
         val batchResult = FunctionEncoder.encodeConstructor(
             listOf(
                 DynamicArray(Bool::class.java, failures.map(::Bool)),
@@ -383,7 +426,7 @@ class EnsResolverTest {
         val expectedArgs = FunctionEncoder.encodeConstructor(
             listOf(DynamicBytes(batchResult.hexStringToByteArray()), DynamicBytes(EXTRA_DATA))
         )
-        assertEquals(CALLBACK + expectedArgs, rpc.takeRequest().ethCall().data)
+        assertEquals(CALLBACK + expectedArgs, node.ethCalls[1].data)
     }
 
     private fun word(value: Int) = value.toString(16).padStart(64, '0')
@@ -418,9 +461,9 @@ class EnsResolverTest {
     private fun resolver(client: OkHttpClient = EnsResolver.newGatewayClient().newBuilder().addInterceptor(gateway).build()) =
         EnsResolver(RpcSource.Http(listOf(URI(rpc.url("/").toString())), null), client)
 
-    private fun returns(data: String) = rpc.enqueue(MockResponse().setBody("""{"jsonrpc":"2.0","id":1,"result":"$data"}"""))
+    private fun returns(data: String) = node.enqueue(result("\"$data\""))
 
-    private fun reverts(data: String) = rpc.enqueue(revertResponse(data))
+    private fun reverts(data: String) = node.enqueue(revertResponse(data))
 
     private fun revertResponse(data: String) =
         MockResponse().setBody("""{"jsonrpc":"2.0","id":1,"error":{"code":3,"message":"execution reverted","data":"$data"}}""")
@@ -441,11 +484,36 @@ class EnsResolverTest {
             )
         )
 
-    private class EthCall(val to: String, val data: String)
+    private class EthCall(val to: String, val data: String, val block: String)
 
-    private fun RecordedRequest.ethCall(): EthCall {
-        val params = JsonParser.parseString(body.readUtf8()).asJsonObject["params"].asJsonArray[0] as JsonObject
-        return EthCall(params["to"].asString, params["data"].asString)
+    /** Answers the head requests itself and eth_call from the queue, recording every eth_call. */
+    private class FakeNode : Dispatcher() {
+        val ethCalls = CopyOnWriteArrayList<EthCall>()
+        private val callReplies = ConcurrentLinkedQueue<MockResponse>()
+        @Volatile var repeatedCallReply: MockResponse? = null
+        @Volatile var headTimestamp = System.currentTimeMillis() / 1000
+        @Volatile var headerNumber = HEAD_HEX
+        @Volatile var requestedBlock: String? = null
+        @Volatile var headFails = false
+
+        fun enqueue(response: MockResponse) = callReplies.add(response)
+
+        override fun dispatch(request: RecordedRequest): MockResponse {
+            val json = JsonParser.parseString(request.body.readUtf8()).asJsonObject
+            return when (json["method"].asString) {
+                "eth_blockNumber" -> if (headFails) MockResponse().setResponseCode(500) else result("\"$HEAD_HEX\"")
+                "eth_getBlockByNumber" -> {
+                    requestedBlock = json["params"].asJsonArray[0].asString
+                    result("""{"number":"$headerNumber","timestamp":"0x${headTimestamp.toString(16)}"}""")
+                }
+                else -> {
+                    val params = json["params"].asJsonArray
+                    val call = params[0] as JsonObject
+                    ethCalls += EthCall(call["to"].asString, call["data"].asString, params[1].asString)
+                    repeatedCallReply ?: callReplies.poll() ?: MockResponse().setResponseCode(500)
+                }
+            }
+        }
     }
 
     private class GatewayRequest(val method: String, val url: String, val body: String)
@@ -481,6 +549,7 @@ class EnsResolverTest {
         private const val ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
         private const val RESOLVER = "0x231b0ee14048e9dccd1d247744d114a4eb5e8e63"
         private const val CALLBACK = "0x12345678"
+        private const val HEAD_HEX = "0x1312d00"
         private const val LOCAL_BATCH = "x-batch-gateway:true"
         private const val GATEWAY_DATA = "0xabcdef"
         private const val GATEWAY_OK = """{"data":"$GATEWAY_DATA"}"""
@@ -492,5 +561,7 @@ class EnsResolverTest {
         @JvmStatic
         @BeforeClass
         fun beforeClass() = EthereumKit.init()
+
+        private fun result(json: String) = MockResponse().setBody("""{"jsonrpc":"2.0","id":1,"result":$json}""")
     }
 }

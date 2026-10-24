@@ -4,11 +4,15 @@ import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import com.google.gson.JsonPrimitive
 import io.github.adraffy.ens.ENSNormalize
+import io.horizontalsystems.ethereumkit.api.jsonrpc.BlockNumberJsonRpc
+import io.horizontalsystems.ethereumkit.api.jsonrpc.GetBlockByNumberJsonRpc
 import io.horizontalsystems.ethereumkit.api.jsonrpc.JsonRpc
 import io.horizontalsystems.ethereumkit.core.EthereumKit
+import io.horizontalsystems.ethereumkit.core.RpcApiProviderFactory
 import io.horizontalsystems.ethereumkit.core.strictHexToByteArray
 import io.horizontalsystems.ethereumkit.core.toHexString
 import io.horizontalsystems.ethereumkit.models.Address
+import io.horizontalsystems.ethereumkit.models.DefaultBlockParameter
 import io.horizontalsystems.ethereumkit.models.RpcSource
 import io.horizontalsystems.ethereumkit.network.SharedHttpClient
 import io.reactivex.Single
@@ -44,10 +48,12 @@ class EnsResolver internal constructor(
     }
 
     private fun resolveNormalized(name: String): Address {
+        // Built first: dnsEncode is the last local name check and must reject before any RPC call.
         var calldata = EnsAbi.resolveCall(name)
+        val block = DefaultBlockParameter.BlockNumber(syncedHeadNumber())
         var lookups = 0
         while (true) {
-            val result = call(UNIVERSAL_RESOLVER, calldata)
+            val result = call(UNIVERSAL_RESOLVER, calldata, block)
             val error = result.exceptionOrNull() ?: return decodeAddress(result.getOrThrow())
             val lookup = offchainLookup(error)
             if (++lookups > LOOKUP_LIMIT) throw EnsResolutionError.LookupLimit()
@@ -57,10 +63,25 @@ class EnsResolver internal constructor(
         }
     }
 
-    private fun call(to: Address, data: ByteArray): Result<ByteArray> = EthereumKit.call(rpcSource, to, data)
-        .map { Result.success(it) }
-        .onErrorReturn { Result.failure(it) }
-        .blockingGet()
+    // A lagging node would answer with outdated records, i.e. possibly a former owner's address.
+    private fun syncedHeadNumber(): Long {
+        val provider = RpcApiProviderFactory.nodeApiProvider(rpcSource)
+        val number = provider.single(BlockNumberJsonRpc()).blockingGet()
+        val head = provider.single(GetBlockByNumberJsonRpc(number)).blockingGet()
+        if (head.number != number) throw EnsResolutionError.InvalidResponse()
+        // No arithmetic on the node's timestamp: a huge value would overflow into "fresh".
+        val nowSeconds = System.currentTimeMillis() / 1000
+        if (head.timestamp !in (nowSeconds - SYNC_THRESHOLD_SECONDS)..(nowSeconds + SYNC_THRESHOLD_SECONDS)) {
+            throw EnsResolutionError.NodeNotSynced()
+        }
+        return number
+    }
+
+    private fun call(to: Address, data: ByteArray, block: DefaultBlockParameter): Result<ByteArray> =
+        EthereumKit.call(rpcSource, to, data, block)
+            .map { Result.success(it) }
+            .onErrorReturn { Result.failure(it) }
+            .blockingGet()
 
     private fun decodeAddress(returned: ByteArray): Address {
         val result = AbiReader(returned).bytes(0)
@@ -173,6 +194,7 @@ class EnsResolver internal constructor(
         const val LOOKUP_LIMIT = 4
         const val MAX_GATEWAY_RESPONSE_BYTES = 64 * 1024
         const val MAX_BATCH_REQUESTS = 10
+        const val SYNC_THRESHOLD_SECONDS = 180L
         const val LOCAL_BATCH_GATEWAY = "x-batch-gateway:true"
 
         private val ZERO_ADDRESS = Address(ByteArray(20))
@@ -188,6 +210,7 @@ sealed class EnsResolutionError : Throwable() {
     class NotFound : EnsResolutionError()
     class InvalidResponse : EnsResolutionError()
     class LookupLimit : EnsResolutionError()
+    class NodeNotSynced : EnsResolutionError()
     /** [status] is set when a gateway answered 4xx. */
     class Gateway(val status: Int? = null) : EnsResolutionError()
     class Rpc(override val cause: Throwable) : EnsResolutionError()
