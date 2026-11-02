@@ -24,9 +24,13 @@ import io.horizontalsystems.ethereumkit.core.IApiStorage
 import io.horizontalsystems.ethereumkit.core.IBlockchain
 import io.horizontalsystems.ethereumkit.core.IBlockchainListener
 import io.horizontalsystems.ethereumkit.core.INonceProvider
+import io.horizontalsystems.ethereumkit.core.RawTransactionBroadcaster
 import io.horizontalsystems.ethereumkit.core.RpcApiProviderFactory
 import io.horizontalsystems.ethereumkit.core.TransactionBuilder
+import io.horizontalsystems.ethereumkit.core.isKnownTransactionError
+import io.horizontalsystems.ethereumkit.core.isPermanentBroadcastError
 import io.horizontalsystems.ethereumkit.core.rxIoDispatcher
+import io.horizontalsystems.ethereumkit.core.transactionExists
 import io.horizontalsystems.ethereumkit.models.Address
 import io.horizontalsystems.ethereumkit.models.DefaultBlockParameter
 import io.horizontalsystems.ethereumkit.models.GasPrice
@@ -160,6 +164,14 @@ class RpcBlockchain(
 
         return syncer.single(SendRawTransactionJsonRpc(encoded))
             .map { transaction }
+            .onErrorResumeNext { error: Throwable -> recoverAlreadyBroadcast(transaction, error) }
+    }
+
+    private fun recoverAlreadyBroadcast(transaction: Transaction, error: Throwable): Single<Transaction> = when {
+        error.isKnownTransactionError() -> Single.just(transaction)
+        error.isPermanentBroadcastError() -> transactionExists(transaction.hash, RawTransactionBroadcaster.networkTimeout)
+            .flatMap { exists -> if (exists) Single.just(transaction) else Single.error(error) }
+        else -> Single.error(error)
     }
 
     override fun sendRawTransaction(rawTransaction: ByteArray): Single<ByteArray> {

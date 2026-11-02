@@ -1,7 +1,6 @@
 package io.horizontalsystems.ethereumkit.core
 
 import co.touchlab.kermit.Logger
-import io.horizontalsystems.ethereumkit.api.jsonrpc.JsonRpc
 import io.horizontalsystems.ethereumkit.crypto.CryptoUtils
 import io.horizontalsystems.ethereumkit.models.RawTransactionBroadcastRecord
 import io.horizontalsystems.ethereumkit.models.RawTransactionBroadcastResult
@@ -9,7 +8,6 @@ import io.horizontalsystems.ethereumkit.models.RawTransactionBroadcastStatus
 import io.reactivex.Observable
 import io.reactivex.Single
 import kotlinx.coroutines.rx2.rxSingle
-import java.util.Locale
 import java.util.concurrent.TimeUnit
 
 class RawTransactionBroadcaster(
@@ -82,7 +80,7 @@ class RawTransactionBroadcaster(
             return@defer Single.just(Unit)
         }
 
-        transactionExists(record.hash)
+        blockchain.transactionExists(record.hash, networkTimeoutMs)
             .flatMap { exists ->
                 if (exists) {
                     rxSingle(rxIoDispatcher) { storage.deleteRawTransactionBroadcast(record) }
@@ -119,7 +117,7 @@ class RawTransactionBroadcaster(
             }
         }
 
-        if (isKnownTransactionError(error)) {
+        if (error.isKnownTransactionError()) {
             return persisting {
                 deleteQueuedBroadcast(hash)
                 RawTransactionBroadcastResult(hash, RawTransactionBroadcastStatus.AlreadyKnown)
@@ -127,7 +125,7 @@ class RawTransactionBroadcaster(
         }
 
         if (isPermanentError(error)) {
-            return transactionExists(hash).flatMapPersisting { exists ->
+            return blockchain.transactionExists(hash, networkTimeoutMs).flatMapPersisting { exists ->
                 deleteQueuedBroadcast(hash)
                 if (!exists) throw error
                 RawTransactionBroadcastResult(hash, RawTransactionBroadcastStatus.AlreadyKnown)
@@ -146,12 +144,12 @@ class RawTransactionBroadcaster(
             return persisting { storage.deleteRawTransactionBroadcast(record) }
         }
 
-        if (isKnownTransactionError(error)) {
+        if (error.isKnownTransactionError()) {
             return persisting { storage.deleteRawTransactionBroadcast(record) }
         }
 
         if (isPermanentError(error)) {
-            return transactionExists(record.hash).flatMapPersisting { exists ->
+            return blockchain.transactionExists(record.hash, networkTimeoutMs).flatMapPersisting { exists ->
                 storage.deleteRawTransactionBroadcast(record)
                 if (!exists) {
                     logger.w(error) { "Dropping raw transaction broadcast after permanent error." }
@@ -200,18 +198,6 @@ class RawTransactionBroadcaster(
         return RawTransactionBroadcastResult(hash, RawTransactionBroadcastStatus.Queued)
     }
 
-    private fun transactionExists(hash: ByteArray): Single<Boolean> {
-        return blockchain.getTransaction(hash)
-            .withNetworkTimeout()
-            .map { true }
-            .onErrorResumeNext {
-                blockchain.getTransactionReceipt(hash)
-                    .withNetworkTimeout()
-                    .map { true }
-                    .onErrorReturnItem(false)
-            }
-    }
-
     private fun validateRpcHash(expectedHash: ByteArray, rpcHash: ByteArray) {
         if (rpcHash.isNotEmpty() && !rpcHash.contentEquals(expectedHash)) {
             throw RpcHashMismatch()
@@ -240,23 +226,8 @@ class RawTransactionBroadcaster(
         inFlight.remove(hash.toRawHexString())
     }
 
-    private fun isKnownTransactionError(error: Throwable): Boolean {
-        val message = error.rpcMessage()
-        return knownTransactionMessages.any { message.contains(it) }
-    }
-
     private fun isPermanentError(error: Throwable): Boolean {
-        if (error is RpcHashMismatch) return true
-
-        val message = error.rpcMessage()
-        return permanentErrorMessages.any { message.contains(it) }
-    }
-
-    private fun Throwable.rpcMessage(): String {
-        return when (this) {
-            is JsonRpc.ResponseError.RpcError -> error.message
-            else -> message.orEmpty()
-        }.lowercase(Locale.US)
+        return error is RpcHashMismatch || error.isPermanentBroadcastError()
     }
 
     private fun <T> Single<T>.withNetworkTimeout(): Single<T> {
@@ -268,23 +239,6 @@ class RawTransactionBroadcaster(
         const val retriesPeriod = 60_000L
         const val retryTtl = 24 * 60 * 60 * 1000L
         const val networkTimeout = 30_000L
-
-        private val knownTransactionMessages = listOf(
-            "already known",
-            "already imported",
-            "known transaction",
-        )
-
-        private val permanentErrorMessages = listOf(
-            "invalid sender",
-            "nonce too low",
-            "transaction underpriced",
-            "replacement transaction underpriced",
-            "insufficient funds",
-            "intrinsic gas too low",
-            "exceeds block gas limit",
-            "chain id",
-        )
     }
 
     private class RpcHashMismatch : IllegalStateException("RPC returned a different transaction hash")
