@@ -8,6 +8,7 @@ import io.horizontalsystems.ethereumkit.api.jsonrpc.EstimateGasJsonRpc
 import io.horizontalsystems.ethereumkit.api.jsonrpc.GetBalanceJsonRpc
 import io.horizontalsystems.ethereumkit.api.jsonrpc.GetBlockByNumberJsonRpc
 import io.horizontalsystems.ethereumkit.api.jsonrpc.GetLogsJsonRpc
+import io.horizontalsystems.ethereumkit.api.jsonrpc.GetCodeJsonRpc
 import io.horizontalsystems.ethereumkit.api.jsonrpc.GetStorageAtJsonRpc
 import io.horizontalsystems.ethereumkit.api.jsonrpc.GetTransactionByHashJsonRpc
 import io.horizontalsystems.ethereumkit.api.jsonrpc.GetTransactionCountJsonRpc
@@ -255,6 +256,10 @@ class RpcBlockchain(
 
     override fun getStorageAt(contractAddress: Address, position: ByteArray, defaultBlockParameter: DefaultBlockParameter): Single<ByteArray> {
         return syncer.single(GetStorageAtJsonRpc(contractAddress, position, defaultBlockParameter))
+    }
+
+    override fun getCode(address: Address, defaultBlockParameter: DefaultBlockParameter): Single<ByteArray> {
+        return syncer.single(GetCodeJsonRpc(address, defaultBlockParameter))
     }
 
     override fun call(contractAddress: Address, data: ByteArray, defaultBlockParameter: DefaultBlockParameter): Single<ByteArray> {

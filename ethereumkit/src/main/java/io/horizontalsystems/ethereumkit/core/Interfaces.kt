@@ -59,6 +59,7 @@ interface IBlockchain {
 
     fun getLogs(address: Address?, topics: List<ByteArray?>, fromBlock: Long, toBlock: Long, pullTimestamps: Boolean): Single<List<TransactionLog>>
     fun getStorageAt(contractAddress: Address, position: ByteArray, defaultBlockParameter: DefaultBlockParameter): Single<ByteArray>
+    fun getCode(address: Address, defaultBlockParameter: DefaultBlockParameter): Single<ByteArray>
     fun call(contractAddress: Address, data: ByteArray, defaultBlockParameter: DefaultBlockParameter): Single<ByteArray>
 
     fun <T: Any> rpcSingle(rpc: JsonRpc<T>): Single<T>
@@ -89,6 +90,9 @@ interface ITransactionStorage {
     suspend fun getDistinctTokenContractAddresses(): List<String>
 
     suspend fun getTransactionsAfter(hash: ByteArray?): List<Transaction>
+
+    suspend fun getTransactionsWithUnknownType(account: Address, limit: Int): List<Transaction>
+    suspend fun getAuthorizationCarriers(): List<Transaction>
 }
 
 interface IRawTransactionBroadcastStorage {

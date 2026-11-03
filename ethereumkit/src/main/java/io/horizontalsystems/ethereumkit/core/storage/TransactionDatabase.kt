@@ -23,7 +23,7 @@ import io.horizontalsystems.ethereumkit.models.TransactionTag
             TransactionSyncSource::class,
             RawTransactionBroadcastRecord::class
         ],
-        version = 17,
+        version = 18,
         exportSchema = true
 )
 @TypeConverters(RoomTypeConverters::class, TransactionDatabase.TypeConverters::class)
@@ -41,7 +41,7 @@ abstract class TransactionDatabase : RoomDatabase() {
             build(kitDatabaseBuilder(context, databaseName, databaseKey))
 
         internal fun build(builder: RoomDatabase.Builder<TransactionDatabase>): TransactionDatabase =
-            builder.addMigrations(migration13_14, migration14_15, migration15_16, migration16_17)
+            builder.addMigrations(migration13_14, migration14_15, migration15_16, migration16_17, migration17_18)
                 .fallbackToDestructiveMigration(dropAllTables = false)
                 .build()
 

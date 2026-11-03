@@ -390,6 +390,8 @@ class RawTransactionBroadcasterTest {
         ): Single<List<TransactionLog>> = Single.error(IOException("not used"))
         override fun getStorageAt(contractAddress: Address, position: ByteArray, defaultBlockParameter: DefaultBlockParameter): Single<ByteArray> =
             Single.error(IOException("not used"))
+        override fun getCode(address: Address, defaultBlockParameter: DefaultBlockParameter): Single<ByteArray> =
+            Single.error(IOException("not used"))
         override fun call(contractAddress: Address, data: ByteArray, defaultBlockParameter: DefaultBlockParameter): Single<ByteArray> =
             Single.error(IOException("not used"))
         override fun <T : Any> rpcSingle(rpc: JsonRpc<T>): Single<T> = Single.error(IOException("not used"))

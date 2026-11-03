@@ -164,7 +164,9 @@ class TransactionSyncManager(
             tx1.maxFeePerGas ?: tx2.maxFeePerGas,
             tx1.maxPriorityFeePerGas ?: tx2.maxPriorityFeePerGas,
             tx1.gasLimit ?: tx2.gasLimit,
-            tx1.gasUsed ?: tx2.gasUsed
+            tx1.gasUsed ?: tx2.gasUsed,
+            type = tx1.type ?: tx2.type,
+            authorizationDelegates = tx1.authorizationDelegates ?: tx2.authorizationDelegates
         )
 
     private suspend fun handle(result: Pair<List<Transaction>, Boolean>) {

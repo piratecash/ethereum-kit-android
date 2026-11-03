@@ -5,6 +5,7 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import io.horizontalsystems.ethereumkit.fixture.EthereumKitFixture.hash
 import io.horizontalsystems.ethereumkit.fixture.EthereumKitFixture.snapshot
+import io.horizontalsystems.ethereumkit.models.Address
 import io.horizontalsystems.ethereumkit.models.RawTransactionBroadcastRecord
 import io.horizontalsystems.ethereumkit.models.Transaction
 import io.horizontalsystems.ethereumkit.models.TransactionTag
@@ -219,6 +220,31 @@ class TransactionStoragePinningTest {
         storage.addRawTransactionBroadcast(original.copy(retriesCount = 9))
 
         assertEquals(original.snapshot(), storage.getRawTransactionBroadcast(original.hash)?.snapshot())
+    }
+
+    @Test
+    fun getTransactionsWithUnknownType_mixedRows_returnsOnlyMinedUntypedOfAccountNewestFirst() = runTest {
+        val account = Address("0x1111111111111111111111111111111111111111")
+        val other = Address("0x2222222222222222222222222222222222222222")
+        val sentTo = confirmed(seed = 0x01, timestamp = 300, index = 0).copy(from = other, to = account)
+        val sentFrom = confirmed(seed = 0x02, timestamp = 400, index = 0).copy(from = account, to = other)
+        val older = confirmed(seed = 0x03, timestamp = 100, index = 0).copy(from = account, to = other)
+        val typed = confirmed(seed = 0x04, timestamp = 500, index = 0).copy(from = account, to = other, type = 2)
+        val unmined = pending(seed = 0x05, timestamp = 600).copy(from = account, to = other)
+        val foreign = confirmed(seed = 0x06, timestamp = 700, index = 0).copy(from = other, to = other)
+        storage.save(listOf(sentTo, sentFrom, older, typed, unmined, foreign))
+
+        assertEquals(expected(sentFrom, sentTo, older), storage.getTransactionsWithUnknownType(account, limit = 10).hashes())
+        assertEquals(expected(sentFrom, sentTo), storage.getTransactionsWithUnknownType(account, limit = 2).hashes())
+    }
+
+    @Test
+    fun getAuthorizationCarriers_mixedRows_returnsOnlyRowsWithDelegates() = runTest {
+        val carrier = confirmed(seed = 0x01, timestamp = 100, index = 0).copy(type = 4, authorizationDelegates = ByteArray(20) { 7 })
+        val plain = confirmed(seed = 0x02, timestamp = 200, index = 0).copy(type = 4)
+        storage.save(listOf(carrier, plain))
+
+        assertEquals(expected(carrier), storage.getAuthorizationCarriers().hashes())
     }
 
     private fun record(seed: Int, retries: Int) = RawTransactionBroadcastRecord(

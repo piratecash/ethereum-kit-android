@@ -166,5 +166,7 @@ class InternalTransactionSyncerTest {
         override suspend fun saveTags(tags: List<TransactionTag>) = error("unused")
         override suspend fun getDistinctTokenContractAddresses() = error("unused")
         override suspend fun getTransactionsAfter(hash: ByteArray?) = error("unused")
+        override suspend fun getTransactionsWithUnknownType(account: Address, limit: Int) = error("unused")
+        override suspend fun getAuthorizationCarriers() = error("unused")
     }
 }

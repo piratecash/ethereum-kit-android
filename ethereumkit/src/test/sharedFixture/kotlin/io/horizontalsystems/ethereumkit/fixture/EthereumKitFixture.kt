@@ -100,7 +100,8 @@ object EthereumKitFixture {
 
     fun Transaction.snapshot() = listOf(
         hash.toHexString(), timestamp, isFailed, blockNumber, transactionIndex, from?.hex, to?.hex, value,
-        input.toHexString(), nonce, gasPrice, maxFeePerGas, maxPriorityFeePerGas, gasLimit, gasUsed, replacedWith.toHexString()
+        input.toHexString(), nonce, gasPrice, maxFeePerGas, maxPriorityFeePerGas, gasLimit, gasUsed, replacedWith.toHexString(),
+        type, authorizationDelegates?.toHexString()
     )
 
     fun InternalTransaction.snapshot() = listOf(hash.toHexString(), traceId, blockNumber, from.hex, to.hex, value)

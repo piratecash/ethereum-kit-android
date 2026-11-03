@@ -3,11 +3,14 @@ package io.horizontalsystems.ethereumkit.decorations
 import io.horizontalsystems.ethereumkit.contracts.ContractEventInstance
 import io.horizontalsystems.ethereumkit.contracts.ContractMethod
 import io.horizontalsystems.ethereumkit.contracts.EmptyMethod
+import io.horizontalsystems.ethereumkit.core.AccountDelegationState
+import io.horizontalsystems.ethereumkit.core.CurrentDelegate
 import io.horizontalsystems.ethereumkit.core.IEventDecorator
 import io.horizontalsystems.ethereumkit.core.IExtraDecorator
 import io.horizontalsystems.ethereumkit.core.IMethodDecorator
 import io.horizontalsystems.ethereumkit.core.ITransactionDecorator
 import io.horizontalsystems.ethereumkit.core.ITransactionStorage
+import io.horizontalsystems.ethereumkit.models.AccountDelegation
 import io.horizontalsystems.ethereumkit.models.Address
 import io.horizontalsystems.ethereumkit.models.FullRpcTransaction
 import io.horizontalsystems.ethereumkit.models.FullTransaction
@@ -15,9 +18,15 @@ import io.horizontalsystems.ethereumkit.models.InternalTransaction
 import io.horizontalsystems.ethereumkit.models.Transaction
 import io.horizontalsystems.ethereumkit.models.TransactionData
 import io.horizontalsystems.ethereumkit.models.TransactionLog
+import io.horizontalsystems.ethereumkit.models.isZero
+import io.horizontalsystems.ethereumkit.models.toDelegates
 import java.math.BigInteger
 
-class DecorationManager(private val userAddress: Address, private val storage: ITransactionStorage) {
+class DecorationManager(
+    private val userAddress: Address,
+    private val storage: ITransactionStorage,
+    private val accountDelegationState: AccountDelegationState
+) {
     private val methodDecorators = mutableListOf<IMethodDecorator>()
     private val eventDecorators = mutableListOf<IEventDecorator>()
     private val transactionDecorators = mutableListOf<ITransactionDecorator>()
@@ -66,7 +75,10 @@ class DecorationManager(private val userAddress: Address, private val storage: I
             }
         }
 
+        val currentDelegate = accountDelegationState.current
+
         return transactions.map { transaction ->
+            transaction.accountDelegation = accountDelegation(transaction, currentDelegate)
             val decoration = decoration(
                 transaction.from,
                 transaction.to,
@@ -100,6 +112,13 @@ class DecorationManager(private val userAddress: Address, private val storage: I
         )
 
         return FullTransaction(transaction, decoration, extra(transaction.hash))
+    }
+
+    private fun accountDelegation(transaction: Transaction, current: CurrentDelegate): AccountDelegation? {
+        val delegates = transaction.authorizationDelegates?.toDelegates()?.takeIf { it.isNotEmpty() } ?: return null
+        val currentAddress = (current as? CurrentDelegate.Known)?.delegate
+        val delegate = currentAddress?.takeIf { it in delegates } ?: delegates.last()
+        return AccountDelegation(delegate, isActive = delegate == currentAddress && !delegate.isZero)
     }
 
     private suspend fun getInternalTransactionsMap(transactions: List<Transaction>): Map<String, List<InternalTransaction>> {

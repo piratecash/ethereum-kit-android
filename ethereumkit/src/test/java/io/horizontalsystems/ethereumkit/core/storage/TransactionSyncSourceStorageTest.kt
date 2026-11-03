@@ -3,6 +3,7 @@ package io.horizontalsystems.ethereumkit.core.storage
 import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
+import io.horizontalsystems.ethereumkit.core.AccountDelegationState
 import io.horizontalsystems.ethereumkit.core.ITransactionProvider
 import io.horizontalsystems.ethereumkit.core.TransactionManager
 import io.horizontalsystems.ethereumkit.decorations.DecorationManager
@@ -39,7 +40,7 @@ class TransactionSyncSourceStorageTest {
         val provider = mockk<ITransactionProvider>()
         every { provider.getTransactions(any()) } returns Single.just(listOf(providerTransaction()))
         val syncer = EthereumTransactionSyncer(provider, TransactionSyncerStateStorage(database), syncSourceStorage)
-        val decorationManager = DecorationManager(address, storage).apply { addExtraDecorator(syncSourceStorage) }
+        val decorationManager = DecorationManager(address, storage, AccountDelegationState()).apply { addExtraDecorator(syncSourceStorage) }
         val transactionManager = TransactionManager(address, storage, decorationManager, mockk(), mockk())
 
         val (transactions, _) = syncer.getTransactionsSingle().blockingGet()

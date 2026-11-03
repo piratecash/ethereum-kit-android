@@ -48,6 +48,7 @@ import io.horizontalsystems.ethereumkit.network.EtherscanService
 import io.horizontalsystems.ethereumkit.network.IntTypeAdapter
 import io.horizontalsystems.ethereumkit.network.LongTypeAdapter
 import io.horizontalsystems.ethereumkit.network.OptionalTypeAdapter
+import io.horizontalsystems.ethereumkit.transactionsyncers.DelegationSyncer
 import io.horizontalsystems.ethereumkit.transactionsyncers.EthereumTransactionSyncer
 import io.horizontalsystems.ethereumkit.transactionsyncers.ExplorerSyncScheduler
 import io.horizontalsystems.ethereumkit.transactionsyncers.ExplorerSyncScheduler.Reason
@@ -937,7 +938,8 @@ class EthereumKit(
             val internalTransactionsSyncer =
                 InternalTransactionSyncer(transactionProvider, transactionStorage)
 
-            val decorationManager = DecorationManager(address, transactionStorage)
+            val accountDelegationState = AccountDelegationState()
+            val decorationManager = DecorationManager(address, transactionStorage, accountDelegationState)
             decorationManager.addExtraDecorator(transactionSyncSourceStorage)
             val transactionManager = TransactionManager(
                 address,
@@ -954,6 +956,9 @@ class EthereumKit(
 
             val pendingTransactionSyncer = PendingTransactionSyncer(transactionStorage, blockchain, transactionManager, log)
             transactionSyncManager.add(pendingTransactionSyncer)
+            transactionSyncManager.add(
+                DelegationSyncer(transactionStorage, blockchain, transactionManager, accountDelegationState, address, chain.id, log)
+            )
             val rawTransactionBroadcaster = RawTransactionBroadcaster(blockchain, transactionStorage, logger = log)
 
             val nonceProvider = NonceProvider()

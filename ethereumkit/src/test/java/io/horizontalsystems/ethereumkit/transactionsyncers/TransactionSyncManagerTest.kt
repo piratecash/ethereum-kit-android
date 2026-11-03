@@ -1,6 +1,7 @@
 package io.horizontalsystems.ethereumkit.transactionsyncers
 
 import co.touchlab.kermit.Logger as KermitLogger
+import io.horizontalsystems.ethereumkit.core.AccountDelegationState
 import io.horizontalsystems.ethereumkit.core.EthereumKit
 import io.horizontalsystems.ethereumkit.core.IBlockchain
 import io.horizontalsystems.ethereumkit.core.ITransactionProvider
@@ -50,21 +51,9 @@ class TransactionSyncManagerTest {
         val syncManager = TransactionSyncManager(transactionManager(storage), KermitLogger.withTag("Test"))
         syncManager.add(transactionSyncer(Transaction(hash, 1L, false, value = nativeValue)))
         syncManager.add(transactionSyncer(Transaction(hash, 1L, false, value = null)))
-        val synced = CountDownLatch(1)
-        val disposable = syncManager.syncStateAsync.subscribe {
-            if (it is EthereumKit.SyncState.Synced) {
-                synced.countDown()
-            }
-        }
+        syncAndAwait(syncManager)
 
-        syncManager.sync()
-
-        try {
-            assertTrue(synced.await(3, TimeUnit.SECONDS))
-            assertEquals(nativeValue, storage.getTransaction(hash)?.value)
-        } finally {
-            disposable.dispose()
-        }
+        assertEquals(nativeValue, storage.getTransaction(hash)?.value)
     }
 
     @Test
@@ -75,21 +64,24 @@ class TransactionSyncManagerTest {
         val syncManager = TransactionSyncManager(transactionManager(storage), KermitLogger.withTag("Test"))
         syncManager.add(transactionSyncer(Transaction(hash, 1L, false, input = nativeInput)))
         syncManager.add(transactionSyncer(Transaction(hash, 1L, false, input = null)))
-        val synced = CountDownLatch(1)
-        val disposable = syncManager.syncStateAsync.subscribe {
-            if (it is EthereumKit.SyncState.Synced) {
-                synced.countDown()
-            }
-        }
+        syncAndAwait(syncManager)
 
-        syncManager.sync()
+        assertArrayEquals(nativeInput, storage.getTransaction(hash)?.input)
+    }
 
-        try {
-            assertTrue(synced.await(3, TimeUnit.SECONDS))
-            assertArrayEquals(nativeInput, storage.getTransaction(hash)?.input)
-        } finally {
-            disposable.dispose()
-        }
+    @Test
+    fun sync_twoSyncersSameHashOneWithDelegation_keepsDelegationColumns() = runTest {
+        val hash = ByteArray(32) { it.toByte() }
+        val delegates = ByteArray(20) { 7 }
+        val storage = FakeTransactionStorage()
+        val syncManager = TransactionSyncManager(transactionManager(storage), KermitLogger.withTag("Test"))
+        syncManager.add(transactionSyncer(Transaction(hash, 1L, false)))
+        syncManager.add(transactionSyncer(Transaction(hash, 1L, false, type = 4, authorizationDelegates = delegates)))
+
+        syncAndAwait(syncManager)
+
+        assertEquals(4, storage.getTransaction(hash)?.type)
+        assertArrayEquals(delegates, storage.getTransaction(hash)?.authorizationDelegates)
     }
 
     @Test
@@ -212,6 +204,21 @@ class TransactionSyncManagerTest {
         }
     }
 
+    private fun syncAndAwait(syncManager: TransactionSyncManager) {
+        val synced = CountDownLatch(1)
+        val disposable = syncManager.syncStateAsync.subscribe {
+            if (it is EthereumKit.SyncState.Synced) {
+                synced.countDown()
+            }
+        }
+        try {
+            syncManager.sync()
+            assertTrue(synced.await(3, TimeUnit.SECONDS))
+        } finally {
+            disposable.dispose()
+        }
+    }
+
     private fun transactionSyncer(transaction: Transaction) = object : ITransactionSyncer {
         override fun getTransactionsSingle(): Single<Pair<List<Transaction>, Boolean>> =
             Single.just(Pair(listOf(transaction), false))
@@ -222,7 +229,7 @@ class TransactionSyncManagerTest {
         return TransactionManager(
             address = address,
             storage = storage,
-            decorationManager = DecorationManager(address, storage),
+            decorationManager = DecorationManager(address, storage, AccountDelegationState()),
             blockchain = unusedProxy(IBlockchain::class.java),
             provider = unusedProxy(ITransactionProvider::class.java)
         )
@@ -278,5 +285,8 @@ class TransactionSyncManagerTest {
         override suspend fun getDistinctTokenContractAddresses(): List<String> = emptyList()
         override suspend fun getTransactionsAfter(hash: ByteArray?): List<Transaction> =
             emptyList()
+        override suspend fun getTransactionsWithUnknownType(account: Address, limit: Int): List<Transaction> =
+            emptyList()
+        override suspend fun getAuthorizationCarriers(): List<Transaction> = emptyList()
     }
 }

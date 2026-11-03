@@ -22,5 +22,7 @@ class RpcTransaction(
         val v: String? = null,
         val r: ByteArray? = null,
         val s: ByteArray? = null,
-        val chainId: Long? = null
+        val chainId: Long? = null,
+        val type: Long? = null,
+        val authorizationList: List<RpcAuthorization>? = null
 )

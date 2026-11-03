@@ -91,7 +91,10 @@ class TransactionManager(
                     gasLimit = newTx.gasLimit ?: existingTx.gasLimit,
                     gasUsed = newTx.gasUsed ?: existingTx.gasUsed,
 
-                    replacedWith = newTx.replacedWith ?: existingTx.replacedWith
+                    replacedWith = newTx.replacedWith ?: existingTx.replacedWith,
+
+                    type = newTx.type ?: existingTx.type,
+                    authorizationDelegates = newTx.authorizationDelegates ?: existingTx.authorizationDelegates
                 )
             } else {
                 newTx

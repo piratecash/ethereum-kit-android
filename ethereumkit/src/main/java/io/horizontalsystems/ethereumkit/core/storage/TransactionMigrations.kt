@@ -72,3 +72,10 @@ val migration16_17 = object : Migration(16, 17) {
         connection.execSQL("DELETE FROM `TransactionSyncerState`")
     }
 }
+
+val migration17_18 = object : Migration(17, 18) {
+    override fun migrate(connection: SQLiteConnection) {
+        connection.execSQL("ALTER TABLE `Transaction` ADD COLUMN `type` INTEGER")
+        connection.execSQL("ALTER TABLE `Transaction` ADD COLUMN `authorizationDelegates` BLOB")
+    }
+}

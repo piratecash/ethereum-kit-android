@@ -5,6 +5,7 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import co.touchlab.kermit.Logger
 import io.horizontalsystems.erc20kit.contract.Eip20ContractMethodFactories
+import io.horizontalsystems.ethereumkit.core.AccountDelegationState
 import io.horizontalsystems.ethereumkit.core.ChainHeadProvider
 import io.horizontalsystems.ethereumkit.core.EthereumKit
 import io.horizontalsystems.ethereumkit.core.ITransactionProvider
@@ -52,7 +53,7 @@ class RecentErc20TransfersIntegrationTest {
     private val transactionManager = TransactionManager(
         userAddress,
         transactionStorage,
-        DecorationManager(userAddress, transactionStorage).apply {
+        DecorationManager(userAddress, transactionStorage, AccountDelegationState()).apply {
             addMethodDecorator(Eip20MethodDecorator(Eip20ContractMethodFactories))
             addEventDecorator(Eip20EventDecorator(userAddress, eip20Storage, Logger))
             addTransactionDecorator(Eip20TransactionDecorator(userAddress))

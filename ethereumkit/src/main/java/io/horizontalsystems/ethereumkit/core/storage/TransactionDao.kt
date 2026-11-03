@@ -32,6 +32,12 @@ interface TransactionDao {
     @Query("SELECT * FROM `Transaction` WHERE blockNumber IS NOT NULL AND nonce IN (:nonces) AND `from`=:from")
     suspend fun getNonPendingByNonces(from: ByteArray, nonces: List<Long>): List<Transaction>
 
+    @Query("SELECT * FROM `Transaction` WHERE `type` IS NULL AND blockNumber IS NOT NULL AND (`to` = :account OR `from` = :account) ORDER BY timestamp DESC LIMIT :limit")
+    suspend fun getTransactionsWithUnknownType(account: ByteArray, limit: Int): List<Transaction>
+
+    @Query("SELECT * FROM `Transaction` WHERE authorizationDelegates IS NOT NULL")
+    suspend fun getAuthorizationCarriers(): List<Transaction>
+
     @Query("SELECT * FROM `InternalTransaction`")
     suspend fun getInternalTransactions(): List<InternalTransaction>
 

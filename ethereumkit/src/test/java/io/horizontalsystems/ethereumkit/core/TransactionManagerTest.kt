@@ -24,7 +24,7 @@ class TransactionManagerTest {
     private val address = Address("0x9d6888ba1ea048dccac5c5f116e14d4713bc3673")
     private val swapHash = ByteArray(32) { 1 }
     private val storage = InMemoryTransactionStorage()
-    private val manager = TransactionManager(address, storage, DecorationManager(address, storage), mockk(), mockk())
+    private val manager = TransactionManager(address, storage, DecorationManager(address, storage, AccountDelegationState()), mockk(), mockk())
 
     private fun pending(hash: ByteArray) = Transaction(hash, 1L, false, from = address, nonce = 998)
     private fun mined(hash: ByteArray) = Transaction(hash, 1L, false, blockNumber = 100, from = address, nonce = 998)
@@ -76,6 +76,18 @@ class TransactionManagerTest {
         assertEquals(21_000L, stored.gasUsed)
     }
 
+    @Test
+    fun handle_laterRowWithoutDelegationColumns_keepsStoredColumns() = runTest {
+        val delegates = ByteArray(20) { 7 }
+        manager.handle(listOf(mined(swapHash).copy(type = 4, authorizationDelegates = delegates)))
+
+        manager.handle(listOf(mined(swapHash)))
+
+        val stored = requireNotNull(storage.getTransaction(swapHash))
+        assertEquals(4, stored.type)
+        assertArrayEquals(delegates, stored.authorizationDelegates)
+    }
+
     /** Mirrors the Room queries TransactionManager relies on; hashes compare by content like SQLite blobs. */
     private class InMemoryTransactionStorage : ITransactionStorage {
         private val rows = linkedMapOf<String, Transaction>()
@@ -119,5 +131,7 @@ class TransactionManagerTest {
         override suspend fun saveTags(tags: List<TransactionTag>) = Unit
         override suspend fun getDistinctTokenContractAddresses() = emptyList<String>()
         override suspend fun getTransactionsAfter(hash: ByteArray?) = emptyList<Transaction>()
+        override suspend fun getTransactionsWithUnknownType(account: Address, limit: Int) = emptyList<Transaction>()
+        override suspend fun getAuthorizationCarriers() = emptyList<Transaction>()
     }
 }

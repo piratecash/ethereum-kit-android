@@ -1,5 +1,6 @@
 package io.horizontalsystems.ethereumkit.core.storage
 
+import androidx.room.migration.Migration
 import androidx.sqlite.SQLiteConnection
 import androidx.sqlite.SQLiteStatement
 import org.junit.Assert.assertEquals
@@ -10,7 +11,22 @@ class TransactionMigrationsTest {
 
     @Test
     fun migration16_17_migrate_resetsTransactionSyncCursor() {
-        var executedSql: String? = null
+        assertEquals(listOf("DELETE FROM `TransactionSyncerState`"), executedSql(migration16_17))
+    }
+
+    @Test
+    fun migration17_18_migrate_addsNullableTypeAndDelegatesColumns() {
+        assertEquals(
+            listOf(
+                "ALTER TABLE `Transaction` ADD COLUMN `type` INTEGER",
+                "ALTER TABLE `Transaction` ADD COLUMN `authorizationDelegates` BLOB",
+            ),
+            executedSql(migration17_18)
+        )
+    }
+
+    private fun executedSql(migration: Migration): List<String> {
+        val executed = mutableListOf<String>()
         val statement = Proxy.newProxyInstance(
             SQLiteStatement::class.java.classLoader,
             arrayOf(SQLiteStatement::class.java)
@@ -26,12 +42,12 @@ class TransactionMigrationsTest {
             arrayOf(SQLiteConnection::class.java)
         ) { _, method, arguments ->
             check(method.name == "prepare")
-            executedSql = arguments?.single() as? String
+            executed += arguments?.single() as String
             statement
         } as SQLiteConnection
 
-        migration16_17.migrate(connection)
+        migration.migrate(connection)
 
-        assertEquals("DELETE FROM `TransactionSyncerState`", executedSql)
+        return executed
     }
 }

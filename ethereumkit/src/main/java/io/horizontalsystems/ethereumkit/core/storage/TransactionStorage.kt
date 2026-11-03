@@ -181,6 +181,12 @@ class TransactionStorage(database: TransactionDatabase) : ITransactionStorage, I
         return transactionDao.getTransactionsByRawQuery(RoomRawQuery(sqlQuery))
     }
 
+    override suspend fun getTransactionsWithUnknownType(account: Address, limit: Int): List<Transaction> =
+        transactionDao.getTransactionsWithUnknownType(account.raw, limit)
+
+    override suspend fun getAuthorizationCarriers(): List<Transaction> =
+        transactionDao.getAuthorizationCarriers()
+
     override suspend fun getRawTransactionBroadcast(hash: ByteArray): RawTransactionBroadcastRecord? =
         rawTransactionBroadcastDao.get(hash)
 
