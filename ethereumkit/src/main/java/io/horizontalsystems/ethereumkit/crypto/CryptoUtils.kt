@@ -1,5 +1,6 @@
 package io.horizontalsystems.ethereumkit.crypto
 
+import io.horizontalsystems.ethereumkit.models.Address
 import io.horizontalsystems.ethereumkit.spv.core.toBytes
 import io.horizontalsystems.ethereumkit.spv.helpers.RandomHelper
 import org.bouncycastle.asn1.sec.SECNamedCurves
@@ -124,6 +125,19 @@ object CryptoUtils {
     fun ecKeyFromPrivate(privKey: BigInteger): ECKey {
         return ECKey(privKey, CURVE.g.multiply(privKey))
     }
+
+    /** Null when r or s is outside [1, n) or no curve point matches r. */
+    fun recoverAddress(messageHash: ByteArray, r: BigInteger, s: BigInteger, recId: Int): Address? {
+        if (!isSignatureScalar(r) || !isSignatureScalar(s)) return null
+        val publicKey = try {
+            recoverPubBytesFromSignature(recId, r, s, messageHash)
+        } catch (error: IllegalArgumentException) {
+            null
+        } ?: return null
+        return Address(sha3(publicKey.copyOfRange(1, publicKey.size)).copyOfRange(12, 32))
+    }
+
+    private fun isSignatureScalar(value: BigInteger) = value.signum() > 0 && value < CURVE.n
 
     private fun makeIESEngine(isEncrypt: Boolean, pub: ECPoint, prv: BigInteger, IV: ByteArray): IESEngine {
         val aesFastEngine = AESEngine()

@@ -8,15 +8,15 @@ import androidx.room.Query
 interface MerkleTransactionDao {
 
     @Query("SELECT * FROM MerkleTransactionHash")
-    fun hashes() : List<MerkleTransactionHash>
+    suspend fun hashes() : List<MerkleTransactionHash>
 
     @Query("SELECT * FROM MerkleTransactionHash WHERE hash = :hash")
-    fun hash(hash: ByteArray) : MerkleTransactionHash?
+    suspend fun hash(hash: ByteArray) : MerkleTransactionHash?
 
     @Insert
-    fun save(hash: MerkleTransactionHash)
+    suspend fun save(hash: MerkleTransactionHash)
 
     @Query("DELETE FROM MerkleTransactionHash WHERE hash IN (:hashes)")
-    fun delete(hashes: List<ByteArray>)
+    suspend fun delete(hashes: List<ByteArray>)
 
 }

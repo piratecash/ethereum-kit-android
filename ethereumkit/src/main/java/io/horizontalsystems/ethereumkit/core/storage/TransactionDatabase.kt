@@ -1,15 +1,18 @@
 package io.horizontalsystems.ethereumkit.core.storage
 
-import android.content.Context
 import androidx.room.Database
-import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverter
 import androidx.room.TypeConverters
+import io.horizontalsystems.databasenaming.DatabaseNameResolver
+import io.horizontalsystems.ethereumkit.PlatformContext
 import io.horizontalsystems.ethereumkit.api.storage.RoomTypeConverters
+import io.horizontalsystems.ethereumkit.database.kitDatabaseBuilder
 import io.horizontalsystems.ethereumkit.models.InternalTransaction
+import io.horizontalsystems.ethereumkit.models.RawTransactionBroadcastRecord
 import io.horizontalsystems.ethereumkit.models.Transaction
 import io.horizontalsystems.ethereumkit.models.TransactionSyncerState
+import io.horizontalsystems.ethereumkit.models.TransactionSyncSource
 import io.horizontalsystems.ethereumkit.models.TransactionTag
 
 @Database(
@@ -17,26 +20,36 @@ import io.horizontalsystems.ethereumkit.models.TransactionTag
             Transaction::class,
             InternalTransaction::class,
             TransactionTag::class,
-            TransactionSyncerState::class
+            TransactionSyncerState::class,
+            TransactionSyncSource::class,
+            RawTransactionBroadcastRecord::class
         ],
-        version = 13,
-        exportSchema = false
+        version = 18,
+        exportSchema = true
 )
 @TypeConverters(RoomTypeConverters::class, TransactionDatabase.TypeConverters::class)
 abstract class TransactionDatabase : RoomDatabase() {
 
     abstract fun transactionDao(): TransactionDao
+    abstract fun rawTransactionBroadcastDao(): RawTransactionBroadcastDao
     abstract fun transactionTagDao(): TransactionTagDao
     abstract fun transactionSyncerStateDao(): TransactionSyncerStateDao
+    abstract fun transactionSyncSourceDao(): TransactionSyncSourceDao
 
     companion object {
 
-        fun getInstance(context: Context, databaseName: String): TransactionDatabase {
-            return Room.databaseBuilder(context, TransactionDatabase::class.java, databaseName)
-                    .fallbackToDestructiveMigration()
-                    .allowMainThreadQueries()
-                    .build()
-        }
+        fun getInstance(
+            context: PlatformContext,
+            databaseName: String,
+            databaseKey: ByteArray,
+            nameResolver: DatabaseNameResolver = DatabaseNameResolver.Identity,
+        ): TransactionDatabase = build(kitDatabaseBuilder(context, databaseName, databaseKey, nameResolver))
+
+        internal fun build(builder: RoomDatabase.Builder<TransactionDatabase>): TransactionDatabase =
+            builder.addMigrations(migration13_14, migration14_15, migration15_16, migration16_17, migration17_18)
+                .fallbackToDestructiveMigration(dropAllTables = false)
+                .build()
+
     }
 
     class TypeConverters {

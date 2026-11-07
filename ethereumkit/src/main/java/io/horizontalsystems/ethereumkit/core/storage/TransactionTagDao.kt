@@ -10,9 +10,9 @@ import io.horizontalsystems.ethereumkit.models.TransactionTag
 interface TransactionTagDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    fun insert(tags: List<TransactionTag>)
+    suspend fun insert(tags: List<TransactionTag>)
 
     @Query("SELECT DISTINCT name FROM TransactionTag WHERE name LIKE '%_outgoing' OR name LIKE '%_incoming'")
-    fun getDistinctTokenContractAddresses(): List<String>
+    suspend fun getDistinctTokenContractAddresses(): List<String>
 
 }

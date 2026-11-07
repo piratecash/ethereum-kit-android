@@ -3,15 +3,18 @@ package io.horizontalsystems.ethereumkit.sample.modules.main
 import android.content.Intent
 import android.os.Bundle
 import android.view.MenuItem
+import android.view.View
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.Toolbar
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.lifecycleScope
 import com.google.android.material.bottomnavigation.BottomNavigationView
 import io.horizontalsystems.ethereumkit.sample.R
 import io.horizontalsystems.ethereumkit.sample.databinding.ActivityMainBinding
 import io.horizontalsystems.ethereumkit.sample.modules.addresswatch.AddressWatchActivity
 import io.horizontalsystems.ethereumkit.sample.modules.uniswapV3.UniswapV3Fragment
+import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity(), BottomNavigationView.OnNavigationItemSelectedListener {
 
@@ -57,7 +60,13 @@ class MainActivity : AppCompatActivity(), BottomNavigationView.OnNavigationItemS
         navigation.selectedItemId = R.id.navigation_nfts
 
         viewModel = ViewModelProvider(this).get(MainViewModel::class.java)
-        viewModel.init()
+
+        // The fragments' click handlers read the kits, so they stay unreachable until the kits exist.
+        lifecycleScope.launch {
+            viewModel.kitsReady.collect { ready ->
+                binding.fragmentContainer.visibility = if (ready) View.VISIBLE else View.GONE
+            }
+        }
     }
 
     fun setToolbarTitle(title: String) {

@@ -126,6 +126,7 @@ class ViewHolderTransaction(private val containerView: View) : RecyclerView.View
         - Amount: ${tx.amount?.let { readableAmount(it) }} ETH
         - isError: ${tx.isError}
         - Decoration: ${tx.decoration}
+        - SyncSource: ${tx.syncSource ?: "n/a"}
         """
 
         if (lastBlockHeight > 0)

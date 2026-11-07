@@ -420,7 +420,7 @@ In order to send an EVM smart contract call transaction, you need to create an i
 
 
 ## Prerequisites
-* JDK >= 11
+* JDK 21
 * Android 8 (minSdkVersion 26) or greater
 
 ## Installation

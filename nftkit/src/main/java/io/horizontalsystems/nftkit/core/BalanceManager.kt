@@ -7,14 +7,14 @@ import io.horizontalsystems.nftkit.models.NftType
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
 import java.math.BigInteger
 
 class BalanceManager(
     private val balanceSyncManager: BalanceSyncManager,
-    private val storage: Storage
+    private val storage: Storage,
+    existingNftBalances: List<NftBalance>
 ) : IBalanceSyncManagerListener {
-    private val _nftBalances = MutableStateFlow<List<NftBalance>>(listOf())
+    private val _nftBalances = MutableStateFlow(existingNftBalances)
 
     val nftBalancesFlow: Flow<List<NftBalance>>
         get() = _nftBalances.asStateFlow()
@@ -22,11 +22,7 @@ class BalanceManager(
     val nftBalances: List<NftBalance>
         get() = _nftBalances.value
 
-    init {
-        syncNftBalances()
-    }
-
-    fun nftBalance(contractAddress: Address, tokenId: BigInteger): NftBalance? =
+    suspend fun nftBalance(contractAddress: Address, tokenId: BigInteger): NftBalance? =
         storage.existingNftBalance(contractAddress, tokenId)
 
     private suspend fun handleNftsFromTransactions(type: NftType, nfts: List<Nft>) {
@@ -40,17 +36,15 @@ class BalanceManager(
         balanceSyncManager.sync()
     }
 
-    private fun syncNftBalances() {
-        _nftBalances.update {
-            storage.existingNftBalances()
-        }
+    private suspend fun syncNftBalances() {
+        _nftBalances.value = storage.existingNftBalances()
     }
 
     suspend fun didSync(nfts: List<Nft>, type: NftType) {
         handleNftsFromTransactions(type, nfts)
     }
 
-    override fun didFinishSyncBalances() {
+    override suspend fun didFinishSyncBalances() {
         syncNftBalances()
     }
 }

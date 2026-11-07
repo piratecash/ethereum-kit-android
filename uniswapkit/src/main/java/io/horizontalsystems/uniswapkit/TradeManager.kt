@@ -1,8 +1,8 @@
 package io.horizontalsystems.uniswapkit
 
+import co.touchlab.kermit.Logger
 import io.horizontalsystems.ethereumkit.contracts.ContractMethod
 import io.horizontalsystems.ethereumkit.core.EthereumKit
-import io.horizontalsystems.ethereumkit.core.toHexString
 import io.horizontalsystems.ethereumkit.models.Address
 import io.horizontalsystems.ethereumkit.models.Chain
 import io.horizontalsystems.ethereumkit.models.RpcSource
@@ -20,10 +20,10 @@ import io.horizontalsystems.uniswapkit.models.Token.Ether
 import io.reactivex.Single
 import java.math.BigInteger
 import java.util.Date
-import java.util.logging.Logger
 
-class TradeManager {
-    private val logger = Logger.getLogger(this.javaClass.simpleName)
+class TradeManager(
+    private val logger: Logger
+) {
 
     sealed class UnsupportedChainError : Throwable() {
         object NoRouterAddress : UnsupportedChainError()
@@ -38,12 +38,10 @@ class TradeManager {
 
         val pairAddress = Pair.address(token0, token1, factoryAddressString, initCodeHashString)
 
-        logger.info("pairAddress: ${pairAddress.hex}")
+        logger.d { "pairAddress: ${pairAddress.hex}" }
 
         return EthereumKit.call(rpcSource, pairAddress, GetReservesMethod().encodedABI())
                 .map { data ->
-                    logger.info("getReserves data: ${data.toHexString()}")
-
                     var rawReserve0: BigInteger = BigInteger.ZERO
                     var rawReserve1: BigInteger = BigInteger.ZERO
 
@@ -55,7 +53,7 @@ class TradeManager {
                     val reserve0 = TokenAmount(token0, rawReserve0)
                     val reserve1 = TokenAmount(token1, rawReserve1)
 
-                    logger.info("getReserves reserve0: $reserve0, reserve1: $reserve1")
+                    logger.d { "getReserves reserve0: $reserve0, reserve1: $reserve1" }
 
                     Pair(reserve0, reserve1)
                 }

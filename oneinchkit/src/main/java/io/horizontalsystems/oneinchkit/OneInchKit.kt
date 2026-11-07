@@ -1,5 +1,6 @@
 package io.horizontalsystems.oneinchkit
 
+import co.touchlab.kermit.Logger
 import com.google.gson.annotations.SerializedName
 import io.horizontalsystems.ethereumkit.core.EthereumKit
 import io.horizontalsystems.ethereumkit.core.toHexString
@@ -89,7 +90,7 @@ class OneInchKit(
 
     companion object {
         fun getInstance(apiKey: String): OneInchKit {
-            return OneInchKit(OneInchService(apiKey))
+            return OneInchKit(OneInchService(apiKey, Logger.withTag("EthereumKit:OneInch")))
         }
 
         fun addDecorators(evmKit: EthereumKit) {

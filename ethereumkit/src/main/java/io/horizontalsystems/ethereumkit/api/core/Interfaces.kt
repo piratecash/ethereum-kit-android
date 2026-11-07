@@ -9,7 +9,7 @@ class RpcHandler(val onSuccess: (RpcResponse) -> Unit, val onError: (Throwable) 
 typealias SubscriptionHandler = (RpcSubscriptionResponse) -> Unit
 
 data class RpcResponse(val id: Int, val result: JsonElement?, val error: Error?) {
-    data class Error(val code: Int, val message: String)
+    data class Error(val code: Int, val message: String, val data: JsonElement? = null)
 }
 
 data class RpcSubscriptionResponse(val method: String, val params: Params) {

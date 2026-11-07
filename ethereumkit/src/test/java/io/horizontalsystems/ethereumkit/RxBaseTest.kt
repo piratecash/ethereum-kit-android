@@ -1,7 +1,6 @@
 package io.horizontalsystems.ethereumkit
 
 import io.reactivex.Scheduler
-import io.reactivex.android.plugins.RxAndroidPlugins
 import io.reactivex.internal.schedulers.ExecutorScheduler
 import io.reactivex.plugins.RxJavaPlugins
 import io.reactivex.schedulers.Schedulers

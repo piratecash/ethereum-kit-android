@@ -25,7 +25,7 @@ class QuoterV2(
 
     private val feeAmounts = FeeAmount.sorted(dexType)
 
-    private fun quoterAddress(chain: Chain) = when (dexType) {
+    internal fun quoterAddress(chain: Chain) = when (dexType) {
         DexType.Uniswap -> getUniswapQuoterAddress(chain)
         DexType.PancakeSwap -> getPancakeSwapQuoterAddress(chain)
     }
@@ -40,6 +40,7 @@ class QuoterV2(
         Chain.BinanceSmartChain -> "0x78D78E420Da98ad378D7799bE8f4AF69033EB077"
         Chain.Base -> "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a"
         Chain.ZkSync -> "0x8Cb537fc92E26d8EBBb760E632c95484b6Ea3e28"
+        Chain.RobinhoodChain -> "0x33e885ed0ec9bf04ecfb19341582aadcb4c8a9e7"
         else -> throw IllegalStateException("Not supported Uniswap chain $chain")
     }
 

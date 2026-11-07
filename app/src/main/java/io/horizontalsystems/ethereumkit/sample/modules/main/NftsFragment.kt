@@ -36,30 +36,35 @@ class NftsFragment : Fragment() {
             )
             setContent {
                 MaterialTheme {
-                    val viewModel = viewModel<NftsViewModel>(factory = NftsViewModelFactory(mainViewModel.ethereumKit))
-                    val nftBalances by viewModel.nftBalancesFlow.collectAsState(initial = listOf())
+                    val kitsReady by mainViewModel.kitsReady.collectAsState()
+                    if (kitsReady) {
+                        val viewModel = viewModel<NftsViewModel>(
+                            factory = NftsViewModelFactory(mainViewModel.ethereumKit, mainViewModel.databaseKey)
+                        )
+                        val nftBalances by viewModel.nftBalancesFlow.collectAsState(initial = listOf())
 
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        LazyColumn {
-                            nftBalances.forEach {
-                                item {
-                                    Column(modifier = Modifier.padding(vertical = 8.dp)) {
-                                        Divider()
-                                        Spacer(modifier = Modifier.height(8.dp))
-                                        SelectionContainer {
-                                            Text(
-                                                text = "Name: ${it.nft.tokenName}\n" +
-                                                        "Type: ${it.nft.type}\n" +
-                                                        "Contract: ${it.nft.contractAddress.hex}\n" +
-                                                        "ID: ${it.nft.tokenId}\n" +
-                                                        "Balance: ${it.balance}\n" +
-                                                        "Synced: ${it.synced}"
-                                            )
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            LazyColumn {
+                                nftBalances.forEach {
+                                    item {
+                                        Column(modifier = Modifier.padding(vertical = 8.dp)) {
+                                            Divider()
+                                            Spacer(modifier = Modifier.height(8.dp))
+                                            SelectionContainer {
+                                                Text(
+                                                    text = "Name: ${it.nft.tokenName}\n" +
+                                                            "Type: ${it.nft.type}\n" +
+                                                            "Contract: ${it.nft.contractAddress.hex}\n" +
+                                                            "ID: ${it.nft.tokenId}\n" +
+                                                            "Balance: ${it.balance}\n" +
+                                                            "Synced: ${it.synced}"
+                                                )
+                                            }
                                         }
                                     }
                                 }

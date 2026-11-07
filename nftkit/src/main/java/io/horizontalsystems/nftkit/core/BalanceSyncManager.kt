@@ -1,6 +1,6 @@
 package io.horizontalsystems.nftkit.core
 
-import android.util.Log
+import co.touchlab.kermit.Logger
 import io.horizontalsystems.ethereumkit.api.jsonrpc.JsonRpc
 import io.horizontalsystems.ethereumkit.models.Address
 import io.horizontalsystems.nftkit.models.Nft
@@ -14,7 +14,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 class BalanceSyncManager(
     private val address: Address,
     private val storage: Storage,
-    private val dataProvider: DataProvider
+    private val dataProvider: DataProvider,
+    private val logger: Logger
 ) {
     private var syncing = AtomicBoolean(false)
     private var syncRequested = AtomicBoolean(false)
@@ -40,7 +41,7 @@ class BalanceSyncManager(
             finishSync()
         }
 
-        Log.e("nfts", "NON-SYNCED NFT BALANCES ${nftBalances.size}")
+        logger.d { "NON-SYNCED NFT BALANCES ${nftBalances.size}" }
 
         val balanceSyncTasks = nftBalances.map { nftBalance ->
             val nft = nftBalance.nft
@@ -48,7 +49,7 @@ class BalanceSyncManager(
                 try {
                     storage.setSynced(nft, getBalance(nft))
                 } catch (error: Throwable) {
-                    Log.e("nfts", "Failed to sync balance for ${nft.tokenName} - ${nft.contractAddress} - ${nft.tokenId}")
+                    logger.e(error) { "Failed to sync balance for ${nft.tokenName} - ${nft.contractAddress} - ${nft.tokenId}" }
                 }
             }
         }

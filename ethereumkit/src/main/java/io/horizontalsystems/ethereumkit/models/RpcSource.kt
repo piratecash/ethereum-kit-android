@@ -7,10 +7,6 @@ sealed class RpcSource {
     data class WebSocket(val uri: URI, val auth: String?) : RpcSource()
 
     companion object {
-        fun bscRpcHttp(): Http {
-            return Http(listOf(URI("https://bscrpc.com")), null)
-        }
-
         fun zkSyncRpcHttp(): Http {
             return Http(listOf(URI("https://mainnet.era.zksync.io")), null)
         }
@@ -39,8 +35,8 @@ sealed class RpcSource {
         fun polygonRpcHttp(): Http {
             return Http(
                 listOf(
-                    URI("https://polygon-rpc.com"),
                     URI("https://polygon.drpc.org"),
+                    URI("https://polygon-bor-rpc.publicnode.com"),
                 ),
                 null)
         }

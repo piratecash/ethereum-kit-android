@@ -40,7 +40,12 @@ data class ProviderTokenTransaction(
     val gasLimit: Long,
     val gasPrice: Long,
     var gasUsed: Long,
-    var cumulativeGasUsed: Long
+    var cumulativeGasUsed: Long,
+    val input: ByteArray?,
+    /** Sender of the transaction. `from` above is the token transfer's sender — for a swap, the pool. */
+    val transactionSender: Address? = null,
+    /** False when the token's decimals() call failed and [tokenDecimal] is a guess. */
+    val tokenMetaResolved: Boolean = true
 )
 
 data class ProviderInternalTransaction(
@@ -53,7 +58,14 @@ data class ProviderInternalTransaction(
     val traceId: String
 ) {
 
-    fun internalTransaction() = InternalTransaction(hash, blockNumber, from, to, value)
+    fun internalTransaction() = InternalTransaction(
+        hash = hash,
+        traceId = traceId,
+        blockNumber = blockNumber,
+        from = from,
+        to = to,
+        value = value
+    )
 
 }
 

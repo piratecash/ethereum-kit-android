@@ -43,14 +43,17 @@ class UniswapV3Fragment : Fragment() {
                 ViewCompositionStrategy.DisposeOnLifecycleDestroyed(viewLifecycleOwner)
             )
             setContent {
-                UniswapV3Screen(
-                    mainViewModel.ethereumKit,
-                    mainViewModel.erc20Adapter,
-                    mainViewModel.ethereumAdapter,
-                    mainViewModel.gasPriceHelper,
-                    mainViewModel.signer,
-                    mainViewModel.rpcSource
-                )
+                val kitsReady by mainViewModel.kitsReady.collectAsState()
+                if (kitsReady) {
+                    UniswapV3Screen(
+                        mainViewModel.ethereumKit,
+                        mainViewModel.erc20Adapter,
+                        mainViewModel.ethereumAdapter,
+                        mainViewModel.gasPriceHelper,
+                        mainViewModel.signer,
+                        mainViewModel.rpcSource
+                    )
+                }
             }
         }
     }
