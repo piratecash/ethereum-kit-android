@@ -1,6 +1,7 @@
 package io.horizontalsystems.ethereumkit.core
 
 import androidx.room.RoomDatabase
+import io.horizontalsystems.databasenaming.DatabaseNameResolver
 import io.horizontalsystems.ethereumkit.PlatformContext
 import io.horizontalsystems.ethereumkit.api.storage.ApiDatabase
 import io.horizontalsystems.ethereumkit.core.storage.Eip20Database
@@ -18,15 +19,21 @@ internal object EthereumDatabaseManager {
     }
 
     /** Opens all three databases or, if one fails, closes those already open. */
-    suspend fun open(context: PlatformContext, chain: Chain, walletId: String, databaseKey: ByteArray): Databases {
+    suspend fun open(
+        context: PlatformContext,
+        chain: Chain,
+        walletId: String,
+        databaseKey: ByteArray,
+        nameResolver: DatabaseNameResolver = DatabaseNameResolver.Identity,
+    ): Databases {
         val opened = mutableListOf<RoomDatabase>()
         suspend fun <T : RoomDatabase> open(name: String, build: (String) -> T): T =
-            EthereumKitDatabases.open(context, name, build).also(opened::add)
+            EthereumKitDatabases.open(context, name, nameResolver, build).also(opened::add)
         try {
             return Databases(
-                api = open(getDbNameApi(walletId, chain)) { ApiDatabase.getInstance(context, it, databaseKey) },
-                transactions = open(getDbNameTransactions(walletId, chain)) { TransactionDatabase.getInstance(context, it, databaseKey) },
-                erc20 = open(getDbNameErc20Events(walletId, chain)) { Eip20Database.getInstance(context, it, databaseKey) },
+                api = open(getDbNameApi(walletId, chain)) { ApiDatabase.getInstance(context, it, databaseKey, nameResolver) },
+                transactions = open(getDbNameTransactions(walletId, chain)) { TransactionDatabase.getInstance(context, it, databaseKey, nameResolver) },
+                erc20 = open(getDbNameErc20Events(walletId, chain)) { Eip20Database.getInstance(context, it, databaseKey, nameResolver) },
             )
         } catch (error: Throwable) {
             opened.forEach(EthereumKitDatabases::close)
@@ -34,12 +41,23 @@ internal object EthereumDatabaseManager {
         }
     }
 
-    suspend fun migrate(context: PlatformContext, chain: Chain, walletId: String, databaseKey: ByteArray): DatabaseMigrationResult =
-        EthereumKitDatabases.migrate(context, migrationId(chain, walletId), databaseNames(chain, walletId), databaseKey)
+    suspend fun migrate(
+        context: PlatformContext,
+        chain: Chain,
+        walletId: String,
+        databaseKey: ByteArray,
+        nameResolver: DatabaseNameResolver = DatabaseNameResolver.Identity,
+    ): DatabaseMigrationResult =
+        EthereumKitDatabases.migrate(context, migrationId(chain, walletId), databaseNames(chain, walletId), databaseKey, nameResolver)
 
-    suspend fun clear(context: PlatformContext, chain: Chain, walletId: String) {
+    suspend fun clear(
+        context: PlatformContext,
+        chain: Chain,
+        walletId: String,
+        nameResolver: DatabaseNameResolver = DatabaseNameResolver.Identity,
+    ) {
         val names = databaseNames(chain, walletId) + getDbNameSpv(walletId, chain)
-        EthereumKitDatabases.clear(context, migrationId(chain, walletId), names)
+        EthereumKitDatabases.clear(context, migrationId(chain, walletId), names, nameResolver)
     }
 
     private fun migrationId(chain: Chain, walletId: String) = EthereumKitDatabases.migrationId("ethereum", chain, walletId)

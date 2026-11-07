@@ -1,5 +1,6 @@
 package io.horizontalsystems.ethereumkit.fixture
 
+import io.horizontalsystems.databasenaming.DatabaseNameResolver
 import io.horizontalsystems.ethereumkit.PlatformContext
 import io.horizontalsystems.ethereumkit.core.EthereumKit
 import io.horizontalsystems.ethereumkit.models.Address
@@ -33,6 +34,7 @@ internal suspend fun watchKit(
     walletId: String,
     key: ByteArray,
     chain: Chain = Chain.Ethereum,
+    nameResolver: DatabaseNameResolver = DatabaseNameResolver.Identity,
 ): EthereumKit = EthereumKit.getInstance(
     application = context,
     address = Address("0x1111111111111111111111111111111111111111"),
@@ -41,4 +43,5 @@ internal suspend fun watchKit(
     transactionSource = TransactionSource.ethereum(listOf("key")),
     walletId = walletId,
     databaseKey = key,
+    nameResolver = nameResolver,
 )

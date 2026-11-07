@@ -9,6 +9,8 @@ kermit = "2.1.0"
 robolectric = "4.16"
 androidxTestCore = "1.7.0"
 piratecashBitcoin = "v0.1.0-pcash.36"
+# The naming contract is a plain jar published with bitcoin-kit; sqlcipher stays on piratecashBitcoin.
+databaseNaming = "v0.1.0-pcash.47"
 
 [libraries]
 hd-wallet-kit = { module = "com.github.piratecash.hd-wallet-kit-android:hd-wallet-kit-kmp", version.ref = "hdWalletKit" }
@@ -18,6 +20,7 @@ room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "
 room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
 room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
 sqlite-bundled = { group = "androidx.sqlite", name = "sqlite-bundled", version.ref = "sqlite" }
+database-naming = { module = "com.github.piratecash.bitcoin-kit-android:database-naming", version.ref = "databaseNaming" }
 sqlcipher-room = { module = "com.github.piratecash.bitcoin-kit-android:sqlcipher-room", version.ref = "piratecashBitcoin" }
 sqlcipher-driver = { module = "com.github.piratecash.bitcoin-kit-android:sqlcipher-driver", version.ref = "piratecashBitcoin" }
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "kotlinxCoroutinesCore" }

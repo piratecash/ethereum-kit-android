@@ -46,6 +46,7 @@ kotlin {
             dependencies {
                 // Public API exposes its exceptions and DatabaseMigrationResult.
                 api(libs.sqlcipher.room)
+                api(libs.database.naming)
                 implementation(libs.kotlinx.coroutines.android)
                 implementation("androidx.annotation:annotation:1.4.0")
             }
@@ -53,6 +54,7 @@ kotlin {
         named("desktopMain") {
             dependencies {
                 api(libs.sqlcipher.room)
+                api(libs.database.naming)
                 runtimeOnly(libs.secp256k1.jni.jvm)
             }
         }

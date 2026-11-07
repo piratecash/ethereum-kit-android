@@ -2,6 +2,7 @@ package io.horizontalsystems.ethereumkit.database
 
 import androidx.room.RoomDatabase
 import androidx.room.useReaderConnection
+import io.horizontalsystems.databasenaming.DatabaseNameResolver
 import io.horizontalsystems.ethereumkit.PlatformContext
 import io.horizontalsystems.ethereumkit.models.Chain
 import io.horizontalsystems.sqlcipher.room.DatabaseMigrationResult
@@ -19,8 +20,6 @@ import java.util.concurrent.ConcurrentHashMap
  * so within the process they queue on one lock instead.
  */
 object EthereumKitDatabases {
-    // Names the on-disk manifest and lock files (`.ethereum-kit-sqlcipher*`); must never change.
-    private val databases = SqlCipherDatabases("ethereum-kit")
     private val mutex = Mutex()
 
     // Every instance this process opened and has not closed, by file path; a kit recreated on an RPC change
@@ -52,13 +51,17 @@ object EthereumKitDatabases {
         migrationId: String,
         databaseNames: List<String>,
         databaseKey: ByteArray,
+        nameResolver: DatabaseNameResolver = DatabaseNameResolver.Identity,
     ): DatabaseMigrationResult {
         requireValidDatabaseKey(databaseKey)
-        databaseNames.forEach(::requireValidDatabaseName)
+        val names = databaseNames.map { resolvedDatabaseName(it, nameResolver) }
+        val databases = databases(nameResolver)
+        val resolvedMigrationId = nameResolver.resolve(migrationId)
         val directory = directory(context).path
         return mutex.withLock {
-            databaseNames.fold(DatabaseMigrationResult(0, 0)) { total, name ->
-                val result = databases.migrateDatabases(directory, listOf(name), migrationId, databaseKey)
+            // An empty group still reaches the engine: it recovers interrupted work of the namespace before anything else.
+            names.map(::listOf).ifEmpty { listOf(emptyList()) }.fold(DatabaseMigrationResult(0, 0)) { total, group ->
+                val result = databases.migrateDatabases(directory, group, resolvedMigrationId, databaseKey)
                 DatabaseMigrationResult(
                     total.migratedDatabaseCount + result.migratedDatabaseCount,
                     total.alreadyEncryptedDatabaseCount + result.alreadyEncryptedDatabaseCount,
@@ -71,27 +74,44 @@ object EthereumKitDatabases {
      * Closes the still open instances of [databaseNames], then deletes them and whatever an interrupted
      * migration or clear of [migrationId] left behind. Closing interrupts their pending writes.
      */
-    suspend fun clear(context: PlatformContext, migrationId: String, databaseNames: List<String>) {
-        databaseNames.forEach(::requireValidDatabaseName)
+    suspend fun clear(
+        context: PlatformContext,
+        migrationId: String,
+        databaseNames: List<String>,
+        nameResolver: DatabaseNameResolver = DatabaseNameResolver.Identity,
+    ) {
+        val names = databaseNames.map { resolvedDatabaseName(it, nameResolver) }
+        val databases = databases(nameResolver)
+        val resolvedMigrationId = nameResolver.resolve(migrationId)
         val directory = directory(context).path
-        val paths = databaseNames.map { databasePath(context, it) }.toSet()
+        val paths = names.map { databasePath(context, it) }.toSet()
         mutex.withLock {
             withContext(Dispatchers.IO) {
                 // An open file cannot be deleted on Windows, and an open connection would write into a deleted file.
                 openDatabases.filterValues(paths::contains).keys.forEach(::close)
-                databases.clearDatabases(directory, databaseNames, migrationId)
+                databases.clearDatabases(directory, names, resolvedMigrationId)
             }
         }
     }
 
     /** Builds and opens the database file [name], so key and open failures surface here rather than on a later query. */
-    suspend fun <T : RoomDatabase> open(context: PlatformContext, name: String, build: (name: String) -> T): T = mutex.withLock {
+    suspend fun <T : RoomDatabase> open(context: PlatformContext, name: String, build: (name: String) -> T): T =
+        open(context, name, DatabaseNameResolver.Identity, build)
+
+    /** As the overload above for the file [nameResolver] maps the default [name] to; [build] receives the resolved name. */
+    suspend fun <T : RoomDatabase> open(
+        context: PlatformContext,
+        name: String,
+        nameResolver: DatabaseNameResolver,
+        build: (name: String) -> T,
+    ): T = mutex.withLock {
         var database: T? = null
+        val resolvedName = resolvedDatabaseName(name, nameResolver)
         try {
             withContext(Dispatchers.IO) {
-                build(name).also {
+                build(resolvedName).also {
                     database = it
-                    openDatabases[it] = databasePath(context, name)
+                    openDatabases[it] = databasePath(context, resolvedName)
                 }.apply { useReaderConnection { } }
             }
         } catch (error: Throwable) {
@@ -123,14 +143,24 @@ object EthereumKitDatabases {
         builder: RoomDatabase.Builder<T>,
         path: String,
         databaseKey: ByteArray,
-    ): RoomDatabase.Builder<T> = databases.encrypted(builder, path, databaseKey)
+        nameResolver: DatabaseNameResolver = DatabaseNameResolver.Identity,
+    ): RoomDatabase.Builder<T> = databases(nameResolver).encrypted(builder, path, databaseKey)
+
+    private fun databases(nameResolver: DatabaseNameResolver) =
+        SqlCipherDatabases(resolvedNamespace(nameResolver))
+
+    private fun resolvedNamespace(nameResolver: DatabaseNameResolver): String =
+        nameResolver.resolve(NAMESPACE).also(::requireNoPathOrMigrationName)
 
     private fun databasePath(context: PlatformContext, name: String): String = databaseFile(context, name).absolutePath
 
-    private fun requireValidDatabaseName(name: String) {
+    private fun resolvedDatabaseName(defaultName: String, nameResolver: DatabaseNameResolver): String {
+        val name = nameResolver.resolve(defaultName)
+        val reservedPrefixes = RESERVED_PREFIXES + ".${resolvedNamespace(nameResolver)}-sqlcipher"
         require(name.isNotBlank()) { "Database name must not be blank" }
-        require(RESERVED_PREFIXES.none(name::startsWith)) { "Database name uses a reserved migration prefix: $name" }
+        require(reservedPrefixes.none(name::startsWith)) { "Database name uses a reserved migration prefix: $name" }
         requireNoPathOrMigrationName(name)
+        return name
     }
 
     private fun requireNoPathOrMigrationName(value: String) {
@@ -139,6 +169,8 @@ object EthereumKitDatabases {
         require(RESERVED_SUFFIXES.none(value::contains)) { "Must not contain a reserved migration suffix: $value" }
     }
 
+    // Names the on-disk manifest and lock files (`.ethereum-kit-sqlcipher*`); the default must never change.
+    private const val NAMESPACE = "ethereum-kit"
     private const val DATABASE_KEY_SIZE = 32
     private const val DIRECTORY_PROBE = "ethereum-kit"
 

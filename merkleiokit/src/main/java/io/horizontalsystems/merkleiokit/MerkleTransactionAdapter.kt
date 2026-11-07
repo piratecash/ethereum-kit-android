@@ -1,5 +1,6 @@
 package io.horizontalsystems.merkleiokit
 
+import io.horizontalsystems.databasenaming.DatabaseNameResolver
 import io.horizontalsystems.ethereumkit.PlatformContext
 import io.horizontalsystems.ethereumkit.api.core.ApiRpcSyncer
 import io.horizontalsystems.ethereumkit.api.core.NodeApiProvider
@@ -66,6 +67,7 @@ class MerkleTransactionAdapter(
             sourceTag: String,
             transactionSyncSourceStorage: TransactionSyncSourceStorage,
             eventListenerFactory: EventListener.Factory? = null,
+            nameResolver: DatabaseNameResolver = DatabaseNameResolver.Identity,
         ): MerkleTransactionAdapter? {
             EthereumKitDatabases.requireValidDatabaseKey(databaseKey)
             EthereumKitDatabases.requireValidWalletId(walletId)
@@ -81,8 +83,8 @@ class MerkleTransactionAdapter(
             )
 
             // Opened first: the syncer registers a connection listener, and nothing may suspend after that.
-            val merkleDatabase = EthereumKitDatabases.open(context, databaseName(chain, walletId)) {
-                MerkleDatabase.getInstance(context, it, databaseKey)
+            val merkleDatabase = EthereumKitDatabases.open(context, databaseName(chain, walletId), nameResolver) {
+                MerkleDatabase.getInstance(context, it, databaseKey, nameResolver)
             }
 
             val connectionManager = ConnectionManager.getInstance(context)
@@ -115,17 +117,23 @@ class MerkleTransactionAdapter(
             context: PlatformContext,
             chain: Chain,
             walletId: String,
-            databaseKey: ByteArray
+            databaseKey: ByteArray,
+            nameResolver: DatabaseNameResolver = DatabaseNameResolver.Identity,
         ): DatabaseMigrationResult {
             EthereumKitDatabases.requireValidDatabaseKey(databaseKey)
             EthereumKitDatabases.requireValidWalletId(walletId)
-            return EthereumKitDatabases.migrate(context, migrationId(chain, walletId), listOf(databaseName(chain, walletId)), databaseKey)
+            return EthereumKitDatabases.migrate(context, migrationId(chain, walletId), listOf(databaseName(chain, walletId)), databaseKey, nameResolver)
         }
 
         /** Deletes the wallet's Merkle database on [chain]; same contract as [EthereumKit.clear]. */
-        suspend fun clear(context: PlatformContext, chain: Chain, walletId: String) {
+        suspend fun clear(
+            context: PlatformContext,
+            chain: Chain,
+            walletId: String,
+            nameResolver: DatabaseNameResolver = DatabaseNameResolver.Identity,
+        ) {
             EthereumKitDatabases.requireValidWalletId(walletId)
-            EthereumKitDatabases.clear(context, migrationId(chain, walletId), listOf(databaseName(chain, walletId)))
+            EthereumKitDatabases.clear(context, migrationId(chain, walletId), listOf(databaseName(chain, walletId)), nameResolver)
         }
 
         private fun migrationId(chain: Chain, walletId: String) = EthereumKitDatabases.migrationId("merkle", chain, walletId)

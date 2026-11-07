@@ -1,5 +1,6 @@
 package io.horizontalsystems.erc20kit.core
 
+import io.horizontalsystems.databasenaming.DatabaseNameResolver
 import io.horizontalsystems.erc20kit.contract.Eip20ContractMethodFactories
 import io.horizontalsystems.ethereumkit.PlatformContext
 import io.horizontalsystems.ethereumkit.core.EthereumKit
@@ -170,7 +171,8 @@ class Erc20Kit(
                 ethereumKit.chain,
                 ethereumKit.walletId,
                 contractAddress,
-                databaseKey
+                databaseKey,
+                ethereumKit.nameResolver
             )
             val roomStorage = Erc20Storage(erc20KitDatabase)
             val balanceStorage: ITokenBalanceStorage = roomStorage
@@ -260,23 +262,35 @@ class Erc20Kit(
 
         /**
          * Encrypts every token database of [walletId] on [chain] with [databaseKey], keeping the data; same
-         * contract and failures as [EthereumKit.migrateDatabase].
+         * contract and failures as [EthereumKit.migrateDatabase]. Under a [nameResolver] other than
+         * [DatabaseNameResolver.Identity] only [contractAddresses] are migrated; interrupted work is recovered either way.
          */
         suspend fun migrateDatabases(
             context: PlatformContext,
             chain: Chain,
             walletId: String,
-            databaseKey: ByteArray
+            databaseKey: ByteArray,
+            nameResolver: DatabaseNameResolver = DatabaseNameResolver.Identity,
+            contractAddresses: Collection<Address> = emptyList(),
         ): DatabaseMigrationResult {
             EthereumKitDatabases.requireValidDatabaseKey(databaseKey)
             EthereumKitDatabases.requireValidWalletId(walletId)
-            return Erc20DatabaseManager.migrate(context, chain, walletId, databaseKey)
+            return Erc20DatabaseManager.migrate(context, chain, walletId, databaseKey, nameResolver, contractAddresses)
         }
 
-        /** Deletes every token database of [walletId] on [chain]; same contract as [EthereumKit.clear]. */
-        suspend fun clear(context: PlatformContext, chain: Chain, walletId: String) {
+        /**
+         * Deletes every token database of [walletId] on [chain]; same contract as [EthereumKit.clear].
+         * Under a [nameResolver] other than [DatabaseNameResolver.Identity] only [contractAddresses] are deleted.
+         */
+        suspend fun clear(
+            context: PlatformContext,
+            chain: Chain,
+            walletId: String,
+            nameResolver: DatabaseNameResolver = DatabaseNameResolver.Identity,
+            contractAddresses: Collection<Address> = emptyList(),
+        ) {
             EthereumKitDatabases.requireValidWalletId(walletId)
-            Erc20DatabaseManager.clear(context, chain, walletId)
+            Erc20DatabaseManager.clear(context, chain, walletId, nameResolver, contractAddresses)
         }
     }
 

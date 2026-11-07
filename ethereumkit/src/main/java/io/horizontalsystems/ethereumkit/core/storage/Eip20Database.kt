@@ -1,6 +1,7 @@
 package io.horizontalsystems.ethereumkit.core.storage
 
 import androidx.room.*
+import io.horizontalsystems.databasenaming.DatabaseNameResolver
 import io.horizontalsystems.ethereumkit.PlatformContext
 import io.horizontalsystems.ethereumkit.api.storage.RoomTypeConverters
 import io.horizontalsystems.ethereumkit.database.kitDatabaseBuilder
@@ -23,8 +24,12 @@ abstract class Eip20Database : RoomDatabase() {
 
     companion object {
 
-        fun getInstance(context: PlatformContext, databaseName: String, databaseKey: ByteArray): Eip20Database =
-            build(kitDatabaseBuilder(context, databaseName, databaseKey))
+        fun getInstance(
+            context: PlatformContext,
+            databaseName: String,
+            databaseKey: ByteArray,
+            nameResolver: DatabaseNameResolver = DatabaseNameResolver.Identity,
+        ): Eip20Database = build(kitDatabaseBuilder(context, databaseName, databaseKey, nameResolver))
 
         internal fun build(builder: RoomDatabase.Builder<Eip20Database>): Eip20Database =
             builder.addMigrations(migration2_3, migration3_4, migration4_5, migration5_6)

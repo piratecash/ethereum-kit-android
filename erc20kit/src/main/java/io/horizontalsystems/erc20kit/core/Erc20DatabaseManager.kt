@@ -1,5 +1,6 @@
 package io.horizontalsystems.erc20kit.core
 
+import io.horizontalsystems.databasenaming.DatabaseNameResolver
 import io.horizontalsystems.erc20kit.core.room.Erc20KitDatabase
 import io.horizontalsystems.ethereumkit.PlatformContext
 import io.horizontalsystems.ethereumkit.database.EthereumKitDatabases
@@ -18,19 +19,46 @@ internal object Erc20DatabaseManager {
         walletId: String,
         contractAddress: Address,
         databaseKey: ByteArray,
-    ): Erc20KitDatabase = EthereumKitDatabases.open(context, "${getDbNameBase(chain, walletId)}-${contractAddress.hex}") {
-        Erc20KitDatabase.getInstance(context, it, databaseKey)
+        nameResolver: DatabaseNameResolver = DatabaseNameResolver.Identity,
+    ): Erc20KitDatabase = EthereumKitDatabases.open(context, tokenDatabaseName(chain, walletId, contractAddress), nameResolver) {
+        Erc20KitDatabase.getInstance(context, it, databaseKey, nameResolver)
     }
 
-    suspend fun migrate(context: PlatformContext, chain: Chain, walletId: String, databaseKey: ByteArray): DatabaseMigrationResult {
-        val names = erc20DatabaseNames(context, chain, walletId)
-        return EthereumKitDatabases.migrate(context, migrationId(chain, walletId), names, databaseKey)
+    suspend fun migrate(
+        context: PlatformContext,
+        chain: Chain,
+        walletId: String,
+        databaseKey: ByteArray,
+        nameResolver: DatabaseNameResolver = DatabaseNameResolver.Identity,
+        contractAddresses: Collection<Address> = emptyList(),
+    ): DatabaseMigrationResult {
+        val names = tokenDatabaseNames(context, chain, walletId, nameResolver, contractAddresses)
+        return EthereumKitDatabases.migrate(context, migrationId(chain, walletId), names, databaseKey, nameResolver)
     }
 
     // Always issued, even without token files: the engine still finds an interrupted migration or clear by its id.
-    suspend fun clear(context: PlatformContext, chain: Chain, walletId: String) {
-        val names = erc20DatabaseNames(context, chain, walletId)
-        EthereumKitDatabases.clear(context, migrationId(chain, walletId), names)
+    suspend fun clear(
+        context: PlatformContext,
+        chain: Chain,
+        walletId: String,
+        nameResolver: DatabaseNameResolver = DatabaseNameResolver.Identity,
+        contractAddresses: Collection<Address> = emptyList(),
+    ) {
+        val names = tokenDatabaseNames(context, chain, walletId, nameResolver, contractAddresses)
+        EthereumKitDatabases.clear(context, migrationId(chain, walletId), names, nameResolver)
+    }
+
+    // Directory discovery sees only default names, and resolving one would pick an opaque file nobody listed.
+    private suspend fun tokenDatabaseNames(
+        context: PlatformContext,
+        chain: Chain,
+        walletId: String,
+        nameResolver: DatabaseNameResolver,
+        contractAddresses: Collection<Address>,
+    ): List<String> {
+        val listed = contractAddresses.map { tokenDatabaseName(chain, walletId, it) }
+        if (nameResolver !== DatabaseNameResolver.Identity) return listed.distinct()
+        return (erc20DatabaseNames(context, chain, walletId) + listed).distinct()
     }
 
     /**
@@ -51,6 +79,9 @@ internal object Erc20DatabaseManager {
     }
 
     private fun migrationId(chain: Chain, walletId: String) = EthereumKitDatabases.migrationId("erc20", chain, walletId)
+
+    private fun tokenDatabaseName(chain: Chain, walletId: String, contractAddress: Address): String =
+        "${getDbNameBase(chain, walletId)}-${contractAddress.hex}"
 
     private fun getDbNameBase(chain: Chain, walletId: String): String {
         return "Erc20-${chain.id}-$walletId"

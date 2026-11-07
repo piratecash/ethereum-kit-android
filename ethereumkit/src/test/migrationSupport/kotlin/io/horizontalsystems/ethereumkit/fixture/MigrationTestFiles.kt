@@ -55,20 +55,26 @@ internal fun interruptStagedMigration(database: File, migrationId: String, key: 
 }
 
 /** A sqlcipher-room manifest (format version 1) for [migrationId], as the kit would have written it. */
-internal fun writeManifest(directory: File, migrationId: String, phase: ManifestPhase, databases: List<File>): File {
+internal fun writeManifest(
+    directory: File,
+    migrationId: String,
+    phase: ManifestPhase,
+    databases: List<File>,
+    namespace: String = NAMESPACE,
+): File {
     val entries = databases.joinToString(",") { database ->
         """{"databasePath":${jsonString(database.path)},"stagingPath":${jsonString("${database.path}$STAGING_SUFFIX")}}"""
     }
-    return manifestFile(directory, migrationId).apply {
+    return manifestFile(directory, migrationId, namespace).apply {
         writeText("""{"version":1,"phase":"${phase.name}","entries":[$entries]}""")
     }
 }
 
 // Same derivation as sqlcipher-room: SHA-256 prefix of the migration id in hex.
-internal fun manifestFile(directory: File, migrationId: String): File {
+internal fun manifestFile(directory: File, migrationId: String, namespace: String = NAMESPACE): File {
     val digest = MessageDigest.getInstance("SHA-256").digest(migrationId.encodeToByteArray())
     val id = digest.take(8).joinToString("") { "%02x".format(it) }
-    return File(directory, ".$NAMESPACE-sqlcipher-$id.json")
+    return File(directory, ".$namespace-sqlcipher-$id.json")
 }
 
 private fun jsonString(value: String): String = "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\""

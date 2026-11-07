@@ -4,6 +4,7 @@ import androidx.room.Database
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverter
 import androidx.room.TypeConverters
+import io.horizontalsystems.databasenaming.DatabaseNameResolver
 import io.horizontalsystems.ethereumkit.PlatformContext
 import io.horizontalsystems.ethereumkit.api.storage.RoomTypeConverters
 import io.horizontalsystems.ethereumkit.database.kitDatabaseBuilder
@@ -37,8 +38,12 @@ abstract class TransactionDatabase : RoomDatabase() {
 
     companion object {
 
-        fun getInstance(context: PlatformContext, databaseName: String, databaseKey: ByteArray): TransactionDatabase =
-            build(kitDatabaseBuilder(context, databaseName, databaseKey))
+        fun getInstance(
+            context: PlatformContext,
+            databaseName: String,
+            databaseKey: ByteArray,
+            nameResolver: DatabaseNameResolver = DatabaseNameResolver.Identity,
+        ): TransactionDatabase = build(kitDatabaseBuilder(context, databaseName, databaseKey, nameResolver))
 
         internal fun build(builder: RoomDatabase.Builder<TransactionDatabase>): TransactionDatabase =
             builder.addMigrations(migration13_14, migration14_15, migration15_16, migration16_17, migration17_18)

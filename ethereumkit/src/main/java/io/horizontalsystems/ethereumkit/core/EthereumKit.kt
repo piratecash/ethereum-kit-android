@@ -2,6 +2,7 @@ package io.horizontalsystems.ethereumkit.core
 
 import com.google.gson.GsonBuilder
 import com.google.gson.reflect.TypeToken
+import io.horizontalsystems.databasenaming.DatabaseNameResolver
 import io.horizontalsystems.ethereumkit.PlatformContext
 import io.horizontalsystems.ethereumkit.api.core.ApiRpcSyncer
 import io.horizontalsystems.ethereumkit.api.core.IRpcSyncer
@@ -115,7 +116,8 @@ class EthereumKit(
     private val rawTransactionBroadcaster: RawTransactionBroadcaster,
     lastScannedBlock: Long?,
     private val state: EthereumKitState = EthereumKitState(),
-    val eventListenerFactory: EventListener.Factory? = null
+    val eventListenerFactory: EventListener.Factory? = null,
+    val nameResolver: DatabaseNameResolver = DatabaseNameResolver.Identity,
 ) : IBlockchainListener, ChainHeadProvider {
 
     /** Scanning ERC-20 logs needs HTTP RPC endpoints, which a WebSocket source does not provide. */
@@ -848,7 +850,8 @@ class EthereumKit(
             databaseKey: ByteArray,
             fallbackHistoryBlockWindow: Long = DEFAULT_FALLBACK_HISTORY_BLOCK_WINDOW,
             scanHistoricalEip20: Boolean = true,
-            eventListenerFactory: EventListener.Factory? = null
+            eventListenerFactory: EventListener.Factory? = null,
+            nameResolver: DatabaseNameResolver = DatabaseNameResolver.Identity,
         ): EthereumKit {
             val seed = Mnemonic().toSeed(words, passphrase)
             val privateKey = Signer.privateKey(seed, chain)
@@ -863,7 +866,8 @@ class EthereumKit(
                 databaseKey,
                 fallbackHistoryBlockWindow,
                 scanHistoricalEip20,
-                eventListenerFactory
+                eventListenerFactory,
+                nameResolver
             )
         }
 
@@ -885,11 +889,12 @@ class EthereumKit(
             databaseKey: ByteArray,
             fallbackHistoryBlockWindow: Long = DEFAULT_FALLBACK_HISTORY_BLOCK_WINDOW,
             scanHistoricalEip20: Boolean = true,
-            eventListenerFactory: EventListener.Factory? = null
+            eventListenerFactory: EventListener.Factory? = null,
+            nameResolver: DatabaseNameResolver = DatabaseNameResolver.Identity,
         ): EthereumKit {
             EthereumKitDatabases.requireValidDatabaseKey(databaseKey)
             EthereumKitDatabases.requireValidWalletId(walletId)
-            val databases = EthereumDatabaseManager.open(application, chain, walletId, databaseKey)
+            val databases = EthereumDatabaseManager.open(application, chain, walletId, databaseKey, nameResolver)
             val storage = ApiStorage(databases.api)
             val erc20Storage = Eip20Storage(databases.erc20)
             // All reads happen before any listener is registered.
@@ -984,7 +989,8 @@ class EthereumKit(
                 rawTransactionBroadcaster,
                 lastScannedBlock,
                 state,
-                eventListenerFactory
+                eventListenerFactory,
+                nameResolver
             )
 
             blockchain.listener = ethereumKit
@@ -1007,11 +1013,12 @@ class EthereumKit(
             context: PlatformContext,
             chain: Chain,
             walletId: String,
-            databaseKey: ByteArray
+            databaseKey: ByteArray,
+            nameResolver: DatabaseNameResolver = DatabaseNameResolver.Identity,
         ): DatabaseMigrationResult {
             EthereumKitDatabases.requireValidDatabaseKey(databaseKey)
             EthereumKitDatabases.requireValidWalletId(walletId)
-            return EthereumDatabaseManager.migrate(context, chain, walletId, databaseKey)
+            return EthereumDatabaseManager.migrate(context, chain, walletId, databaseKey, nameResolver)
         }
 
         /**
@@ -1019,9 +1026,14 @@ class EthereumKit(
          * Stop the kit first. Throws [IllegalArgumentException] for an invalid [walletId] before any I/O, and
          * [DatabaseMigrationConflictException] while another process migrates or clears; retry later.
          */
-        suspend fun clear(context: PlatformContext, chain: Chain, walletId: String) {
+        suspend fun clear(
+            context: PlatformContext,
+            chain: Chain,
+            walletId: String,
+            nameResolver: DatabaseNameResolver = DatabaseNameResolver.Identity,
+        ) {
             EthereumKitDatabases.requireValidWalletId(walletId)
-            EthereumDatabaseManager.clear(context, chain, walletId)
+            EthereumDatabaseManager.clear(context, chain, walletId, nameResolver)
         }
 
         private fun transactionProvider(
