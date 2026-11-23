@@ -177,6 +177,19 @@ class RawTransactionBroadcasterTest {
     }
 
     @Test
+    fun retry_transactionTypeNotSupported_deletesRecord() {
+        storage.records[hash.toRawHexString()] = queuedRecord(lastSendTime = 0L)
+        now = RawTransactionBroadcaster.retriesPeriod + 1
+        stubTransactionAbsent()
+        blockchain.sendRawTransactionResult =
+            Single.error(JsonRpc.ResponseError.RpcError(RpcResponse.Error(-32000, "transaction type not supported")))
+
+        broadcaster.retryQueued().blockingGet()
+
+        assertTrue(storage.records.isEmpty())
+    }
+
+    @Test
     fun retry_retriesExhausted_deletesWithoutBroadcast() {
         storage.records[hash.toRawHexString()] = queuedRecord(
             lastSendTime = 0L,
@@ -258,6 +271,17 @@ class RawTransactionBroadcasterTest {
         val result = broadcaster.broadcast(rawTransaction).blockingGet()
 
         assertEquals(RawTransactionBroadcastStatus.AlreadyKnown, result.status)
+        assertTrue(storage.records.isEmpty())
+    }
+
+    @Test
+    fun broadcast_unknownTransactionType_throwsAndDoesNotQueue() {
+        stubTransactionAbsent()
+        blockchain.sendRawTransactionResult =
+            Single.error(JsonRpc.ResponseError.RpcError(RpcResponse.Error(-32000, "unknown transaction type")))
+
+        broadcaster.broadcast(rawTransaction).test().await().assertError(JsonRpc.ResponseError.RpcError::class.java)
+
         assertTrue(storage.records.isEmpty())
     }
 

@@ -5,11 +5,9 @@ import io.reactivex.Single
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-private val knownTransactionMessages = listOf(
-    "already known",
-    "already imported",
-    "known transaction",
-)
+// Whole phrases only: the refusal "unknown transaction type" contains "known transaction".
+private val knownTransactionMessage =
+    Regex("(?<![a-z])(already known|alreadyknown|already imported|known transaction)(?![a-z])")
 
 private val permanentErrorMessages = listOf(
     "invalid sender",
@@ -20,12 +18,12 @@ private val permanentErrorMessages = listOf(
     "intrinsic gas too low",
     "exceeds block gas limit",
     "chain id",
+    "unknown transaction type",
+    "transaction type not supported",
 )
 
-internal fun Throwable.isKnownTransactionError(): Boolean {
-    val message = rpcMessage()
-    return knownTransactionMessages.any { message.contains(it) }
-}
+internal fun Throwable.isKnownTransactionError(): Boolean =
+    knownTransactionMessage.containsMatchIn(rpcMessage())
 
 internal fun Throwable.isPermanentBroadcastError(): Boolean {
     val message = rpcMessage()

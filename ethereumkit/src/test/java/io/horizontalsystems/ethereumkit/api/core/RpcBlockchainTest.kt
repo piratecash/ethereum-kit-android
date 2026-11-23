@@ -76,6 +76,28 @@ class RpcBlockchainTest {
     }
 
     @Test
+    fun send_alreadyKnownConcatenated_returnsTransaction() {
+        broadcastFails("AlreadyKnown")
+
+        send().assertValue(transaction)
+    }
+
+    @Test
+    fun send_knownTransactionPhrase_returnsTransaction() {
+        broadcastFails("Known transaction: 0abc")
+
+        send().assertValue(transaction)
+    }
+
+    @Test
+    fun send_unknownTransactionType_fails() {
+        val error = broadcastFails("unknown transaction type")
+        transactionMissing()
+
+        send().assertError(error)
+    }
+
+    @Test
     fun send_nonceTooLowAndTxExists_returnsTransaction() {
         broadcastFails("nonce too low")
         every { syncer.single(ofType<GetTransactionByHashJsonRpc>()) } returns Single.just(mockk())
