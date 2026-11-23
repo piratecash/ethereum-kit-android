@@ -102,8 +102,15 @@ class TransactionManagerTest {
             return snapshot
         }
         override suspend fun getTransaction(hash: ByteArray) = rows[hash.toHexString()]?.detached()
-        override suspend fun getTransactionsBefore(tags: List<List<String>>, hash: ByteArray?, limit: Int?) =
-            emptyList<Transaction>()
+        override suspend fun getTransactionsBefore(
+            tags: List<List<String>>,
+            hash: ByteArray?,
+            limit: Int?,
+            sinceTimestamp: Long?,
+            untilTimestamp: Long?
+        ) = emptyList<Transaction>()
+
+        override suspend fun getOldestTransactionTimestamp(tags: List<List<String>>): Long? = null
 
         /** Room materializes a fresh blob per read, so no two rows may share a hash array. */
         private fun Transaction.detached() = copy(hash = hash.copyOf())

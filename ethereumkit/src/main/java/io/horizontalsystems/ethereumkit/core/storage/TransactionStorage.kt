@@ -21,19 +21,14 @@ class TransactionStorage(database: TransactionDatabase) : ITransactionStorage, I
     override suspend fun getTransaction(hash: ByteArray): Transaction? =
         transactionDao.getTransaction(hash)
 
-    override suspend fun getTransactionsBefore(tags: List<List<String>>, hash: ByteArray?, limit: Int?): List<Transaction> {
-        val whereConditions = mutableListOf<String>()
-
-        if (tags.isNotEmpty()) {
-            val tagConditions = tags
-                .mapIndexed { index, andTags ->
-                    val tagsString = andTags.joinToString(", ") { "'$it'" }
-                    "transaction_tags_$index.name IN ($tagsString)"
-                }
-                .joinToString(" AND ")
-
-            whereConditions.add(tagConditions)
-        }
+    override suspend fun getTransactionsBefore(
+        tags: List<List<String>>,
+        hash: ByteArray?,
+        limit: Int?,
+        sinceTimestamp: Long?,
+        untilTimestamp: Long?
+    ): List<Transaction> {
+        val whereConditions = historyConditions(tags, sinceTimestamp, untilTimestamp)
 
         hash?.let { transactionDao.getTransaction(hash) }?.let { fromTransaction ->
             val transactionIndex = fromTransaction.transactionIndex ?: 0
@@ -55,6 +50,40 @@ class TransactionStorage(database: TransactionDatabase) : ITransactionStorage, I
             whereConditions.add(fromCondition)
         }
 
+        val orderClause = "ORDER BY tx.timestamp DESC, tx.transactionIndex DESC, HEX(tx.hash) DESC"
+        val limitClause = limit?.let { "LIMIT $limit" } ?: ""
+        val sqlQuery = historySql("tx.*", tags, whereConditions, "$orderClause $limitClause")
+
+        return transactionDao.getTransactionsByRawQuery(RoomRawQuery(sqlQuery))
+    }
+
+    override suspend fun getOldestTransactionTimestamp(tags: List<List<String>>): Long? {
+        val sqlQuery = historySql("MIN(tx.timestamp)", tags, historyConditions(tags, null, null))
+
+        return transactionDao.getTimestampByRawQuery(RoomRawQuery(sqlQuery))
+    }
+
+    private fun historyConditions(tags: List<List<String>>, sinceTimestamp: Long?, untilTimestamp: Long?): MutableList<String> {
+        val whereConditions = mutableListOf<String>()
+
+        if (tags.isNotEmpty()) {
+            val tagConditions = tags
+                .mapIndexed { index, andTags ->
+                    val tagsString = andTags.joinToString(", ") { "'$it'" }
+                    "transaction_tags_$index.name IN ($tagsString)"
+                }
+                .joinToString(" AND ")
+
+            whereConditions.add(tagConditions)
+        }
+
+        sinceTimestamp?.let { whereConditions.add("tx.timestamp >= $it") }
+        untilTimestamp?.let { whereConditions.add("tx.timestamp < $it") }
+
+        return whereConditions
+    }
+
+    private fun historySql(select: String, tags: List<List<String>>, whereConditions: List<String>, tail: String = ""): String {
         val transactionTagJoinStatements = tags
             .mapIndexed { index, _ ->
                 "INNER JOIN TransactionTag AS transaction_tags_$index ON tx.hash = transaction_tags_$index.hash"
@@ -62,19 +91,14 @@ class TransactionStorage(database: TransactionDatabase) : ITransactionStorage, I
             .joinToString("\n")
 
         val whereClause = if (whereConditions.isNotEmpty()) "WHERE ${whereConditions.joinToString(" AND ")}" else ""
-        val orderClause = "ORDER BY tx.timestamp DESC, tx.transactionIndex DESC, HEX(tx.hash) DESC"
-        val limitClause = limit?.let { "LIMIT $limit" } ?: ""
 
-        val sqlQuery = """
-                      SELECT tx.*
-                      FROM `Transaction` as tx
-                      $transactionTagJoinStatements
-                      $whereClause
-                      $orderClause
-                      $limitClause
-                      """
-
-        return transactionDao.getTransactionsByRawQuery(RoomRawQuery(sqlQuery))
+        return """
+               SELECT $select
+               FROM `Transaction` as tx
+               $transactionTagJoinStatements
+               $whereClause
+               $tail
+               """
     }
 
     override suspend fun save(transactions: List<Transaction>) {

@@ -406,9 +406,15 @@ class EthereumKit(
     fun getFullTransactionsAsync(
         tags: List<List<String>>,
         fromHash: ByteArray? = null,
-        limit: Int? = null
+        limit: Int? = null,
+        sinceTimestamp: Long? = null,
+        untilTimestamp: Long? = null
     ): Single<List<FullTransaction>> {
-        return transactionManager.getFullTransactionsAsync(tags, fromHash, limit)
+        return transactionManager.getFullTransactionsAsync(tags, fromHash, limit, sinceTimestamp, untilTimestamp)
+    }
+
+    suspend fun getOldestTransactionTimestamp(tags: List<List<String>>): Long? {
+        return transactionManager.getOldestTransactionTimestamp(tags)
     }
 
     suspend fun getPendingFullTransactions(tags: List<List<String>>): List<FullTransaction> {

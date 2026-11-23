@@ -47,10 +47,21 @@ class TransactionManager(
             .filter { it.isNotEmpty() }
     }
 
-    fun getFullTransactionsAsync(tags: List<List<String>>, fromHash: ByteArray? = null, limit: Int? = null): Single<List<FullTransaction>> =
+    fun getFullTransactionsAsync(
+        tags: List<List<String>>,
+        fromHash: ByteArray? = null,
+        limit: Int? = null,
+        sinceTimestamp: Long? = null,
+        untilTimestamp: Long? = null
+    ): Single<List<FullTransaction>> =
         rxSingle(rxIoDispatcher) {
-            decorationManager.decorateTransactions(storage.getTransactionsBefore(tags, fromHash, limit))
+            decorationManager.decorateTransactions(
+                storage.getTransactionsBefore(tags, fromHash, limit, sinceTimestamp, untilTimestamp)
+            )
         }
+
+    suspend fun getOldestTransactionTimestamp(tags: List<List<String>>): Long? =
+        storage.getOldestTransactionTimestamp(tags)
 
     suspend fun getPendingFullTransactions(tags: List<List<String>>): List<FullTransaction> =
         decorationManager.decorateTransactions(storage.getPendingTransactions(tags))

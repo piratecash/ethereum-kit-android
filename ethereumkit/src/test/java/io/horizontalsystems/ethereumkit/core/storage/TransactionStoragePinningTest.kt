@@ -56,6 +56,14 @@ class TransactionStoragePinningTest {
     private suspend fun before(tags: List<List<String>> = emptyList(), from: Transaction? = null, limit: Int? = null) =
         storage.getTransactionsBefore(tags, from?.hash, limit).hashes()
 
+    private suspend fun between(
+        since: Long? = null,
+        until: Long? = null,
+        tags: List<List<String>> = emptyList(),
+        from: Transaction? = null,
+        limit: Int? = null
+    ) = storage.getTransactionsBefore(tags, from?.hash, limit, since, until).hashes()
+
     private suspend fun after(from: Transaction? = null) = storage.getTransactionsAfter(from?.hash).hashes()
 
     private fun List<Transaction>.hashes() = map { it.snapshot()[0] }
@@ -119,6 +127,72 @@ class TransactionStoragePinningTest {
 
         assertEquals(expected(b), before(tags = listOf(listOf(TransactionTag.OUTGOING)), from = c, limit = 1))
         assertEquals(expected(c), before(tags = listOf(listOf(TransactionTag.OUTGOING)), from = e, limit = 1))
+    }
+
+    @Test
+    fun getTransactionsBefore_sinceTimestamp_isInclusive() = runTest {
+        givenHistory()
+
+        assertEquals(expected(e, c, d, b), between(since = 200))
+    }
+
+    @Test
+    fun getTransactionsBefore_untilTimestamp_isExclusive() = runTest {
+        givenHistory()
+
+        assertEquals(expected(c, d, b, a), between(until = 300))
+    }
+
+    @Test
+    fun getTransactionsBefore_sinceAndUntil_returnsHalfOpenPeriod() = runTest {
+        givenHistory()
+
+        assertEquals(expected(c, d, b), between(since = 200, until = 300))
+    }
+
+    @Test
+    fun getTransactionsBefore_periodAndCursor_combine() = runTest {
+        givenHistory()
+
+        assertEquals(expected(b), between(since = 200, until = 300, from = d))
+        assertEquals(expected(d, b), between(since = 200, until = 300, from = c))
+    }
+
+    @Test
+    fun getTransactionsBefore_periodTagsAndLimit_combine() = runTest {
+        givenHistory()
+
+        assertEquals(expected(c), between(since = 150, tags = listOf(listOf(TransactionTag.OUTGOING)), until = 300, limit = 1))
+    }
+
+    @Test
+    fun getTransactionsBefore_periodWithoutRows_returnsEmpty() = runTest {
+        givenHistory()
+
+        assertEquals(emptyList<String>(), between(since = 301))
+        assertEquals(emptyList<String>(), between(until = 100))
+        assertEquals(emptyList<String>(), between(since = 200, until = 200))
+    }
+
+    @Test
+    fun getOldestTransactionTimestamp_noFilters_returnsMinimumTimestamp() = runTest {
+        givenHistory()
+
+        assertEquals(100L, storage.getOldestTransactionTimestamp(emptyList()))
+    }
+
+    @Test
+    fun getOldestTransactionTimestamp_withTagFilters_returnsMinimumOfMatching() = runTest {
+        givenHistory()
+
+        assertEquals(200L, storage.getOldestTransactionTimestamp(listOf(listOf(TransactionTag.OUTGOING))))
+        assertEquals(200L, storage.getOldestTransactionTimestamp(listOf(listOf(TransactionTag.OUTGOING), listOf(TransactionTag.SWAP))))
+        assertNull(storage.getOldestTransactionTimestamp(listOf(listOf(TransactionTag.OUTGOING), listOf(TransactionTag.INCOMING))))
+    }
+
+    @Test
+    fun getOldestTransactionTimestamp_emptyStorage_returnsNull() = runTest {
+        assertNull(storage.getOldestTransactionTimestamp(emptyList()))
     }
 
     @Test

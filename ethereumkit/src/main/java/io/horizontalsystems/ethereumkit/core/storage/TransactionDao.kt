@@ -19,6 +19,9 @@ interface TransactionDao {
     @RawQuery
     suspend fun getTransactionsByRawQuery(query: RoomRawQuery): List<Transaction>
 
+    @RawQuery
+    suspend fun getTimestampByRawQuery(query: RoomRawQuery): Long?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(transactions: List<Transaction>)
 

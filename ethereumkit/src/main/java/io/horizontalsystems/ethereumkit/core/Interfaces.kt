@@ -74,7 +74,15 @@ interface IBlockchainListener {
 interface ITransactionStorage {
     suspend fun getTransactions(hashes: List<ByteArray>): List<Transaction>
     suspend fun getTransaction(hash: ByteArray): Transaction?
-    suspend fun getTransactionsBefore(tags: List<List<String>>, hash: ByteArray?, limit: Int?): List<Transaction>
+    suspend fun getTransactionsBefore(
+        tags: List<List<String>>,
+        hash: ByteArray?,
+        limit: Int?,
+        sinceTimestamp: Long? = null,
+        untilTimestamp: Long? = null
+    ): List<Transaction>
+
+    suspend fun getOldestTransactionTimestamp(tags: List<List<String>>): Long?
     suspend fun save(transactions: List<Transaction>)
 
     suspend fun getPendingTransactions(): List<Transaction>

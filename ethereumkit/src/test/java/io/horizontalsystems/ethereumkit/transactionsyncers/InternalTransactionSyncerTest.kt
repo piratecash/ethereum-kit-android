@@ -158,7 +158,15 @@ class InternalTransactionSyncerTest {
 
         override suspend fun getTransactions(hashes: List<ByteArray>) = error("unused")
         override suspend fun getTransaction(hash: ByteArray) = error("unused")
-        override suspend fun getTransactionsBefore(tags: List<List<String>>, hash: ByteArray?, limit: Int?) = error("unused")
+        override suspend fun getTransactionsBefore(
+            tags: List<List<String>>,
+            hash: ByteArray?,
+            limit: Int?,
+            sinceTimestamp: Long?,
+            untilTimestamp: Long?
+        ) = error("unused")
+
+        override suspend fun getOldestTransactionTimestamp(tags: List<List<String>>) = error("unused")
         override suspend fun save(transactions: List<Transaction>) = error("unused")
         override suspend fun getPendingTransactions() = error("unused")
         override suspend fun getPendingTransactions(tags: List<List<String>>) = error("unused")

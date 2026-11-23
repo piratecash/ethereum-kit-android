@@ -255,8 +255,12 @@ class TransactionSyncManagerTest {
         override suspend fun getTransactionsBefore(
             tags: List<List<String>>,
             hash: ByteArray?,
-            limit: Int?
+            limit: Int?,
+            sinceTimestamp: Long?,
+            untilTimestamp: Long?
         ): List<Transaction> = emptyList()
+
+        override suspend fun getOldestTransactionTimestamp(tags: List<List<String>>): Long? = null
 
         override suspend fun save(transactions: List<Transaction>) {
             transactions.forEach { transaction ->
