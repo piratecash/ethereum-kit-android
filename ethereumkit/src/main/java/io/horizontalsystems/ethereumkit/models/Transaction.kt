@@ -26,8 +26,14 @@ data class Transaction(
     val gasLimit: Long? = null,
     val gasUsed: Long? = null,
 
-    var replacedWith: ByteArray? = null
+    var replacedWith: ByteArray? = null,
+
+    val type: Int? = null,
+    val authorizationDelegates: ByteArray? = null
 ) {
+
+    @Ignore
+    var accountDelegation: AccountDelegation? = null
 
     @delegate:Ignore
     val hashString: String by lazy {

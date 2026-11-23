@@ -1,14 +1,12 @@
 package io.horizontalsystems.uniswapkit.v3.router
 
+import io.horizontalsystems.ethereumkit.contracts.BytesArray
 import io.horizontalsystems.ethereumkit.contracts.ContractMethod
 import io.horizontalsystems.ethereumkit.contracts.ContractMethodFactories
 import io.horizontalsystems.ethereumkit.contracts.ContractMethodFactory
 import io.horizontalsystems.ethereumkit.contracts.ContractMethodHelper
 import io.horizontalsystems.ethereumkit.core.hexStringToByteArray
-import io.horizontalsystems.ethereumkit.core.toRawHexString
 import org.web3j.abi.FunctionEncoder
-import org.web3j.abi.TypeDecoder
-import org.web3j.abi.TypeReference
 import org.web3j.abi.datatypes.DynamicArray
 import org.web3j.abi.datatypes.DynamicBytes
 import org.web3j.abi.datatypes.Function
@@ -36,18 +34,12 @@ class MulticallMethod(val methods: List<ContractMethod>) : ContractMethod() {
         override val methodId = ContractMethodHelper.getMethodId(methodSignature)
 
         override fun createMethod(inputArguments: ByteArray): MulticallMethod {
-            val decode = TypeDecoder
-                .decodeDynamicArray(
-                    inputArguments.copyOfRange(32, inputArguments.size).toRawHexString(),
-                    0,
-                    object : TypeReference<DynamicArray<DynamicBytes>>() {
+            val elements = ContractMethodHelper.decodeABI(inputArguments, listOf(BytesArray::class))[0] as BytesArray
 
-                    }
-                )
-
-            val methods = decode.value.mapNotNull {
-                factories.createMethodFromInput(it.value)
-            }
+            // Elements are dispatched through the registry this factory belongs to: nested multicalls would recurse.
+            val methods = elements.array
+                .filterNot { it.copyOf(4).contentEquals(methodId) }
+                .mapNotNull { factories.createMethodFromInput(it) }
 
             return MulticallMethod(methods)
         }

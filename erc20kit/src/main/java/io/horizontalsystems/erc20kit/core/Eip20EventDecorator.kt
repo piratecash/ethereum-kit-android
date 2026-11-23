@@ -1,5 +1,6 @@
 package io.horizontalsystems.erc20kit.core
 
+import co.touchlab.kermit.Logger
 import io.horizontalsystems.erc20kit.events.ApproveEventInstance
 import io.horizontalsystems.erc20kit.events.TokenInfo
 import io.horizontalsystems.erc20kit.events.TransferEventInstance
@@ -12,15 +13,12 @@ import io.horizontalsystems.ethereumkit.models.TransactionLog
 
 class Eip20EventDecorator(
     private val userAddress: Address,
-    private val storage: IEip20Storage
+    private val storage: IEip20Storage,
+    private val logger: Logger
 ) : IEventDecorator {
 
-    override fun contractEventInstancesMap(transactions: List<Transaction>): Map<String, List<ContractEventInstance>> {
-        val erc20Events = if (transactions.size > 100) {
-            storage.getEvents()
-        } else {
-            storage.getEventsByHashes(transactions.map { it.hash })
-        }
+    override suspend fun contractEventInstancesMap(transactions: List<Transaction>): Map<String, List<ContractEventInstance>> {
+        val erc20Events = storage.getEvents()
 
         val map: MutableMap<String, List<ContractEventInstance>> = mutableMapOf()
 
@@ -36,7 +34,7 @@ class Eip20EventDecorator(
 
     override fun contractEventInstances(logs: List<TransactionLog>): List<ContractEventInstance> {
         return logs.mapNotNull { log ->
-            val event = log.getErc20EventInstance() ?: return@mapNotNull null
+            val event = log.getErc20EventInstance(logger) ?: return@mapNotNull null
 
             when (event) {
                 is TransferEventInstance -> {

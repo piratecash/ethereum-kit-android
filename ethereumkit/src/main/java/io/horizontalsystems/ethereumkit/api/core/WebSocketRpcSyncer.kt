@@ -1,5 +1,6 @@
 package io.horizontalsystems.ethereumkit.api.core
 
+import co.touchlab.kermit.Logger
 import com.google.gson.Gson
 import io.horizontalsystems.ethereumkit.api.jsonrpc.JsonRpc
 import io.horizontalsystems.ethereumkit.api.jsonrpc.SubscribeJsonRpc
@@ -9,13 +10,12 @@ import io.horizontalsystems.ethereumkit.core.EthereumKit
 import io.reactivex.Single
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
-import java.util.logging.Logger
 
 class WebSocketRpcSyncer(
         private val rpcSocket: IRpcWebSocket,
-        private val gson: Gson
+        private val gson: Gson,
+        private val logger: Logger
 ) : IRpcSyncer, IRpcWebSocketListener {
-    private val logger = Logger.getLogger("WebSocketRpcSyncer")
 
     private var currentRpcId = AtomicInteger(0)
     private var rpcHandlers = ConcurrentHashMap<Int, RpcHandler>()
@@ -151,7 +151,7 @@ class WebSocketRpcSyncer(
                     listener?.didUpdateLastBlockHeight(lastBlockHeight = header.number)
                 },
                 errorHandler = { error ->
-                    logger.warning("NewHeads Handle Failed: ${error.javaClass.simpleName}")
+                    logger.w(error) { "NewHeads Handle Failed: ${error.javaClass.simpleName}" }
                 }
         )
     }

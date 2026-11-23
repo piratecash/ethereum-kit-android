@@ -1,26 +1,30 @@
 package io.horizontalsystems.merkleiokit
 
-import android.content.Context
 import androidx.room.Database
-import androidx.room.Room
 import androidx.room.RoomDatabase
+import io.horizontalsystems.databasenaming.DatabaseNameResolver
+import io.horizontalsystems.ethereumkit.PlatformContext
+import io.horizontalsystems.ethereumkit.database.kitDatabaseBuilder
 
 @Database(
     entities = [
         MerkleTransactionHash::class,
     ],
     version = 1,
-    exportSchema = false
+    exportSchema = true
 )
 abstract class MerkleDatabase : RoomDatabase() {
     abstract fun merkleTransactionDao(): MerkleTransactionDao
 
     companion object Companion {
-        fun getInstance(context: Context, databaseName: String): MerkleDatabase {
-            return Room.databaseBuilder(context, MerkleDatabase::class.java, databaseName)
-                    .fallbackToDestructiveMigration()
-                    .allowMainThreadQueries()
-                    .build()
-        }
+        fun getInstance(
+            context: PlatformContext,
+            databaseName: String,
+            databaseKey: ByteArray,
+            nameResolver: DatabaseNameResolver = DatabaseNameResolver.Identity,
+        ): MerkleDatabase = build(kitDatabaseBuilder(context, databaseName, databaseKey, nameResolver))
+
+        internal fun build(builder: RoomDatabase.Builder<MerkleDatabase>): MerkleDatabase =
+            builder.fallbackToDestructiveMigration(dropAllTables = false).build()
     }
 }

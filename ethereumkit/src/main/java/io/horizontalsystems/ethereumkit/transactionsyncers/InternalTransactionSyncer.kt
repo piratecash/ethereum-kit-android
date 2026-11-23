@@ -3,34 +3,69 @@ package io.horizontalsystems.ethereumkit.transactionsyncers
 import io.horizontalsystems.ethereumkit.core.ITransactionProvider
 import io.horizontalsystems.ethereumkit.core.ITransactionStorage
 import io.horizontalsystems.ethereumkit.core.ITransactionSyncer
+import io.horizontalsystems.ethereumkit.core.rxIoDispatcher
+import io.horizontalsystems.ethereumkit.core.toHexString
 import io.horizontalsystems.ethereumkit.models.InternalTransaction
 import io.horizontalsystems.ethereumkit.models.ProviderInternalTransaction
 import io.horizontalsystems.ethereumkit.models.Transaction
 import io.reactivex.Single
+import kotlinx.coroutines.rx2.rxSingle
 
 class InternalTransactionSyncer(
         private val transactionProvider: ITransactionProvider,
         private val storage: ITransactionStorage
 ) : ITransactionSyncer {
 
-    private fun handle(transactions: List<ProviderInternalTransaction>) {
+    private suspend fun handle(transactions: List<ProviderInternalTransaction>) {
         if (transactions.isEmpty()) return
 
         val internalTransactions = transactions.map { tx ->
-            InternalTransaction(tx.hash, tx.blockNumber, tx.from, tx.to, tx.value)
+            InternalTransaction(
+                hash = tx.hash,
+                traceId = tx.traceId,
+                blockNumber = tx.blockNumber,
+                from = tx.from,
+                to = tx.to,
+                value = tx.value
+            )
         }
 
         storage.saveInternalTransactions(internalTransactions)
     }
 
-    override fun getTransactionsSingle(): Single<Pair<List<Transaction>, Boolean>> {
-        val lastTransactionBlockNumber = storage.getLastInternalTransaction()?.blockNumber ?: 0
+    // Only the checkpoint block can overlap with storage: the request starts at it (inclusive),
+    // so everything above it is new by construction.
+    private suspend fun unseen(
+        transactions: List<ProviderInternalTransaction>,
+        checkpointBlockNumber: Long
+    ): List<ProviderInternalTransaction> {
+        val checkpointHashes = transactions
+            .filter { it.blockNumber == checkpointBlockNumber }
+            .map { it.hash }
+            .distinctBy { it.toHexString() } // ByteArray equality is by reference
+
+        val stored = storage.getInternalTransactionsByHashes(checkpointHashes)
+            .map { it.hashString to it.traceId }
+            .toSet()
+
+        return transactions.filterNot { (it.hash.toHexString() to it.traceId) in stored }
+    }
+
+    override fun getTransactionsSingle(): Single<Pair<List<Transaction>, Boolean>> =
+        rxSingle(rxIoDispatcher) { storage.getLastInternalTransaction()?.blockNumber ?: 0 }
+            .flatMap(::syncFrom)
+
+    private fun syncFrom(lastTransactionBlockNumber: Long): Single<Pair<List<Transaction>, Boolean>> {
         val initial = lastTransactionBlockNumber == 0L
 
-        return transactionProvider.getInternalTransactions(lastTransactionBlockNumber + 1)
-                .doOnSuccess { providerInternalTransactions -> handle(providerInternalTransactions) }
-                .map { providerInternalTransactions ->
-                    val array = providerInternalTransactions.map { transaction ->
+        return transactionProvider.getInternalTransactions(lastTransactionBlockNumber)
+                .flatMap { providerInternalTransactions ->
+                    rxSingle(rxIoDispatcher) {
+                        unseen(providerInternalTransactions, lastTransactionBlockNumber).also { handle(it) }
+                    }
+                }
+                .map { unseenTransactions ->
+                    val array = unseenTransactions.map { transaction ->
                         Transaction(
                                 hash = transaction.hash,
                                 timestamp = transaction.timestamp,

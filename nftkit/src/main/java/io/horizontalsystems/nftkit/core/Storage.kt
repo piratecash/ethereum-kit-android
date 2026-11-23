@@ -12,48 +12,48 @@ class Storage(
     private val eip1155EventDao = database.eip1155EventDao()
     private val balanceDao = database.nftBalanceDao()
 
-    fun nftBalances(type: NftType): List<NftBalance> =
+    suspend fun nftBalances(type: NftType): List<NftBalance> =
         balanceDao.nftBalances(type)
 
-    fun existingNftBalances(): List<NftBalance> =
+    suspend fun existingNftBalances(): List<NftBalance> =
         balanceDao.existingNftBalances()
 
-    fun nonSyncedNftBalances(): List<NftBalance> =
+    suspend fun nonSyncedNftBalances(): List<NftBalance> =
         balanceDao.nonSyncedNftBalances()
 
-    fun existingNftBalance(contractAddress: Address, tokenId: BigInteger): NftBalance? =
+    suspend fun existingNftBalance(contractAddress: Address, tokenId: BigInteger): NftBalance? =
         balanceDao.existingNftBalance(contractAddress, tokenId)
 
-    fun setNotSynced(nfts: List<Nft>) =
+    suspend fun setNotSynced(nfts: List<Nft>) =
         nfts.forEach { balanceDao.setNotSynced(it.contractAddress, it.tokenId) }
 
-    fun setSynced(nft: Nft, balance: Int) =
+    suspend fun setSynced(nft: Nft, balance: Int) =
         balanceDao.setSynced(nft.contractAddress, nft.tokenId, balance)
 
-    fun saveNftBalances(balances: List<NftBalance>) =
+    suspend fun saveNftBalances(balances: List<NftBalance>) =
         balanceDao.insertAll(balances.map { NftBalanceRecord(it) })
 
-    fun lastEip721Event(): Eip721Event? =
+    suspend fun lastEip721Event(): Eip721Event? =
         eip721EventDao.lastEvent()
 
-    fun eip721Events(): List<Eip721Event> =
+    suspend fun eip721Events(): List<Eip721Event> =
         eip721EventDao.events()
 
-    fun eip721Events(hashes: List<ByteArray>) =
+    suspend fun eip721Events(hashes: List<ByteArray>) =
         eip721EventDao.eventsByHash(hashes)
 
-    fun saveEip721Events(events: List<Eip721Event>) =
+    suspend fun saveEip721Events(events: List<Eip721Event>) =
         eip721EventDao.insertAll(events)
 
-    fun lastEip1155Event(): Eip1155Event? =
+    suspend fun lastEip1155Event(): Eip1155Event? =
         eip1155EventDao.lastEvent()
 
-    fun eip1155Events(): List<Eip1155Event> =
+    suspend fun eip1155Events(): List<Eip1155Event> =
         eip1155EventDao.events()
 
-    fun eip1155Events(hashes: List<ByteArray>): List<Eip1155Event> =
+    suspend fun eip1155Events(hashes: List<ByteArray>): List<Eip1155Event> =
         eip1155EventDao.eventsByHash(hashes)
 
-    fun saveEip1155Events(events: List<Eip1155Event>) =
+    suspend fun saveEip1155Events(events: List<Eip1155Event>) =
         eip1155EventDao.insertAll(events)
 }

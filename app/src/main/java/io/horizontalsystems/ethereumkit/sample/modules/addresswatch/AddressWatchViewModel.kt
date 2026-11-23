@@ -2,6 +2,7 @@ package io.horizontalsystems.ethereumkit.sample.modules.addresswatch
 
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import io.horizontalsystems.erc20kit.core.Erc20Kit
 import io.horizontalsystems.ethereumkit.core.EthereumKit
 import io.horizontalsystems.ethereumkit.models.Chain
@@ -17,11 +18,20 @@ import io.horizontalsystems.ethereumkit.sample.modules.main.ShowTxType
 import io.reactivex.android.schedulers.AndroidSchedulers
 import io.reactivex.disposables.CompositeDisposable
 import io.reactivex.schedulers.Schedulers
+import io.horizontalsystems.hdwalletkit.Mnemonic
+import kotlinx.coroutines.DelicateCoroutinesApi
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.net.URI
 
 class AddressWatchViewModel : ViewModel() {
 
     private val disposables = CompositeDisposable()
+
+    // Concurrent requests would clear/open the same walletId databases under different keys.
+    private val watchMutex = Mutex()
 
     private var showTxType = ShowTxType.Eth
     private var ethTxs = listOf<TransactionRecord>()
@@ -49,11 +59,25 @@ class AddressWatchViewModel : ViewModel() {
             return
         }
 
-        clearKits()
+        viewModelScope.launch {
+            watchMutex.withLock {
+                clearKits()
+                watch(wordList)
+            }
+        }
+    }
 
-        val evmKit = createKit(wordList)
+    private suspend fun watch(wordList: List<String>) {
+        val databaseKey = Configuration.databaseKey(Mnemonic().toSeed(wordList))
+        val evmKit = createKit(wordList, databaseKey)
         val evmAdapter = EthereumBaseAdapter(evmKit)
-        val erc20Adapter = Erc20BaseAdapter(App.instance, Configuration.erc20Tokens.first(), evmKit)
+        val token = Configuration.erc20Tokens.first()
+        Erc20Kit.migrateDatabases(App.instance, Configuration.chain, Configuration.walletId, databaseKey)
+        val erc20Adapter = Erc20BaseAdapter(
+            token,
+            evmKit,
+            Erc20Kit.getInstance(App.instance, evmKit, token.contractAddress, databaseKey)
+        )
 
         Erc20Kit.addTransactionSyncer(evmKit)
         Erc20Kit.addDecorators(evmKit)
@@ -95,12 +119,14 @@ class AddressWatchViewModel : ViewModel() {
         erc20Adapter.start()
     }
 
+    @OptIn(DelicateCoroutinesApi::class)
     override fun onCleared() {
-        clearKits()
+        // viewModelScope is already cancelled here.
+        GlobalScope.launch { clearKits() }
         disposables.clear()
     }
 
-    private fun clearKits() {
+    private suspend fun clearKits() {
         EthereumKit.clear(App.instance, Configuration.chain, Configuration.walletId)
         Erc20Kit.clear(App.instance, Configuration.chain, Configuration.walletId)
     }
@@ -123,17 +149,17 @@ class AddressWatchViewModel : ViewModel() {
         updateTransactionList()
     }
 
-    private fun createKit(wordList: List<String>): EthereumKit {
+    private suspend fun createKit(wordList: List<String>, databaseKey: ByteArray): EthereumKit {
         val rpcSource: RpcSource?
         val transactionSource: TransactionSource?
 
         when (Configuration.chain) {
             Chain.BinanceSmartChain -> {
-                transactionSource = TransactionSource.etherscanApi(Configuration.etherscanKey.split(","))
+                transactionSource = TransactionSource.binance(Configuration.etherscanKey.split(","))
                 rpcSource = RpcSource.binanceSmartChainHttp()
             }
             Chain.Ethereum -> {
-                transactionSource = TransactionSource.etherscanApi(Configuration.etherscanKey.split(","))
+                transactionSource = TransactionSource.ethereum(Configuration.etherscanKey.split(","))
                 rpcSource = RpcSource.Http(listOf(URI(Configuration.ethereumRpc)), null)
             }
             else -> {
@@ -150,10 +176,12 @@ class AddressWatchViewModel : ViewModel() {
             throw Exception("Could not get transactionSource!")
         }
 
+        EthereumKit.migrateDatabase(App.instance, Configuration.chain, Configuration.walletId, databaseKey)
+
         return EthereumKit.getInstance(
             App.instance, wordList, "",
             Configuration.chain, rpcSource, transactionSource,
-            Configuration.walletId
+            Configuration.walletId, databaseKey
         )
     }
 

@@ -1,5 +1,6 @@
 package io.horizontalsystems.erc20kit.core
 
+import co.touchlab.kermit.Logger
 import io.horizontalsystems.erc20kit.decorations.ApproveEip20Decoration
 import io.horizontalsystems.erc20kit.events.ApproveEventInstance
 import io.horizontalsystems.erc20kit.events.TransferEventInstance
@@ -10,7 +11,7 @@ import io.horizontalsystems.ethereumkit.models.Address
 import io.horizontalsystems.ethereumkit.models.TransactionLog
 import java.math.BigInteger
 
-fun TransactionLog.getErc20EventInstance(): ContractEventInstance? {
+fun TransactionLog.getErc20EventInstance(logger: Logger): ContractEventInstance? {
     return try {
         if (topics.size != 3) {
             return null
@@ -30,7 +31,7 @@ fun TransactionLog.getErc20EventInstance(): ContractEventInstance? {
                 null
         }
     } catch (error: Throwable) {
-        error.printStackTrace()
+        logger.w(error) { "Failed to decode ERC-20 event" }
         null
     }
 }

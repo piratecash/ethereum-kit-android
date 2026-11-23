@@ -7,9 +7,9 @@ import io.horizontalsystems.ethereumkit.api.models.LastBlockHeight
 interface LastBlockHeightDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    fun insert(lastBlockHeight: LastBlockHeight)
+    suspend fun insert(lastBlockHeight: LastBlockHeight)
 
     @Query("SELECT * FROM LastBlockHeight")
-    fun getLastBlockHeight(): LastBlockHeight?
+    suspend fun getLastBlockHeight(): LastBlockHeight?
 
 }

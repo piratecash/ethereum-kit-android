@@ -8,6 +8,8 @@ import io.horizontalsystems.nftkit.models.Eip1155Event
 import io.horizontalsystems.nftkit.models.Nft
 import io.horizontalsystems.nftkit.models.NftType
 import io.reactivex.Single
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.rx2.rxSingle
 
 class Eip1155TransactionSyncer(
     private val transactionProvider: ITransactionProvider,
@@ -16,7 +18,7 @@ class Eip1155TransactionSyncer(
 
     var listener: ITransactionSyncerListener? = null
 
-    private fun handle(transactions: List<ProviderEip1155Transaction>) {
+    private suspend fun handle(transactions: List<ProviderEip1155Transaction>) {
         if (transactions.isEmpty()) return
 
         val events = transactions.map { tx ->
@@ -37,12 +39,20 @@ class Eip1155TransactionSyncer(
         listener?.didSync(nfts, NftType.Eip1155)
     }
 
-    override fun getTransactionsSingle(): Single<Pair<List<Transaction>, Boolean>> {
-        val lastTransactionBlockNumber = storage.lastEip1155Event()?.blockNumber ?: 0
+    override fun getTransactionsSingle(): Single<Pair<List<Transaction>, Boolean>> =
+        rxSingle(Dispatchers.IO) { storage.lastEip1155Event()?.blockNumber ?: 0 }
+            .flatMap(::syncFrom)
+
+    private fun syncFrom(lastTransactionBlockNumber: Long): Single<Pair<List<Transaction>, Boolean>> {
         val initial: Boolean = lastTransactionBlockNumber == 0L
 
         return transactionProvider.getEip1155Transactions(lastTransactionBlockNumber + 1)
-            .doOnSuccess { providerTokenTransactions -> handle(providerTokenTransactions) }
+            .flatMap { providerTokenTransactions ->
+                rxSingle(Dispatchers.IO) {
+                    handle(providerTokenTransactions)
+                    providerTokenTransactions
+                }
+            }
             .map { providerTokenTransactions ->
                 val array = providerTokenTransactions.map { transaction ->
                     Transaction(

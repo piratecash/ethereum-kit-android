@@ -1,8 +1,9 @@
 package io.horizontalsystems.ethereumkit.sample.modules.main
 
-import android.util.Log
+import co.touchlab.kermit.Logger
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import io.horizontalsystems.erc20kit.core.Erc20Kit
 import io.horizontalsystems.ethereumkit.core.EthereumKit
 import io.horizontalsystems.ethereumkit.core.EthereumKit.SyncState
@@ -31,13 +32,15 @@ import io.horizontalsystems.uniswapkit.models.TradeOptions
 import io.reactivex.android.schedulers.AndroidSchedulers
 import io.reactivex.disposables.CompositeDisposable
 import io.reactivex.schedulers.Schedulers
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.rx2.rxSingle
 import java.math.BigDecimal
 import java.net.URI
-import java.util.logging.Logger
 
 class MainViewModel : ViewModel() {
-    private val logger = Logger.getLogger("MainViewModel")
+    private val logger = Logger.withTag("Sample")
 
     private val disposables = CompositeDisposable()
 
@@ -45,6 +48,7 @@ class MainViewModel : ViewModel() {
     lateinit var ethereumAdapter: EthereumAdapter
     lateinit var signer: Signer
     lateinit var rpcSource: RpcSource
+    lateinit var databaseKey: ByteArray
     private lateinit var transactionSource: TransactionSource
 
     lateinit var erc20Adapter: Erc20Adapter
@@ -83,15 +87,28 @@ class MainViewModel : ViewModel() {
     private val chain: Chain
         get() = ethereumKit.chain
 
-    fun init() {
+    private val _kitsReady = MutableStateFlow(false)
+
+    // The kits are created asynchronously: read the lateinit kit fields only once this is true.
+    val kitsReady: StateFlow<Boolean> = _kitsReady
+
+    init {
+        viewModelScope.launch { initKits() }
+    }
+
+    private suspend fun initKits() {
         val words = Configuration.defaultsWords.split(" ")
         val seed = Mnemonic().toSeed(words)
+        databaseKey = Configuration.databaseKey(seed)
         signer = Signer.getInstance(seed, Configuration.chain)
         ethereumKit = createKit()
         ethereumAdapter = EthereumAdapter(ethereumKit, signer)
+        Erc20Kit.migrateDatabases(App.instance, Configuration.chain, Configuration.walletId, databaseKey)
         erc20Adapter = Erc20Adapter(
-            App.instance, fromToken ?: toToken
-            ?: Configuration.erc20Tokens.first(), ethereumKit, signer
+            fromToken,
+            ethereumKit,
+            Erc20Kit.getInstance(App.instance, ethereumKit, fromToken.contractAddress, databaseKey),
+            signer
         )
         uniswapKit = UniswapKit.getInstance()
 
@@ -179,32 +196,30 @@ class MainViewModel : ViewModel() {
         erc20Adapter.start()
 
         gasPriceHelper = GasPriceHelper(Eip1559GasPriceProvider(ethereumKit))
+        _kitsReady.value = true
         gasPriceHelper.gasPriceFlowable()
             .subscribe({
                 gasPrice = it
-                Log.e("AAA", "set gasPrice: $gasPrice")
+                logger.d { "set gasPrice: $gasPrice" }
             }, {
-                Log.e(
-                    "AAA",
-                    "error: ${it.localizedMessage ?: it.message ?: it.javaClass.simpleName}"
-                )
+                logger.e(it) { "gasPrice error" }
             }).let { disposables.add(it) }
     }
 
-    private fun createKit(): EthereumKit {
+    private suspend fun createKit(): EthereumKit {
         when (Configuration.chain) {
             Chain.BinanceSmartChain -> {
-                transactionSource = TransactionSource.etherscanApi(Configuration.etherscanKey.split(","))
+                transactionSource = TransactionSource.binance(Configuration.etherscanKey.split(","))
                 rpcSource = RpcSource.binanceSmartChainHttp()
             }
 
             Chain.Ethereum -> {
-                transactionSource = TransactionSource.etherscanApi(Configuration.etherscanKey.split(","))
+                transactionSource = TransactionSource.ethereum(Configuration.etherscanKey.split(","))
                 rpcSource = RpcSource.Http(listOf(URI(Configuration.ethereumRpc)), null)
             }
 
             Chain.ArbitrumOne -> {
-                transactionSource = TransactionSource.etherscanApi(Configuration.etherscanKey.split(","))
+                transactionSource = TransactionSource.arbitrumOne(Configuration.etherscanKey.split(","))
                 rpcSource = RpcSource.arbitrumOneRpcHttp()
             }
 
@@ -213,18 +228,20 @@ class MainViewModel : ViewModel() {
             }
         }
 
+        EthereumKit.migrateDatabase(App.instance, Configuration.chain, Configuration.walletId, databaseKey)
+
         return if (Configuration.watchAddress != null) {
             EthereumKit.getInstance(
                 App.instance, Address(Configuration.watchAddress),
                 Configuration.chain, rpcSource, transactionSource,
-                Configuration.walletId
+                Configuration.walletId, databaseKey
             )
         } else {
             val words = Configuration.defaultsWords.split(" ")
             EthereumKit.getInstance(
                 App.instance, words, "",
                 Configuration.chain, rpcSource, transactionSource,
-                Configuration.walletId
+                Configuration.walletId, databaseKey
             )
         }
     }
@@ -300,9 +317,12 @@ class MainViewModel : ViewModel() {
     }
 
     fun clear() {
-        EthereumKit.clear(App.instance, Configuration.chain, Configuration.walletId)
-        Erc20Kit.clear(App.instance, Configuration.chain, Configuration.walletId)
-        init()
+        _kitsReady.value = false
+        viewModelScope.launch {
+            EthereumKit.clear(App.instance, Configuration.chain, Configuration.walletId)
+            Erc20Kit.clear(App.instance, Configuration.chain, Configuration.walletId)
+            initKits()
+        }
     }
 
     fun receiveAddress(): String {
@@ -326,7 +346,7 @@ class MainViewModel : ViewModel() {
                 //success
                 estimatedGas.value = it.toString()
             }, {
-                logger.warning("Gas estimate: ${it.message}")
+                logger.w(it) { "Gas estimate failed" }
                 estimatedGas.value = it.message
             })
             .let { disposables.add(it) }
@@ -343,11 +363,11 @@ class MainViewModel : ViewModel() {
             .observeOn(AndroidSchedulers.mainThread())
             .subscribe({ fullTransaction ->
                 //success
-                logger.info("Successfully sent, hash: ${fullTransaction.transaction.hash.toHexString()}")
+                logger.d { "Successfully sent, hash: ${fullTransaction.transaction.hash.toHexString()}" }
 
                 sendStatus.value = null
             }, {
-                logger.warning("Ether send failed: ${it.message}")
+                logger.w(it) { "Ether send failed" }
                 sendStatus.value = it
             }).let { disposables.add(it) }
 
@@ -367,11 +387,11 @@ class MainViewModel : ViewModel() {
             .subscribeOn(Schedulers.io())
             .observeOn(AndroidSchedulers.mainThread())
             .subscribe({ fullTransaction ->
-                logger.info("Successfully sent, hash: ${fullTransaction.transaction.hash.toHexString()}")
+                logger.d { "Successfully sent, hash: ${fullTransaction.transaction.hash.toHexString()}" }
                 //success
                 sendStatus.value = null
             }, {
-                logger.warning("Erc20 send failed: ${it.message}")
+                logger.w(it) { "Erc20 send failed" }
                 sendStatus.value = it
             }).let { disposables.add(it) }
     }
@@ -402,7 +422,7 @@ class MainViewModel : ViewModel() {
             .subscribe({
                 swapData.value = it
             }, {
-                logger.warning("swapData ERROR = ${it.message}")
+                logger.w(it) { "swapData ERROR" }
             }).let {
                 disposables.add(it)
             }
@@ -413,9 +433,9 @@ class MainViewModel : ViewModel() {
             .subscribeOn(Schedulers.io())
             .observeOn(AndroidSchedulers.mainThread())
             .subscribe({
-                logger.info("allowance: ${it.toPlainString()}")
+                logger.d { "allowance: ${it.toPlainString()}" }
             }, {
-                logger.warning("swapData ERROR = ${it.message}")
+                logger.w(it) { "swapData ERROR" }
             }).let {
                 disposables.add(it)
             }
@@ -431,19 +451,19 @@ class MainViewModel : ViewModel() {
 
         ethereumKit.estimateGas(transactionData, gasPrice)
             .flatMap { gasLimit ->
-                logger.info("gas limit: $gasLimit")
+                logger.d { "gas limit: $gasLimit" }
                 ethereumKit.rawTransaction(transactionData, gasPrice, gasLimit)
             }
             .flatMap { rawTransaction ->
-                val signature = runBlocking { signer.signature(rawTransaction) }
-                ethereumKit.send(rawTransaction, signature)
+                rxSingle { signer.signature(rawTransaction) }
+                    .flatMap { signature -> ethereumKit.send(rawTransaction, signature) }
             }
             .subscribeOn(Schedulers.io())
             .observeOn(AndroidSchedulers.mainThread())
             .subscribe({ fullTransaction ->
-                logger.info("approve: ${fullTransaction.transaction.hash}")
+                logger.d { "approve: ${fullTransaction.transaction.hash}" }
             }, {
-                logger.warning("approve ERROR = ${it.message}")
+                logger.w(it) { "approve ERROR" }
             }).let {
                 disposables.add(it)
             }
@@ -462,7 +482,7 @@ class MainViewModel : ViewModel() {
             tradeData.value = try {
                 uniswapKit.bestTradeExactIn(it, amountIn, tradeOptions)
             } catch (error: Throwable) {
-                logger.info("bestTradeExactIn error: ${error.javaClass.simpleName} (${error.localizedMessage})")
+                logger.w(error) { "bestTradeExactIn error" }
                 null
             }
         }
@@ -473,7 +493,7 @@ class MainViewModel : ViewModel() {
             tradeData.value = try {
                 uniswapKit.bestTradeExactOut(it, amountOut, tradeOptions)
             } catch (error: Throwable) {
-                logger.info("bestTradeExactOut error: ${error.javaClass.simpleName} (${error.localizedMessage})")
+                logger.w(error) { "bestTradeExactOut error" }
                 null
             }
         }
@@ -486,24 +506,23 @@ class MainViewModel : ViewModel() {
             val transactionData = uniswapKit.transactionData(ethereumKit.receiveAddress, chain, tradeData)
             ethereumKit.estimateGas(transactionData, gasPrice)
                 .flatMap { gasLimit ->
-                    logger.info("gas limit: $gasLimit")
+                    logger.d { "gas limit: $gasLimit" }
 
                     val transactionData = uniswapKit.transactionData(ethereumKit.receiveAddress, chain, tradeData)
                     ethereumKit.rawTransaction(transactionData, gasPrice, gasLimit)
                 }
                 .flatMap { rawTransaction ->
-                    val signature = runBlocking { signer.signature(rawTransaction) }
-                    ethereumKit.send(rawTransaction, signature)
+                    rxSingle { signer.signature(rawTransaction) }
+                        .flatMap { signature -> ethereumKit.send(rawTransaction, signature) }
                 }
                 .subscribeOn(Schedulers.io())
                 .observeOn(AndroidSchedulers.mainThread())
                 .subscribe({ fullTransaction ->
                     swapStatus.value = null
-                    logger.info("swap SUCCESS, txHash=${fullTransaction.transaction.hash.toHexString()}")
+                    logger.d { "swap SUCCESS, txHash=${fullTransaction.transaction.hash.toHexString()}" }
                 }, {
                     swapStatus.value = it
-                    logger.info("swap ERROR, error=${it.message}")
-                    it.printStackTrace()
+                    logger.e(it) { "swap ERROR" }
                 }).let { disposables.add(it) }
         }
     }

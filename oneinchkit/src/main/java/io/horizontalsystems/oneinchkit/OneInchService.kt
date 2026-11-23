@@ -1,5 +1,6 @@
 package io.horizontalsystems.oneinchkit
 
+import co.touchlab.kermit.Logger
 import com.google.gson.GsonBuilder
 import io.horizontalsystems.ethereumkit.models.Address
 import io.horizontalsystems.ethereumkit.models.Chain
@@ -7,8 +8,6 @@ import io.horizontalsystems.ethereumkit.models.GasPrice
 import io.horizontalsystems.ethereumkit.network.*
 import io.reactivex.Single
 import okhttp3.Interceptor
-import okhttp3.OkHttpClient
-import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.adapter.rxjava2.RxJava2CallAdapterFactory
 import retrofit2.converter.gson.GsonConverterFactory
@@ -16,19 +15,16 @@ import retrofit2.http.GET
 import retrofit2.http.Path
 import retrofit2.http.Query
 import java.math.BigInteger
-import java.util.logging.Logger
 
 class OneInchService(
-    apiKey: String
+    apiKey: String,
+    logger: Logger
 ) {
-    private val logger = Logger.getLogger("OneInchService")
     private val url = "https://api.1inch.dev/swap/v5.2/"
     private val service: OneInchServiceApi
 
     init {
-        val loggingInterceptor = HttpLoggingInterceptor { message ->
-            logger.info(message)
-        }.setLevel(HttpLoggingInterceptor.Level.BASIC)
+        val loggingInterceptor = RedactedLoggingInterceptor(logger)
 
         val headersInterceptor = Interceptor { interceptorChain ->
             val requestBuilder = interceptorChain.request().newBuilder()
@@ -37,9 +33,10 @@ class OneInchService(
             interceptorChain.proceed(requestBuilder.build())
         }
 
-        val httpClient = OkHttpClient.Builder()
-            .addInterceptor(headersInterceptor)
-            .addInterceptor(loggingInterceptor)
+        val httpClient = SharedHttpClient.newClient {
+            addInterceptor(headersInterceptor)
+            addInterceptor(loggingInterceptor)
+        }
 
         val gson = GsonBuilder()
             .setLenient()
@@ -54,7 +51,7 @@ class OneInchService(
             .baseUrl(url)
             .addCallAdapterFactory(RxJava2CallAdapterFactory.create())
             .addConverterFactory(GsonConverterFactory.create(gson))
-            .client(httpClient.build())
+            .client(httpClient)
             .build()
 
         service = retrofit.create(OneInchServiceApi::class.java)

@@ -1,8 +1,17 @@
 package io.horizontalsystems.ethereumkit.core
 
+import org.junit.BeforeClass
 import org.junit.Test
 
 class AddressValidatorTest {
+
+    companion object {
+        @JvmStatic
+        @BeforeClass
+        fun beforeClass() {
+            EthereumKit.init()
+        }
+    }
 
     private val addressValidator = AddressValidator
 
